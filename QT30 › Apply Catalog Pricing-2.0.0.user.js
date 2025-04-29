@@ -4,6 +4,8 @@
 // @version      2.0.0
 // @description  Add “Apply Catalog Pricing” button to Plex quote wizard and POST to datasources endpoints
 // @match        *://*.plex.com/SalesAndCrm/QuoteWizard*
+// @downloadURL  https://raw.githubusercontent.com/AlphaGeek509/plex-tampermonkey-scripts/main/QT30-ApplyCatalogPricing.user.js
+// @updateURL    https://raw.githubusercontent.com/AlphaGeek509/plex-tampermonkey-scripts/main/QT30-ApplyCatalogPricing.user.js
 // @require      https://gist.githubusercontent.com/AlphaGeek509/c8a8aec394d2906fcc559dd70b679786/raw/871917c17a169d2ee839b2e1050eb0c71d431440/lt-plex-tm-utils.user.js
 // @require      https://gist.githubusercontent.com/AlphaGeek509/1f0b6287c1f0e7e97cac1d079bd0935b/raw/78d3ea2f4829b51e8676d57affcd26ed5d917325/lt-plex-auth.user.js
 // @grant        GM_registerMenuCommand
