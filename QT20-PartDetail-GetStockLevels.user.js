@@ -4,8 +4,8 @@
 // @version      2.0.0
 // @description  Inject “Get Stock Levels” button, show persistent fetching banner, preserve Note text, and sum Quantity from endpoint 172 using shared TMUtils + PlexAPI
 // @match        *://*.plex.com/SalesAndCrm/QuoteWizard/Index?QuoteKey*
-// @downloadURL  https://raw.githubusercontent.com/AlphaGeek509/plex-tampermonkey-scripts/main/QT20-GetStockLevels.user.js
-// @updateURL    https://raw.githubusercontent.com/AlphaGeek509/plex-tampermonkey-scripts/main/QT20-GetStockLevels.user.js
+// @downloadURL https://raw.githubusercontent.com/AlphaGeek509/plex-tampermonkey-scripts/master/QT20-PartDetail-GetStockLevels.user.js  
+// @updateURL   https://raw.githubusercontent.com/AlphaGeek509/plex-tampermonkey-scripts/master/QT20-PartDetail-GetStockLevels.user.js
 // @require      https://gist.githubusercontent.com/AlphaGeek509/c8a8aec394d2906fcc559dd70b679786/raw/871917c17a169d2ee839b2e1050eb0c71d431440/lt-plex-tm-utils.user.js
 // @require      https://gist.githubusercontent.com/AlphaGeek509/1f0b6287c1f0e7e97cac1d079bd0935b/raw/78d3ea2f4829b51e8676d57affcd26ed5d917325/lt-plex-auth.user.js
 // @grant        GM_registerMenuCommand
