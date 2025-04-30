@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         QT20 > Part Detail > Get Stock Levels
 // @namespace    http://tampermonkey.net/
-// @version      2.0.0
+// @version      2.0.1
 // @description  Inject “Get Stock Levels” button, show persistent fetching banner, preserve Note text, and sum Quantity from endpoint 172 using shared TMUtils + PlexAPI
 // @match        *://*.plex.com/SalesAndCrm/QuoteWizard/Index?QuoteKey*
 // @downloadURL https://raw.githubusercontent.com/AlphaGeek509/plex-tampermonkey-scripts/master/QT20-PartDetail-GetStockLevels.user.js  
@@ -54,7 +54,7 @@
             'Content-Type': 'application/json;charset=UTF-8',
             'Authorization': apiKey
           },
-          body: JSON.stringify({ Part_No: partNo, Shippable: 'TRUE' })
+          body: JSON.stringify({ Part_No: partNo, Shippable: 'TRUE', Container_Status: 'OK' })
         });
         if (!resp.ok) throw `API error ${resp.status}`;
 
