@@ -1,4 +1,6 @@
 // ==UserScript==
+// @downloadURL  https://raw.githubusercontent.com/AlphaGeek509/plex-tampermonkey-scripts/master/QT35-DocAttachmentCount.user.js
+// @updateURL    https://raw.githubusercontent.com/AlphaGeek509/plex-tampermonkey-scripts/master/QT35-DocAttachmentCount.user.js
 // @name         QT35 › Doc Attachment Count
 // @namespace    http://tampermonkey.net/
 // @version      1.3.0
