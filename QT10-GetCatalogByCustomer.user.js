@@ -1,11 +1,11 @@
 // ==UserScript==
-// @name         QT10 > Get Catalog by Customer
-// @namespace    http://tampermonkey.net/
-// @version      2.0.0
-// @description  Floating CustomerNo, CatalogKey & CatalogCode with root-model + KO + DOM fallback, scheduled after KO tasks
-// @match        *://*.plex.com/SalesAndCrm/QuoteWizard
 // @downloadURL  https://raw.githubusercontent.com/AlphaGeek509/plex-tampermonkey-scripts/master/QT10-GetCatalogByCustomer.user.js  
 // @updateURL    https://raw.githubusercontent.com/AlphaGeek509/plex-tampermonkey-scripts/master/QT10-GetCatalogByCustomer.user.js
+// @name         QT10 > Get Catalog by Customer
+// @namespace    http://tampermonkey.net/
+// @version      2.1.2
+// @description  Floating CustomerNo, CatalogKey & CatalogCode with root-model + KO + DOM fallback, scheduled after KO tasks
+// @match        *://*.plex.com/SalesAndCrm/QuoteWizard*
 // @require      https://gist.githubusercontent.com/AlphaGeek509/c8a8aec394d2906fcc559dd70b679786/raw/871917c17a169d2ee839b2e1050eb0c71d431440/lt-plex-tm-utils.user.js
 // @require      https://gist.githubusercontent.com/AlphaGeek509/1f0b6287c1f0e7e97cac1d079bd0935b/raw/78d3ea2f4829b51e8676d57affcd26ed5d917325/lt-plex-auth.user.js
 // @grant        GM_registerMenuCommand
@@ -77,6 +77,15 @@
                     const catalogKey = rows1[0]?.Catalog_Key || 0;
                     console.log('QT10 ▶️ catalogKey:', catalogKey);
 
+                    // 🟡 Warn if catalogKey is 0
+                    if (catalogKey === 0) {
+                        TMUtils.showMessage(
+                            `⚠️ Warning: No catalog found for CustomerNo ${cust}. Please verify customer setup.`,
+                            { type: 'warning', autoClear: 7500 }
+                        );
+                        return; // Exit early since CatalogCode lookup will fail anyway
+                    }
+
                     // — Step 2: CatalogCode —
                     const rows2 = await fetch(
                         `${location.origin}/api/datasources/22696/execute?format=2`, {
@@ -135,7 +144,7 @@
                 }
                 catch (err) {
                     console.error('QT10 ✖️ lookup failed', err);
-                    TMUtils.showMessage('Lookup failed', { type: 'error', autoClear: 0 });
+                    TMUtils.showMessage('Lookup failed', { type: 'error', autoClear: 7500 });
                 }
             }
         });
