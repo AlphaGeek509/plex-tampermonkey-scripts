@@ -3,7 +3,7 @@
 // @updateURL   https://raw.githubusercontent.com/AlphaGeek509/plex-tampermonkey-scripts/master/QT20-PartDetail-GetStockLevels.user.js
 // @name         QT20 > Part Detail > Get Stock Levels
 // @namespace    http://tampermonkey.net/
-// @version      2.0.1
+// @version      2.0.3
 // @description  Inject “Get Stock Levels” button only in 'Quote Part Detail' modal, use Plex API 172, show banners, and update Note text
 // @match        *://*.plex.com/SalesAndCrm/QuoteWizard*
 // @require      https://gist.githubusercontent.com/AlphaGeek509/c8a8aec394d2906fcc559dd70b679786/raw/871917c17a169d2ee839b2e1050eb0c71d431440/lt-plex-tm-utils.user.js
@@ -78,7 +78,7 @@
         TMUtils.showMessage(`✅ STK: ${formatted}`, { type: 'success' });
       } catch (err) {
         console.error('Stock Level error:', err);
-        TMUtils.showMessage(`❌ ${err}`, { type: 'error', autoClear: false });
+        TMUtils.showMessage(`❌ ${err}`, { type: 'error', autoClear: 7500 });
       } finally {
         btn.style.pointerEvents = '';
         btn.style.opacity = '';
