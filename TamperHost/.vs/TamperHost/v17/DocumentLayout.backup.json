@@ -1,0 +1,108 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{3B07EA92-52CC-4005-9B6F-7F20C5FDA9F1}|TamperHost.fsproj|c:\\lyntron\\gitrepositories\\lyntrontampermonkey\\plex-tampermonkey-scripts\\tamperhost\\wwwroot\\qt10-getcatalogbycustomer.user.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}",
+      "RelativeMoniker": "D:0:0:{3B07EA92-52CC-4005-9B6F-7F20C5FDA9F1}|TamperHost.fsproj|solutionrelative:wwwroot\\qt10-getcatalogbycustomer.user.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{3B07EA92-52CC-4005-9B6F-7F20C5FDA9F1}|TamperHost.fsproj|c:\\lyntron\\gitrepositories\\lyntrontampermonkey\\plex-tampermonkey-scripts\\tamperhost\\properties\\launchsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{3B07EA92-52CC-4005-9B6F-7F20C5FDA9F1}|TamperHost.fsproj|solutionrelative:properties\\launchsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{3B07EA92-52CC-4005-9B6F-7F20C5FDA9F1}|TamperHost.fsproj|c:\\lyntron\\gitrepositories\\lyntrontampermonkey\\plex-tampermonkey-scripts\\tamperhost\\wwwroot\\lt-plex-tm-utils.user.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}",
+      "RelativeMoniker": "D:0:0:{3B07EA92-52CC-4005-9B6F-7F20C5FDA9F1}|TamperHost.fsproj|solutionrelative:wwwroot\\lt-plex-tm-utils.user.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{3B07EA92-52CC-4005-9B6F-7F20C5FDA9F1}|TamperHost.fsproj|c:\\lyntron\\gitrepositories\\lyntrontampermonkey\\plex-tampermonkey-scripts\\tamperhost\\wwwroot\\lt-plex-auth.user.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}",
+      "RelativeMoniker": "D:0:0:{3B07EA92-52CC-4005-9B6F-7F20C5FDA9F1}|TamperHost.fsproj|solutionrelative:wwwroot\\lt-plex-auth.user.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 215,
+          "SelectedChildIndex": 7,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:129:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:129:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{57d563b6-44a5-47df-85be-f4199ad6b651}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:3:0:{57d563b6-44a5-47df-85be-f4199ad6b651}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{aa2115a1-9712-457b-9047-dbb71ca2cdd2}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "lt-plex-auth.user.js",
+              "DocumentMoniker": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\wwwroot\\lt-plex-auth.user.js",
+              "RelativeDocumentMoniker": "wwwroot\\lt-plex-auth.user.js",
+              "ToolTip": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\wwwroot\\lt-plex-auth.user.js",
+              "RelativeToolTip": "wwwroot\\lt-plex-auth.user.js",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAMAAAAWAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001646|",
+              "WhenOpened": "2025-06-25T19:16:41.87Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "lt-plex-tm-utils.user.js",
+              "DocumentMoniker": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\wwwroot\\lt-plex-tm-utils.user.js",
+              "RelativeDocumentMoniker": "wwwroot\\lt-plex-tm-utils.user.js",
+              "ToolTip": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\wwwroot\\lt-plex-tm-utils.user.js",
+              "RelativeToolTip": "wwwroot\\lt-plex-tm-utils.user.js",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAMAAAASAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001646|",
+              "WhenOpened": "2025-06-25T19:16:38.383Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "QT10-GetCatalogByCustomer.user.js",
+              "DocumentMoniker": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\wwwroot\\QT10-GetCatalogByCustomer.user.js",
+              "RelativeDocumentMoniker": "wwwroot\\QT10-GetCatalogByCustomer.user.js",
+              "ToolTip": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\wwwroot\\QT10-GetCatalogByCustomer.user.js",
+              "RelativeToolTip": "wwwroot\\QT10-GetCatalogByCustomer.user.js",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABIAAAAcAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001646|",
+              "WhenOpened": "2025-06-25T19:14:49.44Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "launchSettings.json",
+              "DocumentMoniker": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\Properties\\launchSettings.json",
+              "RelativeDocumentMoniker": "Properties\\launchSettings.json",
+              "ToolTip": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\Properties\\launchSettings.json",
+              "RelativeToolTip": "Properties\\launchSettings.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA0AAAAgAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2025-06-25T19:10:36.781Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

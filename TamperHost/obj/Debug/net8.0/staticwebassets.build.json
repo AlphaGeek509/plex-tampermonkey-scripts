@@ -1,0 +1,331 @@
+{
+  "Version": 1,
+  "Hash": "g6othdRWCgqtCvwGQWaDPWIP8Q6yIH6pz9R6gbqjwaA=",
+  "Source": "TamperHost",
+  "BasePath": "_content/TamperHost",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [
+    {
+      "Name": "TamperHost\\wwwroot",
+      "Source": "TamperHost",
+      "ContentRoot": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\wwwroot\\",
+      "BasePath": "_content/TamperHost",
+      "Pattern": "**"
+    }
+  ],
+  "Assets": [
+    {
+      "Identity": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\wwwroot\\lt-plex-auth.user.js",
+      "SourceId": "TamperHost",
+      "SourceType": "Discovered",
+      "ContentRoot": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\wwwroot\\",
+      "BasePath": "_content/TamperHost",
+      "RelativePath": "lt-plex-auth.user#[.{fingerprint}]?.js",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "Fingerprint": "ydjhdh02l5",
+      "Integrity": "mvKbXwMQYnT2oQGxH53loGP7UEYpt53/somt1+itsMc=",
+      "CopyToOutputDirectory": "Always",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\lt-plex-auth.user.js"
+    },
+    {
+      "Identity": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\wwwroot\\lt-plex-tm-utils.user.js",
+      "SourceId": "TamperHost",
+      "SourceType": "Discovered",
+      "ContentRoot": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\wwwroot\\",
+      "BasePath": "_content/TamperHost",
+      "RelativePath": "lt-plex-tm-utils.user#[.{fingerprint}]?.js",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "Fingerprint": "5ge0zn26i8",
+      "Integrity": "21fkL2AeHe/IWbTIVAiLRFtvYq8t92rg5DLt335pTf4=",
+      "CopyToOutputDirectory": "Always",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\lt-plex-tm-utils.user.js"
+    },
+    {
+      "Identity": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\wwwroot\\QT10-GetCatalogByCustomer.user.js",
+      "SourceId": "TamperHost",
+      "SourceType": "Discovered",
+      "ContentRoot": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\wwwroot\\",
+      "BasePath": "_content/TamperHost",
+      "RelativePath": "QT10-GetCatalogByCustomer.user#[.{fingerprint}]?.js",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "Fingerprint": "urkgfhnz0p",
+      "Integrity": "KlBCmcSIHiRKXnhs0/C9hiEiADVt4eBAT/EB0pkWRNU=",
+      "CopyToOutputDirectory": "Always",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\QT10-GetCatalogByCustomer.user.js"
+    }
+  ],
+  "Endpoints": [
+    {
+      "Route": "lt-plex-auth.user.js",
+      "AssetFile": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\wwwroot\\lt-plex-auth.user.js",
+      "Selectors": [],
+      "ResponseHeaders": [
+        {
+          "Name": "Accept-Ranges",
+          "Value": "bytes"
+        },
+        {
+          "Name": "Content-Length",
+          "Value": "2825"
+        },
+        {
+          "Name": "Content-Type",
+          "Value": "text/javascript"
+        },
+        {
+          "Name": "ETag",
+          "Value": "\"mvKbXwMQYnT2oQGxH53loGP7UEYpt53/somt1+itsMc=\""
+        },
+        {
+          "Name": "Last-Modified",
+          "Value": "Wed, 25 Jun 2025 19:17:36 GMT"
+        },
+        {
+          "Name": "Cache-Control",
+          "Value": "no-cache"
+        }
+      ],
+      "EndpointProperties": [
+        {
+          "Name": "integrity",
+          "Value": "sha256-mvKbXwMQYnT2oQGxH53loGP7UEYpt53/somt1+itsMc="
+        }
+      ]
+    },
+    {
+      "Route": "lt-plex-auth.user.ydjhdh02l5.js",
+      "AssetFile": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\wwwroot\\lt-plex-auth.user.js",
+      "Selectors": [],
+      "ResponseHeaders": [
+        {
+          "Name": "Accept-Ranges",
+          "Value": "bytes"
+        },
+        {
+          "Name": "Content-Length",
+          "Value": "2825"
+        },
+        {
+          "Name": "Content-Type",
+          "Value": "text/javascript"
+        },
+        {
+          "Name": "ETag",
+          "Value": "\"mvKbXwMQYnT2oQGxH53loGP7UEYpt53/somt1+itsMc=\""
+        },
+        {
+          "Name": "Last-Modified",
+          "Value": "Wed, 25 Jun 2025 19:17:36 GMT"
+        },
+        {
+          "Name": "Cache-Control",
+          "Value": "max-age=31536000, immutable"
+        }
+      ],
+      "EndpointProperties": [
+        {
+          "Name": "fingerprint",
+          "Value": "ydjhdh02l5"
+        },
+        {
+          "Name": "label",
+          "Value": "lt-plex-auth.user.js"
+        },
+        {
+          "Name": "integrity",
+          "Value": "sha256-mvKbXwMQYnT2oQGxH53loGP7UEYpt53/somt1+itsMc="
+        }
+      ]
+    },
+    {
+      "Route": "lt-plex-tm-utils.user.5ge0zn26i8.js",
+      "AssetFile": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\wwwroot\\lt-plex-tm-utils.user.js",
+      "Selectors": [],
+      "ResponseHeaders": [
+        {
+          "Name": "Accept-Ranges",
+          "Value": "bytes"
+        },
+        {
+          "Name": "Content-Length",
+          "Value": "2854"
+        },
+        {
+          "Name": "Content-Type",
+          "Value": "text/javascript"
+        },
+        {
+          "Name": "ETag",
+          "Value": "\"21fkL2AeHe/IWbTIVAiLRFtvYq8t92rg5DLt335pTf4=\""
+        },
+        {
+          "Name": "Last-Modified",
+          "Value": "Wed, 25 Jun 2025 19:17:36 GMT"
+        },
+        {
+          "Name": "Cache-Control",
+          "Value": "max-age=31536000, immutable"
+        }
+      ],
+      "EndpointProperties": [
+        {
+          "Name": "fingerprint",
+          "Value": "5ge0zn26i8"
+        },
+        {
+          "Name": "label",
+          "Value": "lt-plex-tm-utils.user.js"
+        },
+        {
+          "Name": "integrity",
+          "Value": "sha256-21fkL2AeHe/IWbTIVAiLRFtvYq8t92rg5DLt335pTf4="
+        }
+      ]
+    },
+    {
+      "Route": "lt-plex-tm-utils.user.js",
+      "AssetFile": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\wwwroot\\lt-plex-tm-utils.user.js",
+      "Selectors": [],
+      "ResponseHeaders": [
+        {
+          "Name": "Accept-Ranges",
+          "Value": "bytes"
+        },
+        {
+          "Name": "Content-Length",
+          "Value": "2854"
+        },
+        {
+          "Name": "Content-Type",
+          "Value": "text/javascript"
+        },
+        {
+          "Name": "ETag",
+          "Value": "\"21fkL2AeHe/IWbTIVAiLRFtvYq8t92rg5DLt335pTf4=\""
+        },
+        {
+          "Name": "Last-Modified",
+          "Value": "Wed, 25 Jun 2025 19:17:36 GMT"
+        },
+        {
+          "Name": "Cache-Control",
+          "Value": "no-cache"
+        }
+      ],
+      "EndpointProperties": [
+        {
+          "Name": "integrity",
+          "Value": "sha256-21fkL2AeHe/IWbTIVAiLRFtvYq8t92rg5DLt335pTf4="
+        }
+      ]
+    },
+    {
+      "Route": "QT10-GetCatalogByCustomer.user.js",
+      "AssetFile": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\wwwroot\\QT10-GetCatalogByCustomer.user.js",
+      "Selectors": [],
+      "ResponseHeaders": [
+        {
+          "Name": "Accept-Ranges",
+          "Value": "bytes"
+        },
+        {
+          "Name": "Content-Length",
+          "Value": "7114"
+        },
+        {
+          "Name": "Content-Type",
+          "Value": "text/javascript"
+        },
+        {
+          "Name": "ETag",
+          "Value": "\"KlBCmcSIHiRKXnhs0/C9hiEiADVt4eBAT/EB0pkWRNU=\""
+        },
+        {
+          "Name": "Last-Modified",
+          "Value": "Wed, 25 Jun 2025 19:33:55 GMT"
+        },
+        {
+          "Name": "Cache-Control",
+          "Value": "no-cache"
+        }
+      ],
+      "EndpointProperties": [
+        {
+          "Name": "integrity",
+          "Value": "sha256-KlBCmcSIHiRKXnhs0/C9hiEiADVt4eBAT/EB0pkWRNU="
+        }
+      ]
+    },
+    {
+      "Route": "QT10-GetCatalogByCustomer.user.urkgfhnz0p.js",
+      "AssetFile": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\wwwroot\\QT10-GetCatalogByCustomer.user.js",
+      "Selectors": [],
+      "ResponseHeaders": [
+        {
+          "Name": "Accept-Ranges",
+          "Value": "bytes"
+        },
+        {
+          "Name": "Content-Length",
+          "Value": "7114"
+        },
+        {
+          "Name": "Content-Type",
+          "Value": "text/javascript"
+        },
+        {
+          "Name": "ETag",
+          "Value": "\"KlBCmcSIHiRKXnhs0/C9hiEiADVt4eBAT/EB0pkWRNU=\""
+        },
+        {
+          "Name": "Last-Modified",
+          "Value": "Wed, 25 Jun 2025 19:33:55 GMT"
+        },
+        {
+          "Name": "Cache-Control",
+          "Value": "max-age=31536000, immutable"
+        }
+      ],
+      "EndpointProperties": [
+        {
+          "Name": "fingerprint",
+          "Value": "urkgfhnz0p"
+        },
+        {
+          "Name": "label",
+          "Value": "QT10-GetCatalogByCustomer.user.js"
+        },
+        {
+          "Name": "integrity",
+          "Value": "sha256-KlBCmcSIHiRKXnhs0/C9hiEiADVt4eBAT/EB0pkWRNU="
+        }
+      ]
+    }
+  ]
+}

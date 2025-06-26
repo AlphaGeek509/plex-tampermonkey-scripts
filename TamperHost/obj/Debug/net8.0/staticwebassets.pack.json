@@ -1,0 +1,37 @@
+{
+  "Files": [
+    {
+      "Id": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\wwwroot\\QT10-GetCatalogByCustomer.user.js",
+      "PackagePath": "staticwebassets\\QT10-GetCatalogByCustomer.user.js"
+    },
+    {
+      "Id": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\wwwroot\\lt-plex-auth.user.js",
+      "PackagePath": "staticwebassets\\lt-plex-auth.user.js"
+    },
+    {
+      "Id": "C:\\LynTron\\GitRepositories\\LynTronTamperMonkey\\plex-tampermonkey-scripts\\TamperHost\\wwwroot\\lt-plex-tm-utils.user.js",
+      "PackagePath": "staticwebassets\\lt-plex-tm-utils.user.js"
+    },
+    {
+      "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.TamperHost.Microsoft.AspNetCore.StaticWebAssetEndpoints.props",
+      "PackagePath": "build\\Microsoft.AspNetCore.StaticWebAssetEndpoints.props"
+    },
+    {
+      "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.TamperHost.Microsoft.AspNetCore.StaticWebAssets.props",
+      "PackagePath": "build\\Microsoft.AspNetCore.StaticWebAssets.props"
+    },
+    {
+      "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.build.TamperHost.props",
+      "PackagePath": "build\\TamperHost.props"
+    },
+    {
+      "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.buildMultiTargeting.TamperHost.props",
+      "PackagePath": "buildMultiTargeting\\TamperHost.props"
+    },
+    {
+      "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.buildTransitive.TamperHost.props",
+      "PackagePath": "buildTransitive\\TamperHost.props"
+    }
+  ],
+  "ElementsToRemove": []
+}
