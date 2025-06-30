@@ -1,0 +1,38 @@
+name: Publish TamperMonkey scripts to GitHub Pages
+
+on:
+  push:
+    branches: [ master ]
+
+permissions:
+  contents: write   # so the action can push back to the repo
+
+jobs:
+  update-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1) Check out the repo
+      - uses: actions/checkout@v3
+        with:
+          persist-credentials: true  # so we can push back
+
+      # 2) Copy all .user.js from your host folder into docs/
+      - name: Copy user scripts into docs/
+        run: |
+          cp TamperHost/wwwroot/*.user.js docs/
+
+      # 3) Commit the changes (if any)
+      - name: Commit updated docs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/*.user.js
+          # commit only if there are changes
+          git diff --cached --quiet || git commit -m "ci: update docs/ with latest .user.js"
+
+      # 4) Push back to the repo
+      - name: Push docs changes
+        uses: ad-m/github-push-action@v0.6.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
