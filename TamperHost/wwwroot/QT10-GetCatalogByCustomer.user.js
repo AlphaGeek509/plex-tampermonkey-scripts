@@ -5,13 +5,13 @@
 // ==UserScript==
 // @name         QT10 > Get Catalog by Customer
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.0.13
+// @version      3.0.14
 // @description  Lookup & float CustomerNo → CatalogKey/Code into VM & dropdown
 // @match        *://*.plex.com/SalesAndCrm/QuoteWizard*
-// @require      http://localhost:5000/lt-plex-auth.user.js
 // @require      https://raw.githubusercontent.com/AlphaGeek509/plex-tampermonkey-scripts/master/lt-plex-auth.user.js
-// @require      http://localhost:5000/lt-plex-tm-utils.user.js
+// @require      http://localhost:5000/lt-plex-auth.user.js
 // @require      https://raw.githubusercontent.com/AlphaGeek509/plex-tampermonkey-scripts/master/lt-plex-tm-utils.user.js
+// @require      http://localhost:5000/lt-plex-tm-utils.user.js
 // @grant        GM_registerMenuCommand
 // @grant        GM_getValue
 // @grant        GM_setValue
