@@ -1,0 +1,12 @@
+﻿
+# Visual Studio folders
+.vs/
+**/bin/
+**/obj/
+
+# Rider (if ever used)
+.idea/
+
+# User-specific and temp files
+*.user
+*.suo

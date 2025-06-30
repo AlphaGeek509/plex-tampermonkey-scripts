@@ -1,0 +1,6 @@
+﻿# enforce LF in repo, convert to CRLF on checkout for Windows
+* text=auto
+
+# force scripts to use LF even on Windows (optional)
+*.js    text eol=lf
+*.fs    text eol=lf
