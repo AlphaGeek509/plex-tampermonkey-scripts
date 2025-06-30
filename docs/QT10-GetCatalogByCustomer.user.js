@@ -1,151 +1,93 @@
+// File: QT10-GetCatalogByCustomer.user.js
+// =================================================================
+/* global TMUtils, PlexAPI, ko */
+
 // ==UserScript==
-// @downloadURL  https://raw.githubusercontent.com/AlphaGeek509/plex-tampermonkey-scripts/master/QT10-GetCatalogByCustomer.user.js  
-// @updateURL    https://raw.githubusercontent.com/AlphaGeek509/plex-tampermonkey-scripts/master/QT10-GetCatalogByCustomer.user.js
 // @name         QT10 > Get Catalog by Customer
-// @namespace    http://tampermonkey.net/
-// @version      2.1.2
-// @description  Floating CustomerNo, CatalogKey & CatalogCode with root-model + KO + DOM fallback, scheduled after KO tasks
+// @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
+// @version      3.0.13
+// @description  Lookup & float CustomerNo → CatalogKey/Code into VM & dropdown
 // @match        *://*.plex.com/SalesAndCrm/QuoteWizard*
-// @require      https://gist.githubusercontent.com/AlphaGeek509/c8a8aec394d2906fcc559dd70b679786/raw/871917c17a169d2ee839b2e1050eb0c71d431440/lt-plex-tm-utils.user.js
-// @require      https://gist.githubusercontent.com/AlphaGeek509/1f0b6287c1f0e7e97cac1d079bd0935b/raw/78d3ea2f4829b51e8676d57affcd26ed5d917325/lt-plex-auth.user.js
+// @require      http://localhost:5000/lt-plex-auth.user.js
+// @require      https://raw.githubusercontent.com/AlphaGeek509/plex-tampermonkey-scripts/master/lt-plex-auth.user.js
+// @require      http://localhost:5000/lt-plex-tm-utils.user.js
+// @require      https://raw.githubusercontent.com/AlphaGeek509/plex-tampermonkey-scripts/master/lt-plex-tm-utils.user.js
 // @grant        GM_registerMenuCommand
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_xmlhttpRequest
+// @connect      https://*.plex.com
+// @updateURL    http://localhost:5000/QT10-GetCatalogByCustomer.user.js
+// @updateURL    https://raw.githubusercontent.com/AlphaGeek509/plex-tampermonkey-scripts/master/QT10-GetCatalogByCustomer.user.js
+// @downloadURL  http://localhost:5000/QT10-GetCatalogByCustomer.user.js
+// @downloadURL  https://raw.githubusercontent.com/AlphaGeek509/plex-tampermonkey-scripts/master/QT10-GetCatalogByCustomer.user.js
 // ==/UserScript==
 
-(async function() {
+
+(async function () {
     'use strict';
+    const log = (...args) => console.log('QT10 ▶️', ...args);
+    const err = (...args) => console.error('QT10 ✖️', ...args);
 
-    // 1) PlexAPI helper
+    // 1) Get API key
     let apiKey;
-    try {
-        apiKey = await TMUtils.getApiKey();
-        console.log('QT10 ▶️ PlexAPI ready');
-    } catch (e) {
-        console.error('QT10 ✖️ PlexAPI failed', e);
-    }
+    try { apiKey = await TMUtils.getApiKey(); log('PlexAPI ready'); }
+    catch (e) { err('PlexAPI failed', e); return; }
 
-    // 2) Debug panel
-    const debugPanel = document.createElement('div');
-    debugPanel.id = 'tm-debug-panel';
-    Object.assign(debugPanel.style, {
-        position: 'fixed', bottom: '10px', left: '10px',
-        background: 'rgba(0,0,0,0.7)', color: '#fff',
-        padding: '6px 10px', borderRadius: '4px',
-        fontSize: '0.85em', zIndex: 10000,
-        maxWidth: '300px', lineHeight: '1.2'
-    });
-    // document.body.appendChild(debugPanel);
+    // 2) Wait for root VM model
+    TMUtils.waitForModel('.plex-formatted-address', m => {
+        console.log('🐛 QT10 – waitForModel matched element, VM model is:', m);
 
-    // 3) Wait for the root VM
-    function waitForModel(sel, cb) {
-        const el = document.querySelector(sel);
-        if (el) {
-            const vm = ko.dataFor(el);
-            if (vm?.model) return cb(vm.model);
-        }
-        setTimeout(() => waitForModel(sel, cb), 100);
-    }
-
-    // 4) Core: watch CustomerNo
-    waitForModel('.plex-formatted-address', m => {
-        console.log('QT10 ▶️ VM.model ready');
-        let lastCust = null;
-
+        let lastCust;
         ko.computed(async () => {
             const raw = ko.unwrap(m.CustomerNo);
+            console.log('🐛 QT10 – computed fired, raw CustomerNo =', raw);
+
             const cust = Array.isArray(raw) ? raw[0] : raw;
-            debugPanel.textContent = `CustomerNo: ${cust}   CatalogKey: –   CatalogCode: –`;
 
-            if (cust && cust !== lastCust) {
-                lastCust = cust;
-                console.log('QT10 ▶️ New customer:', cust);
-
-                try {
-                    // — Step 1: CatalogKey —
-                    const rows1 = await fetch(
-                        `${location.origin}/api/datasources/319/execute?format=2`, {
-                        method: 'POST',
-                        headers: {
-                            'Accept': 'application/json',
-                            'Content-Type': 'application/json;charset=UTF-8',
-                            'Authorization': apiKey
-                        },
-                        body: JSON.stringify({ Customer_No: cust })
-                    }).then(r => r.json()).then(d => d.rows || []);
-                    const catalogKey = rows1[0]?.Catalog_Key || 0;
-                    console.log('QT10 ▶️ catalogKey:', catalogKey);
-
-                    // 🟡 Warn if catalogKey is 0
-                    if (catalogKey === 0) {
-                        TMUtils.showMessage(
-                            `⚠️ Warning: No catalog found for CustomerNo ${cust}. Please verify customer setup.`,
-                            { type: 'warning', autoClear: 7500 }
-                        );
-                        return; // Exit early since CatalogCode lookup will fail anyway
-                    }
-
-                    // — Step 2: CatalogCode —
-                    const rows2 = await fetch(
-                        `${location.origin}/api/datasources/22696/execute?format=2`, {
-                        method: 'POST',
-                        headers: {
-                            'Accept': 'application/json',
-                            'Content-Type': 'application/json;charset=UTF-8',
-                            'Authorization': apiKey
-                        },
-                        body: JSON.stringify({ Catalog_Key: catalogKey })
-                    }).then(r => r.json()).then(d => d.rows || []);
-                    const catalogCode = (rows2.map(r => r.Catalog_Code).filter(Boolean)[0]) || '';
-                    console.log('QT10 ▶️ catalogCode:', catalogCode);
-
-                    // — Update root view-model —
-                    if (ko.isObservable(m.CatalogKey)) {
-                        m.CatalogKey(catalogKey);
-                    } else if (Array.isArray(m.CatalogKey)) {
-                        m.CatalogKey.splice(0, m.CatalogKey.length, catalogKey);
-                    }
-
-                    // — Schedule update to dropdown —
-                    ko.tasks.schedule(() => {
-                        const dd = document.getElementById('QuoteCatalogDropDown');
-                        if (!dd) return;
-
-                        const ctx = ko.contextFor(dd);
-                        const items = ko.unwrap(ctx.$data.data);
-                        console.log('QT10 ▶️ dropdown items:', items);
-
-                        // 1) KO binding
-                        const match = items.find(i => i.CatalogKey === catalogKey);
-                        if (match && typeof ctx.$data.selected === 'function') {
-                            ctx.$data.selected([match]);
-                            dd.dispatchEvent(new Event('change', { bubbles: true }));
-                            console.log('QT10 ▶️ selected via KO:', match);
-                        }
-
-                        // 2) DOM fallback
-                        const opts = Array.from(dd.options);
-                        const idx = opts.findIndex(o => o.textContent.trim() === catalogCode);
-                        if (idx > 0) {
-                            dd.selectedIndex = idx;
-                            dd.dispatchEvent(new Event('change', { bubbles: true }));
-                            console.log('QT10 ▶️ selected via DOM:', idx);
-                        }
-                    });
-
-                    // — UI feedback —
-                    TMUtils.showMessage(
-                        `CustomerNo: ${cust}\nCatalogKey: ${catalogKey}\nCatalogCode: ${catalogCode}`,
-                        { type: 'success' }
-                    );
-                    debugPanel.textContent =
-                        `CustomerNo: ${cust}   CatalogKey: ${catalogKey}   CatalogCode: ${catalogCode}`;
+            console.log('🐛 QT10 – normalized cust =', cust);
+            if (!cust || cust === lastCust) return;
+            lastCust = cust;
+            log('New customer', cust);
+            try {
+                // — lookup CatalogKey —
+                const [row1] = await TMUtils.fetchData(319, { Customer_No: cust });
+                const catalogKey = row1?.Catalog_Key || 0;
+                if (!catalogKey) {
+                    TMUtils.showMessage(`⚠️ No catalog for ${cust}`, { type: 'warning' });
+                    return;
                 }
-                catch (err) {
-                    console.error('QT10 ✖️ lookup failed', err);
-                    TMUtils.showMessage('Lookup failed', { type: 'error', autoClear: 7500 });
+
+                // — lookup CatalogCode —
+                const rows2 = await TMUtils.fetchData(22696, { Catalog_Key: catalogKey });
+                const catalogCode = rows2.map(r => r.Catalog_Code).filter(Boolean)[0] || '';
+
+                // — update root VM —
+                if (typeof m.CatalogKey === 'function') m.CatalogKey(catalogKey);
+                else if (Array.isArray(m.CatalogKey)) {
+                    m.CatalogKey.splice(0, m.CatalogKey.length, catalogKey);
                 }
+
+                // — sync dropdown —
+                TMUtils.observeInsert('#QuoteCatalogDropDown', dd => {
+                    const koCtx = ko.contextFor(dd);
+                    const items = ko.unwrap(koCtx.$data.data);
+                    const match = items.find(i => i.CatalogKey === catalogKey);
+                    if (match && typeof koCtx.$data.selected === 'function') {
+                        koCtx.$data.selected([match]);
+                    } else {
+                        TMUtils.selectOptionByText(dd, catalogCode);
+                    }
+                });
+
+                // — show feedback —
+                TMUtils.showMessage(
+                    `Customer: ${cust}\nCatalogKey: ${catalogKey}\nCatalogCode: ${catalogCode}`,
+                    { type: 'success' }
+                );
+            } catch (e) {
+                err('Lookup failed', e);
+                TMUtils.showMessage('Lookup failed', { type: 'error' });
             }
         });
     });
