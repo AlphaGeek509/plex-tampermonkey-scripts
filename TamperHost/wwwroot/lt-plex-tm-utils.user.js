@@ -3,23 +3,17 @@
 // ==UserScript==
 // @name         TM-Utils
 // @namespace    http://tampermonkey.net/
-// @version      2.1.11
+// @version      3.5.55
 // @description  Shared helper: API-key fetch, data fetch, UI messages, DOM utilities
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_xmlhttpRequest
+// @grant        unsafeWindow
 // @connect      *://*.plex.com
 // ==/UserScript==
 
 (function (window) {
     'use strict';
-    console.log(
-        '🐛 TMUtils loaded:',
-        'waitForModel=', typeof waitForModel,
-        'observeInsert=', typeof observeInsert,
-        'fetchData=', typeof fetchData
-    );
-
 
     // 1) Fetch PlexAPI key
     async function getApiKey() {
@@ -85,15 +79,44 @@
         if (existing) { obs.disconnect(); callback(existing); }
     }
 
-    // 5) Knockout root-model waiter
-    function waitForModel(selector, cb, interval = 100) {
-        const el = document.querySelector(selector);
-        if (el && window.ko) {
-            const vm = ko.dataFor(el);
-            if (vm?.model) return cb(vm.model);
-        }
-        setTimeout(() => waitForModel(selector, cb, interval), interval);
+    function waitForModel(selector, cb, interval = 100, maxAttempts = 100) {
+        waitForModelAsync(selector, interval, maxAttempts)
+            .then(cb)
+            .catch(e => console.error('waitForModel error:', e));
     }
+
+
+    // 5) Knockout controller + VM waiter
+    async function waitForModelAsync(sel, interval = 250, max = 10000) {
+        return new Promise((resolve, reject) => {
+            let tries = 0;
+            function go() {
+                const el = document.querySelector(sel);
+                if (!el || typeof ko.contextFor !== 'function') return next();
+
+                const ctrl = ko.contextFor(el).$data;      // FormattedAddressController
+                const vm = ctrl && ctrl.model;           // QuoteWizard VM
+
+                console.groupCollapsed('🔍 waitForModelAsync');
+                console.log('selector →', sel);
+                console.log('controller →', ctrl);
+                console.log('vm →', vm);
+                console.groupEnd();
+
+                if (vm) return resolve({ controller: ctrl, viewModel: vm });
+                next();
+            }
+            function next() {
+                if (++tries >= max) {
+                    console.warn(`⌛ waitForModelAsync timed out`);
+                    return reject(new Error('Timed out'));
+                }
+                setTimeout(go, interval);
+            }
+            go();
+        });
+    }
+
 
     // 6) Select <option> by visible text or by numeric value
     function selectOptionByText(selectEl, text) {
@@ -107,10 +130,27 @@
         if (opt) { selectEl.value = opt.value; selectEl.dispatchEvent(new Event('change', { bubbles: true })); }
     }
 
-    window.TMUtils = {
-        getApiKey, fetchData,
-        showMessage, hideMessage,
-        observeInsert, waitForModel,
-        selectOptionByText, selectOptionByValue
+    // 🔁 Global exposure for TamperMonkey sandbox
+    const TMUtils = {
+        getApiKey,
+        fetchData,
+        showMessage,
+        hideMessage,
+        observeInsert,
+        waitForModel,
+        waitForModelAsync,
+        selectOptionByText,
+        selectOptionByValue
     };
+
+    window.TMUtils = TMUtils;
+    unsafeWindow.TMUtils = TMUtils;
+
+    console.log('🐛 TMUtils loaded from local build:', {
+        waitForModelAsync: typeof waitForModelAsync,
+        observeInsert: typeof observeInsert,
+        fetchData: typeof fetchData
+    });
+
+
 })(window);

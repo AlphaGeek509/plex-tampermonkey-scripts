@@ -1,6 +1,6 @@
 ﻿
 # Visual Studio folders
-**/.vs/
+*.vs/
 **/bin/
 **/obj/
 
@@ -10,3 +10,6 @@
 # User-specific and temp files
 *.user
 *.suo
+
+# VS solution index cache
+*slnx.sqlite
