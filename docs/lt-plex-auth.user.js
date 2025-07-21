@@ -3,7 +3,7 @@
 // ==UserScript==
 // @name         lt-plex-auth
 // @namespace    http://tampermonkey.net/
-// @version      3.1.0
+// @version      3.5.55
 // @description  PlexAPI helper: prompt for user:pass or full token, Base64-encode & prefix "Basic "
 // @grant        GM_getValue
 // @grant        GM_setValue
