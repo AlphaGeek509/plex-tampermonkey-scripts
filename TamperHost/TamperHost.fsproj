@@ -5,6 +5,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include=".version" />
+    <None Include="build-plus.js" />
     <None Include=".gitattributes" />
     <None Include=".gitignore" />
     <Compile Include="Program.fs" />
