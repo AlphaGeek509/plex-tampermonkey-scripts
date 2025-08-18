@@ -1,14 +1,13 @@
-// File: lt-plex-auth.user.js
-// =================================================================
 // ==UserScript==
-// @name         lt-plex-auth
-// @namespace    http://tampermonkey.net/
-// @version      3.5.71
-// @description  PlexAPI helper: prompt for user:pass or full token, Base64-encode & prefix "Basic "
+// @name         LT › Plex Auth Helper
+// @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
+// @version      3.5.93
+// @description  Shared helper for storing and retrieving Plex API key
+// @match        https://*.on.plex.com/*
+// @match        https://*.plex.com/*
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
-// @grant        unsafeWindow
 // ==/UserScript==
 
 (function () {

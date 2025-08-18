@@ -1,14 +1,15 @@
-// File: lt-plex-tm-utils.user.js
-// =================================================================
 // ==UserScript==
-// @name         TM-Utils
+// @name         LT › Plex TM Utils
+// @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
 // @namespace    http://tampermonkey.net/
-// @version      3.5.71
-// @description  Shared helper: API-key fetch, data fetch, UI messages, DOM utilities
-// @grant        GM_getValue
-// @grant        GM_setValue
+// @version      3.5.93
+// @description  Shared utilities (fetchData, observeInsert, waitForModelAsync, matchRoute, etc.)
+// @match        https://*.on.plex.com/*
+// @match        https://*.plex.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
+// @grant        GM_getValue
+// @grant        GM_setValue
 // @connect      *.plex.com
 // ==/UserScript==
 
@@ -19,6 +20,12 @@
     // ENV / FLAGS
     // ---------------------------------------------------------------------
     const DEV = /test\.on\.plex\.com$/i.test(location.hostname);
+    let __tmDebug = false;
+    function setDebug(v) { __tmDebug = !!v; }
+
+    function log(...args) { if (__tmDebug) console.log('TMUtils:', ...args); }
+    function warn(...args) { if (__tmDebug) console.warn('TMUtils:', ...args); }
+    function error(...args) { console.error('TMUtils:', ...args); } // errors always print
 
     // ---------------------------------------------------------------------
     // 1) Fetch Plex API key (now robust to PlexAuth or PlexAPI; async-safe)
@@ -134,9 +141,9 @@
     }
 
     // Dev logger
-    function log(...args) {
-        if (DEV) console.log('TMUtils:', ...args);
-    }
+    //function log(...args) {
+    //    if (DEV) log('TMUtils:', ...args);
+    //}
 
     // ---------------------------------------------------------------------
     // 4) DOM insertion observer (kept as-is)
@@ -173,9 +180,9 @@
                 const vm = ctrl && ctrl.model;        // QuoteWizard VM
 
                 console.groupCollapsed('🔍 waitForModelAsync');
-                console.log('selector →', sel);
-                console.log('controller →', ctrl);
-                console.log('vm →', vm);
+                log('selector →', sel);
+                log('controller →', ctrl);
+                log('vm →', vm);
                 console.groupEnd();
 
                 if (vm) return resolve({ controller: ctrl, viewModel: vm });
@@ -256,9 +263,12 @@
         // new/standardized
         toast,
         log,
+        warn,
+        error,
         ensureRoute,
         onRouteChange,
         matchRoute,
+        setDebug,
 
         // exposed for completeness
         _buildAuthHeader

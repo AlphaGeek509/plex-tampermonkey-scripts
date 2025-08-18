@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         QT10 > Get Catalog by Customer
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.71
+// @version      3.5.93
 // @description  Lookup CatalogKey/Code for CustomerNo and write to VM (no dropdown sync)
 // @match        https://*.on.plex.com/*
 // @match        https://*.plex.com/*
@@ -13,15 +13,22 @@
 // @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
 // @connect      *.plex.com
+// @connect      localhost
 // ==/UserScript==
 
 (async function () {
     'use strict';
 
-    const DEV = /test\.on\.plex\.com$/i.test(location.hostname);
+    // ---------- Debug setup (quiet by default) ----------
+    // Flip TMUtils.setDebug(true) in the console when you want verbose logs.
+    const IS_TEST_ENV = /test\.on\.plex\.com$/i.test(location.hostname);
+    const ROUTES = [/\/SalesAndCRM\/QuoteWizard\b/i];
 
-    // Only run on the QuoteWizard route (case-insensitive guard)
-    if (!/\/SalesAndCRM\/QuoteWizard\b/i.test(location.pathname)) return;
+    TMUtils.setDebug(true);
+    const dlog = (...args) => { if (IS_TEST_ENV) TMUtils.log('QT10:', ...args); };
+    const dwarn = (...args) => { if (IS_TEST_ENV) TMUtils.warn('QT10:', ...args); };
+    const derror = (...args) => { TMUtils.error('QT10:', ...args); };
+
 
     try {
         // Ensure key is available (uses PlexAuth/PlexAPI via TMUtils)
@@ -41,7 +48,7 @@
             if (!formattedAddress) return; // still waiting
 
             sub.dispose();
-            if (DEV) TMUtils.log('QT10: formatted address ready →', formattedAddress);
+            dlog('QT10: formatted address ready →', formattedAddress);
 
             // Pull CustomerNo off the VM (can be observable or array)
             const unwrapped = ko.unwrap(viewModel.CustomerNo);
@@ -85,16 +92,16 @@
                     'success'
                 );
 
-                if (DEV) TMUtils.log('QT10 done', { customerNo, catalogKey, catalogCode });
+                dlog('QT10 done', { customerNo, catalogKey, catalogCode });
             } catch (err) {
                 TMUtils.toast(`❌ Lookup failed: ${err.message}`, 'error');
-                if (DEV) console.error(err);
+                derror(err);
             }
         });
 
-        if (DEV) TMUtils.log('QT10: subscribed — waiting for address change…');
+        dlog('QT10: subscribed — waiting for address change…');
     } catch (e) {
         TMUtils.toast(`❌ QT10 init failed: ${e.message}`, 'error');
-        if (DEV) console.error(e);
+        derror(e);
     }
 })();

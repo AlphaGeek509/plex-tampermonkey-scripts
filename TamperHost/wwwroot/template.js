@@ -80,7 +80,7 @@
 
             // Placeholder so you can verify the template runs:
             TMUtils.toast('✅ QTxx template ran (replace with your logic)', 'success');
-            if (DEV) TMUtils.log('QTxx ▶️ init complete', { route: location.pathname });
+            dlog('QTxx ▶️ init complete', { route: location.pathname });
             // Optional: show diagnostics with VM keys
             if (DEV) showDiag(viewModel);
         } catch (err) {
