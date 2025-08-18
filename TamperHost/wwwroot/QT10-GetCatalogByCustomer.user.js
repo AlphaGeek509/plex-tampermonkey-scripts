@@ -1,9 +1,10 @@
 // ==UserScript==
 // @name         QT10 > Get Catalog by Customer
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.63
-// @description  Lookup & float CustomerNo → CatalogKey/Code into VM & dropdown
-// @match        *://*.plex.com/SalesAndCrm/QuoteWizard*
+// @version      3.5.71
+// @description  Lookup CatalogKey/Code for CustomerNo and write to VM (no dropdown sync)
+// @match        https://*.on.plex.com/*
+// @match        https://*.plex.com/*
 // @require      http://localhost:5000/lt-plex-auth.user.js
 // @require      http://localhost:5000/lt-plex-tm-utils.user.js
 // @grant        GM_registerMenuCommand
@@ -11,116 +12,89 @@
 // @grant        GM_setValue
 // @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
-// @connect      https://*.plex.com
+// @connect      *.plex.com
 // ==/UserScript==
 
-; (async function () {
+(async function () {
     'use strict';
-    const log = (...args) => console.log('QT10 ▶️', ...args);
-    const err = (...args) => console.error('QT10 ✖️', ...args);
 
-    // 1️⃣ Grab your Plex API key
+    const DEV = /test\.on\.plex\.com$/i.test(location.hostname);
+
+    // Only run on the QuoteWizard route (case-insensitive guard)
+    if (!/\/SalesAndCRM\/QuoteWizard\b/i.test(location.pathname)) return;
+
     try {
+        // Ensure key is available (uses PlexAuth/PlexAPI via TMUtils)
         await TMUtils.getApiKey();
-        log('PlexAPI ready');
-    } catch (e) {
-        return err('PlexAPI failed', e);
-    }
 
-    // 2️⃣ Sanity‐check TMUtils
-    if (typeof TMUtils !== 'object') {
-        return err('TMUtils not available');
-    }
+        // Wait for KO to bind and hand back controller + viewModel
+        const { controller, viewModel } =
+            await TMUtils.waitForModelAsync('.plex-formatted-address', 250, 1000);
 
-    // 3️⃣ Wait for the FormattedAddressComponent to bind
-    //    — it now resolves to an object { controller, viewModel }
-    let controller, viewModel;
-    try {
-        ({ controller, viewModel } = await TMUtils.waitForModelAsync('.plex-formatted-address', 250, 1000));
-        log('✅ waitForModelAsync → controller & viewModel found', controller, viewModel);
-    } catch (e) {
-        return err('waitForModelAsync failed', e);
-    }
-
-    // 4️⃣ Subscribe to the address picker
-    if (!ko.isObservable(controller.address)) {
-        return err('address is not an observable on controller!');
-    }
-    const sub = controller.address.subscribe(async formattedAddress => {
-        if (!formattedAddress) {
-            log('⏳ Waiting for formatted address…');
+        if (!ko.isObservable(controller.address)) {
+            TMUtils.toast('❌ controller.address is not observable', 'error');
             return;
         }
-        sub.dispose();
-        log('✅ Formatted address arrived:', formattedAddress);
 
-        // 5️⃣ Pull the CustomerNo off your viewModel (it's an observableArray)
-        const arr = ko.unwrap(viewModel.CustomerNo);
-        const cust = Array.isArray(arr) ? arr[0] : arr;
-        if (!cust) {
-            return err('No CustomerNo found on the viewModel—aborting.');
-        }
-        log('👤 CustomerNo is:', cust);
+        // React once the formatted address is populated
+        const sub = controller.address.subscribe(async formattedAddress => {
+            if (!formattedAddress) return; // still waiting
 
-        // 6️⃣ Do your Plex lookup
-        try {
-            const [row1] = await TMUtils.fetchData(319, { Customer_No: cust });
-            const catalogKey = row1?.Catalog_Key || 0;
-            if (!catalogKey) {
-                return TMUtils.showMessage(`⚠️ No catalog for ${cust}`, { type: 'warning' });
+            sub.dispose();
+            if (DEV) TMUtils.log('QT10: formatted address ready →', formattedAddress);
+
+            // Pull CustomerNo off the VM (can be observable or array)
+            const unwrapped = ko.unwrap(viewModel.CustomerNo);
+            const customerNo = Array.isArray(unwrapped) ? unwrapped[0] : unwrapped;
+            if (!customerNo) {
+                TMUtils.toast('❌ No CustomerNo found on VM', 'error');
+                return;
             }
-            const rows2 = await TMUtils.fetchData(22696, { Catalog_Key: catalogKey });
-            const catalogCode = rows2.map(r => r.Catalog_Code).filter(Boolean)[0] || '';
 
-            // 7️⃣ Update your viewModel
-            if (typeof viewModel.CatalogKey === 'function') {
-                viewModel.CatalogKey(catalogKey);
-            } else {
-                viewModel.CatalogKey.splice(0, viewModel.CatalogKey.length, catalogKey);
-            }
-            debugger;
-            TMUtils.observeInsert('#QuoteCatalogDropDown', dd => {
-                const ddCtx = ko.contextFor(dd).$data;
-                const items = ko.unwrap(ddCtx.data);
-                // find the matching item object:
-                const match = items.find(i => i.CatalogKey === catalogKey);
-
-                if (match && typeof ddCtx.selected === 'function') {
-                    // 1) bind the object itself:
-                    ddCtx.selected([match]);
-                    // 2) also fire a native change so any listeners pick it up
-                    dd.value = String(items.indexOf(match));
-                    dd.dispatchEvent(new Event('change', { bubbles: true }));
-                    console.log('📝 Dropdown set via KO to item:', match);
-                } else {
-                    // fallback by text if something weird happens
-                    TMUtils.selectOptionByText(dd, catalogCode);
-                    console.log('⚠️ Fallback: setting by visible text to', catalogCode);
+            try {
+                // 1) Customer → CatalogKey
+                //    (Your existing datasource IDs preserved)
+                const [row1] = await TMUtils.fetchData(319, { Customer_No: customerNo });
+                const catalogKey = row1?.Catalog_Key || 0;
+                if (!catalogKey) {
+                    TMUtils.toast(`⚠️ No catalog for ${customerNo}`, 'warn');
+                    return;
                 }
-            });
 
-;
+                // 2) CatalogKey → CatalogCode
+                const rows2 = await TMUtils.fetchData(22696, { Catalog_Key: catalogKey });
+                const catalogCode = rows2.map(r => r.Catalog_Code).find(Boolean) || '';
 
-            //// 8️⃣ Sync the dropdown UI
-            //TMUtils.observeInsert('#QuoteCatalogDropDown', dd => {
-            //    const ddCtx = ko.contextFor(dd).$data;
-            //    const match = ko.unwrap(ddCtx.data).find(i => i.CatalogKey === catalogKey);
-            //    if (match && typeof ddCtx.selected === 'function') {
-            //        ddCtx.selected([match]);
-            //    } else {
-            //        TMUtils.selectOptionByText(dd, catalogCode);
-            //    }
-            //});
+                // 3) Write back to KO VM (prefer observables, fallback to arrays)
+                if (typeof viewModel.CatalogKey === 'function') {
+                    viewModel.CatalogKey(catalogKey);
+                } else if (Array.isArray(viewModel.CatalogKey)) {
+                    viewModel.CatalogKey.length = 0;
+                    viewModel.CatalogKey.push(catalogKey);
+                }
 
-            TMUtils.showMessage(
-                `Customer: ${cust}\nCatalogKey: ${catalogKey}\nCatalogCode: ${catalogCode}`,
-                { type: 'success' }
-            );
-        } catch (lookupErr) {
-            err('Lookup failed', lookupErr);
-            TMUtils.showMessage('Lookup failed', { type: 'error' });
-        }
-    });
+                if (typeof viewModel.CatalogCode === 'function') {
+                    viewModel.CatalogCode(catalogCode);
+                } else if (Array.isArray(viewModel.CatalogCode)) {
+                    viewModel.CatalogCode.length = 0;
+                    viewModel.CatalogCode.push(catalogCode);
+                }
 
-    log('⏳ Subscribed — waiting for address change…');
+                TMUtils.toast(
+                    `✅ Customer: ${customerNo}\nCatalogKey: ${catalogKey}\nCatalogCode: ${catalogCode}`,
+                    'success'
+                );
+
+                if (DEV) TMUtils.log('QT10 done', { customerNo, catalogKey, catalogCode });
+            } catch (err) {
+                TMUtils.toast(`❌ Lookup failed: ${err.message}`, 'error');
+                if (DEV) console.error(err);
+            }
+        });
+
+        if (DEV) TMUtils.log('QT10: subscribed — waiting for address change…');
+    } catch (e) {
+        TMUtils.toast(`❌ QT10 init failed: ${e.message}`, 'error');
+        if (DEV) console.error(e);
+    }
 })();
