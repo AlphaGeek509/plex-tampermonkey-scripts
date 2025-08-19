@@ -1,12 +1,12 @@
 ﻿// ==UserScript==
 // @name         QT35 › Doc Attachment Count
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.97
+// @version      3.5.109
 // @description  Displays read-only “Attachment (N)” in the Quote Wizard action bar (DS 11713). Independent of pricing/button presence.
 // @match        https://*.on.plex.com/*
 // @match        https://*.plex.com/*
-// @require      http://localhost:5000/lt-plex-auth.user.js
 // @require      http://localhost:5000/lt-plex-tm-utils.user.js
+// @require      http://localhost:5000/lt-plex-auth.user.js
 // @grant        GM_registerMenuCommand
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -19,14 +19,21 @@
 (function (window) {
     'use strict';
 
-    // ========= Config / Routing =========
+    // ========= Config / Routing / Standard bootstraping =========
     const IS_TEST_ENV = /test\.on\.plex\.com$/i.test(location.hostname);
-    const ROUTES = [/\/SalesAndCRM\/QuoteWizard\b/i];
 
-    TMUtils.setDebug(true);
-    const dlog = (...args) => { if (IS_TEST_ENV) TMUtils.log('QT35:', ...args); };
-    const dwarn = (...args) => { if (IS_TEST_ENV) TMUtils.warn('QT35:', ...args); };
-    const derror = (...args) => { TMUtils.error('QT35:', ...args); };
+    // Only enable verbose logs on test; keep prod quiet
+    TMUtils.setDebug?.(IS_TEST_ENV);
+
+    // Namespaced logger + gated wrappers (match this label to the script)
+    const L = TMUtils.getLogger?.('QT35');
+    const dlog = (...a) => { if (IS_TEST_ENV) L?.log?.(...a); };
+    const dwarn = (...a) => { if (IS_TEST_ENV) L?.warn?.(...a); };
+    const derror = (...a) => { if (IS_TEST_ENV) L?.error?.(...a); };  // gate errors too if you want
+
+    // Route allowlist (same across QT files)
+    const ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
+    if (!TMUtils.matchRoute?.(ROUTES)) return;
 
     // Datasource + params
     const DS_ATTACH_COUNT = 11713;
@@ -53,7 +60,7 @@
         GM_registerMenuCommand('🔄 QT35: Refresh now', forceFetch);
         GM_registerMenuCommand('🔎 QT35: Diagnostics', () => {
             TMUtils.toast('QT35: see console', 'info');
-            if (DEV) console.table({
+            if (IS_TEST_ENV) console.table({
                 route: location.pathname,
                 lastQuoteKey,
                 onTargetPage: isOnTargetWizardPage(),
@@ -152,7 +159,7 @@
     // ---------- Fetching ----------
     async function fetchAttachmentCount(qk) {
         try {
-            const rows = await TMUtils.fetchData(DS_ATTACH_COUNT, {
+            const rows = await TMUtils.dsRows(DS_ATTACH_COUNT, {
                 Attachment_Group_Key: ATTACHMENT_GROUP_KEY,
                 Record_Key_Value: String(qk)
             });

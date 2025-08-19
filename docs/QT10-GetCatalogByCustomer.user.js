@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         QT10 > Get Catalog by Customer
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.97
+// @version      3.5.109
 // @description  Lookup CatalogKey/Code for CustomerNo and write to VM (no dropdown sync)
 // @match        https://*.on.plex.com/*
 // @match        https://*.plex.com/*
-// @require      http://localhost:5000/lt-plex-auth.user.js
 // @require      http://localhost:5000/lt-plex-tm-utils.user.js
+// @require      http://localhost:5000/lt-plex-auth.user.js
 // @grant        GM_registerMenuCommand
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -19,27 +19,46 @@
 (async function () {
     'use strict';
 
-    // ---------- Debug setup (quiet by default) ----------
-    // Flip TMUtils.setDebug(true) in the console when you want verbose logs.
+    // ========= Config / Routing / Standard bootstraping =========
     const IS_TEST_ENV = /test\.on\.plex\.com$/i.test(location.hostname);
-    const ROUTES = [/\/SalesAndCRM\/QuoteWizard\b/i];
 
-    TMUtils.setDebug(true);
-    const dlog = (...args) => { if (IS_TEST_ENV) TMUtils.log('QT10:', ...args); };
-    const dwarn = (...args) => { if (IS_TEST_ENV) TMUtils.warn('QT10:', ...args); };
-    const derror = (...args) => { TMUtils.error('QT10:', ...args); };
+    // Only enable verbose logs on test; keep prod quiet
+    TMUtils.setDebug?.(IS_TEST_ENV);
+
+    // Namespaced logger + gated wrappers (match this label to the script)
+    const L = TMUtils.getLogger?.('QT10');
+    const dlog = (...a) => { if (IS_TEST_ENV) L?.log?.(...a); };
+    const dwarn = (...a) => { if (IS_TEST_ENV) L?.warn?.(...a); };
+    const derror = (...a) => { if (IS_TEST_ENV) L?.error?.(...a); };  // gate errors too if you want
+
+    // Route allowlist (same across QT files)
+    const ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
+    if (!TMUtils.matchRoute?.(ROUTES)) return;
 
 
     try {
         // Ensure key is available (uses PlexAuth/PlexAPI via TMUtils)
         await TMUtils.getApiKey();
 
-        // Wait for KO to bind and hand back controller + viewModel
-        const { controller, viewModel } =
-            await TMUtils.waitForModelAsync('.plex-formatted-address', 250, 1000);
+        const { controller, viewModel, element } = await TMUtils.waitForModelAsync('.plex-formatted-address', {
+            pollMs: 250,
+            timeoutMs: 15000,   
+            logger: IS_TEST_ENV ? L : null
+        });
 
-        if (!ko.isObservable(controller.address)) {
-            TMUtils.toast('❌ controller.address is not observable', 'error');
+        if (!controller || !viewModel) {
+            TMUtils.toast('❌ Could not resolve KO bindings for .plex-formatted-address', 'error', 3000);
+            return;
+        }
+
+        // Safe KO reference (avoid bare `ko`)
+        const KO =
+            (typeof window !== 'undefined' && window.ko) ||
+            (typeof unsafeWindow !== 'undefined' && unsafeWindow.ko) ||
+            null;
+
+        if (!KO?.isObservable?.(controller.address)) {
+            TMUtils.toast('❌ controller.address is not observable', 'error', 3000);
             return;
         }
 
@@ -61,7 +80,7 @@
             try {
                 // 1) Customer → CatalogKey
                 //    (Your existing datasource IDs preserved)
-                const [row1] = await TMUtils.fetchData(319, { Customer_No: customerNo });
+                const [row1] = await TMUtils.dsRows(319, { Customer_No: customerNo });
                 const catalogKey = row1?.Catalog_Key || 0;
                 if (!catalogKey) {
                     TMUtils.toast(`⚠️ No catalog for ${customerNo}`, 'warn');
@@ -69,7 +88,7 @@
                 }
 
                 // 2) CatalogKey → CatalogCode
-                const rows2 = await TMUtils.fetchData(22696, { Catalog_Key: catalogKey });
+                const rows2 = await TMUtils.dsRows(22696, { Catalog_Key: catalogKey });
                 const catalogCode = rows2.map(r => r.Catalog_Code).find(Boolean) || '';
 
                 // 3) Write back to KO VM (prefer observables, fallback to arrays)

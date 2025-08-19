@@ -1,14 +1,14 @@
 ﻿// ==UserScript==
 // @name         QT30 › Apply Catalog Pricing
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.97
+// @version      3.5.109
 // @description  Adds “LT Apply Catalog Pricing” button on Quote Wizard (Part Summary).
 //               Looks up Catalog_Key (DS 3156), loads breakpoints per part (DS 4809),
 //               applies the correct price by quantity, deletes zero-qty rows, and refreshes the wizard.
 // @match        https://*.on.plex.com/*
 // @match        https://*.plex.com/*
-// @require      http://localhost:5000/lt-plex-auth.user.js
 // @require      http://localhost:5000/lt-plex-tm-utils.user.js
+// @require      http://localhost:5000/lt-plex-auth.user.js
 // @grant        GM_registerMenuCommand
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -21,15 +21,21 @@
 (function (window) {
     'use strict';
 
-    // ---------- Debug setup (quiet by default) ----------
-    // Flip TMUtils.setDebug(true) in the console when you want verbose logs.
+    // ========= Config / Routing / Standard bootstraping =========
     const IS_TEST_ENV = /test\.on\.plex\.com$/i.test(location.hostname);
-    const ROUTES = [/\/SalesAndCRM\/QuoteWizard\b/i];
 
-    TMUtils.setDebug(true);
-    const dlog = (...args) => { if (IS_TEST_ENV) TMUtils.log('QT30:', ...args); };
-    const dwarn = (...args) => { if (IS_TEST_ENV) TMUtils.warn('QT30:', ...args); };
-    const derror = (...args) => { TMUtils.error('QT30:', ...args); };
+    // Only enable verbose logs on test; keep prod quiet
+    TMUtils.setDebug?.(IS_TEST_ENV);
+
+    // Namespaced logger + gated wrappers (match this label to the script)
+    const L = TMUtils.getLogger?.('QT30');
+    const dlog = (...a) => { if (IS_TEST_ENV) L?.log?.(...a); };
+    const dwarn = (...a) => { if (IS_TEST_ENV) L?.warn?.(...a); };
+    const derror = (...a) => { if (IS_TEST_ENV) L?.error?.(...a); };  // gate errors too if you want
+
+    // Route allowlist (same across QT files)
+    const ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
+    if (!TMUtils.matchRoute?.(ROUTES)) return;
 
     // ---------- Config ----------
     const TARGET_WIZARD_PAGE = 'Part Summary';
@@ -119,7 +125,7 @@
 
             // --- 1) Fetch Catalog_Key (DS 3156) ---
             TMUtils.toast('⏳ Fetching Catalog Key…', 'info');
-            const rows1 = await TMUtils.fetchData(DS.CatalogKeyByQuoteKey, { Quote_Key: quoteKey });
+            const rows1 = await TMUtils.dsRows(DS.CatalogKeyByQuoteKey, { Quote_Key: quoteKey });
             const catalogKey = rows1?.[0]?.Catalog_Key;
             if (!catalogKey) {
                 TMUtils.toast(oneOf(NO_CATALOG_MESSAGES), 'warn', 5000);
@@ -139,7 +145,7 @@
 
             const priceMap = {}; // { [partNo]: sorted breakpoints[] }
             await Promise.all(partNos.map(async (p) => {
-                const rows = await TMUtils.fetchData(DS.BreakpointsByPart, {
+                const rows = await TMUtils.dsRows(DS.BreakpointsByPart, {
                     Catalog_Key: catalogKey,
                     Catalog_Part_No: p
                 });

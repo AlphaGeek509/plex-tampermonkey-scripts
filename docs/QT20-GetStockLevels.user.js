@@ -1,14 +1,14 @@
 ﻿// ==UserScript==
 // @name         QT20 > Part Detail > Get Stock Levels
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.97
+// @version      3.5.109
 // @description  Injects a "Get Stock Levels" button into the "Quote Part Detail" modal.
 //               On click, calls Plex DS 172 (Stock lookup) and appends `STK: <sum>` to NoteNew.
 //               Useful for quoting visibility—quick stock check without leaving the modal.
 // @match        https://*.on.plex.com/*
 // @match        https://*.plex.com/*
-// @require      http://localhost:5000/lt-plex-auth.user.js
 // @require      http://localhost:5000/lt-plex-tm-utils.user.js
+// @require      http://localhost:5000/lt-plex-auth.user.js
 // @grant        GM_registerMenuCommand
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -21,15 +21,21 @@
 (function () {
     'use strict';
 
-    // ---------- Debug setup (quiet by default) ----------
-    // Flip TMUtils.setDebug(true) in the console when you want verbose logs.
+    // ========= Config / Routing / Standard bootstraping =========
     const IS_TEST_ENV = /test\.on\.plex\.com$/i.test(location.hostname);
-    const ROUTES = [/\/SalesAndCRM\/QuoteWizard\b/i];
 
-    TMUtils.setDebug(true);
-    const dlog = (...args) => { if (IS_TEST_ENV) TMUtils.log('QT20:', ...args); };
-    const dwarn = (...args) => { if (IS_TEST_ENV) TMUtils.warn('QT20:', ...args); };
-    const derror = (...args) => { TMUtils.error('QT20:', ...args); };
+    // Only enable verbose logs on test; keep prod quiet
+    TMUtils.setDebug?.(IS_TEST_ENV);
+
+    // Namespaced logger + gated wrappers (match this label to the script)
+    const L = TMUtils.getLogger?.('QT20');
+    const dlog = (...a) => { if (IS_TEST_ENV) L?.log?.(...a); };
+    const dwarn = (...a) => { if (IS_TEST_ENV) L?.warn?.(...a); };
+    const derror = (...a) => { if (IS_TEST_ENV) L?.error?.(...a); };  // gate errors too if you want
+
+    // Route allowlist (same across QT files)
+    const ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
+    if (!TMUtils.matchRoute?.(ROUTES)) return;
 
     // ========= Config / Routing =========
     const DS_STOCK = 172;                                        // Plex datasource: stock levels
@@ -115,7 +121,7 @@
             if (typeof noteSetter !== 'function') throw new Error('NoteNew not writable');
 
             // --- DS Call ---
-            const rows = await TMUtils.fetchData(DS_STOCK, {
+            const rows = await TMUtils.dsRows(DS_STOCK, {
                 Part_No: partNo,
                 Shippable: 'TRUE',
                 Container_Status: 'OK'
