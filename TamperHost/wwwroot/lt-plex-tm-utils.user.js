@@ -1,8 +1,7 @@
 // ==UserScript==
 // @name         LT › Plex TM Utils
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @namespace    http://tampermonkey.net/
-// @version      3.5.93
+// @version      3.5.97
 // @description  Shared utilities (fetchData, observeInsert, waitForModelAsync, matchRoute, etc.)
 // @match        https://*.on.plex.com/*
 // @match        https://*.plex.com/*
@@ -19,13 +18,12 @@
     // ---------------------------------------------------------------------
     // ENV / FLAGS
     // ---------------------------------------------------------------------
-    const DEV = /test\.on\.plex\.com$/i.test(location.hostname);
-    let __tmDebug = false;
-    function setDebug(v) { __tmDebug = !!v; }
+    // Create + expose first so we can safely attach props below
+    const TMUtils = {};
+    window.TMUtils = TMUtils;
 
-    function log(...args) { if (__tmDebug) console.log('TMUtils:', ...args); }
-    function warn(...args) { if (__tmDebug) console.warn('TMUtils:', ...args); }
-    function error(...args) { console.error('TMUtils:', ...args); } // errors always print
+    if (typeof unsafeWindow !== 'undefined') unsafeWindow.TMUtils = TMUtils;
+    
 
     // ---------------------------------------------------------------------
     // 1) Fetch Plex API key (now robust to PlexAuth or PlexAPI; async-safe)
@@ -53,57 +51,61 @@
         return `Basic ${raw}`;
     }
 
-    // ---------------------------------------------------------------------
-    // 2) Generic data fetch from Plex datasource (keeps your original API)
-    //    - Default: same-origin fetch to /api/datasources/{id}/execute?format=2
-    //    - Injects Authorization using your saved key
-    //    - Adds optional XHR path (GM_xmlhttpRequest) for cross-origin if needed
-    // ---------------------------------------------------------------------
-    async function fetchData(sourceId, payload, opts = {}) {
-        const key = _buildAuthHeader(await getApiKey());
-        const url = `${location.origin}/api/datasources/${sourceId}/execute?format=2`;
+    // Low-level: one place that actually executes the HTTP call
+    TMUtils.fetchData = async function fetchData(url, { method = 'GET', headers = {}, body, timeoutMs = 15000, useXHR = false } = {}) {
+        const auth = await TMUtils.getApiKey().catch(() => '');
+        const finalHeaders = {
+            'Accept': 'application/json',
+            ...(body ? { 'Content-Type': 'application/json;charset=UTF-8' } : {}),
+            ...(auth ? { 'Authorization': auth } : {}),
+            ...headers
+        };
+        const payload = typeof body === 'string' ? body : (body ? JSON.stringify(body) : undefined);
 
-        if (opts.useXHR) {
+        if (useXHR && typeof GM_xmlhttpRequest === 'function') {
             return new Promise((resolve, reject) => {
+                const timer = setTimeout(() => reject(new Error('Network timeout')), timeoutMs);
                 GM_xmlhttpRequest({
-                    method: 'POST',
-                    url,
-                    headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json;charset=UTF-8',
-                        ...(key ? { 'Authorization': key } : {})
-                    },
-                    data: JSON.stringify(payload ?? {}),
+                    method, url, headers: finalHeaders, data: payload,
                     onload: (res) => {
+                        clearTimeout(timer);
                         const ok = res.status >= 200 && res.status < 300;
-                        if (!ok) return reject(new Error(`Fetch ${sourceId} failed: ${res.status}`));
-                        try {
-                            const parsed = JSON.parse(res.responseText || '{}');
-                            resolve(parsed.rows || []);
-                        } catch {
-                            reject(new Error('Invalid JSON response'));
-                        }
+                        if (!ok) return reject(new Error(`${res.status} ${res.statusText || 'Request failed'}`));
+                        try { resolve(JSON.parse(res.responseText || '{}')); }
+                        catch { resolve({}); } // tolerate empty/invalid json => {}
                     },
-                    onerror: () => reject(new Error('Network error')),
-                    ontimeout: () => reject(new Error('Network timeout'))
+                    onerror: () => { clearTimeout(timer); reject(new Error('Network error')); },
+                    ontimeout: () => { clearTimeout(timer); reject(new Error('Network timeout')); }
                 });
             });
         }
 
-        // Original same-origin fetch path (unchanged behavior, now with Authorization)
-        const resp = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json;charset=UTF-8',
-                ...(key ? { 'Authorization': key } : {})
-            },
-            body: JSON.stringify(payload ?? {})
-        });
-        if (!resp.ok) throw new Error(`Fetch ${sourceId} failed: ${resp.status}`);
-        const { rows = [] } = await resp.json();
+        // fetch path
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), timeoutMs);
+        try {
+            const resp = await fetch(url, { method, headers: finalHeaders, body: payload, signal: ctrl.signal });
+            if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
+            const text = await resp.text();
+            return text ? JSON.parse(text) : {};
+        } finally {
+            clearTimeout(t);
+        }
+    };
+
+    // DS helpers: the only API your userscripts need to call
+    TMUtils.ds = async function ds(sourceId, payload, opts = {}) {
+        const url = `${location.origin}/api/datasources/${sourceId}/execute?format=2`;
+        const json = await TMUtils.fetchData(url, { method: 'POST', body: payload, ...opts });
+        // normalize: always return { rows: [...] }
+        const rows = Array.isArray(json?.rows) ? json.rows : [];
+        return { ...json, rows }; // keep any extra fields if Plex adds them
+    };
+
+    TMUtils.dsRows = async function dsRows(sourceId, payload, opts = {}) {
+        const { rows } = await TMUtils.ds(sourceId, payload, opts);
         return rows;
-    }
+    };
 
     // ---------------------------------------------------------------------
     // 3) Floating message UI (kept as-is; added toast() alias + log())
@@ -180,9 +182,9 @@
                 const vm = ctrl && ctrl.model;        // QuoteWizard VM
 
                 console.groupCollapsed('🔍 waitForModelAsync');
-                log('selector →', sel);
-                log('controller →', ctrl);
-                log('vm →', vm);
+                console.debug('selector →', sel);
+                console.debug('controller →', ctrl);
+                console.debug('vm →', vm);
                 console.groupEnd();
 
                 if (vm) return resolve({ controller: ctrl, viewModel: vm });
@@ -224,7 +226,7 @@
 
     function onRouteChange(handler) {
         const fire = () => {
-            try { handler(location.pathname); } catch (e) { log('onRouteChange handler error', e); }
+            try { handler(location.pathname); } catch (e) { console.warn('onRouteChange handler error', e); }
         };
         const _ps = history.pushState;
         history.pushState = function () { _ps.apply(this, arguments); window.dispatchEvent(new Event('locationchange')); };
@@ -246,43 +248,81 @@
     }
 
     // ---------------------------------------------------------------------
+    // Logger Helpers
+    // ---------------------------------------------------------------------
+    function setDebug(v) { __tmDebug = !!v; }
+    function makeLogger(ns) {
+        const label = ns || 'TM';
+        const emit = (m, badge, ...a) => (console[m] || console.log)(`${label} ${badge}`, ...a);
+        return {
+            log: (...a) => emit('log', '▶️', ...a),
+            info: (...a) => emit('info', 'ℹ️', ...a),
+            warn: (...a) => emit('warn', '⚠️', ...a),
+            error: (...a) => emit('error', '✖️', ...a),
+            ok: (...a) => emit('log', '✅', ...a)
+        };
+    }
+
+    function deriveNsFromScriptName() {
+        try {
+            const name = (typeof GM_info !== 'undefined' && GM_info?.script?.name) || '';
+            if (!name) return 'TM';
+            // grab the first token before a space/arrow (works for “QT10 …”, “CR&S10 ➜ …”, etc.)
+            return name.split(/[ \t–—\-→➜>]/)[0].trim() || 'TM';
+        } catch { return 'TM'; }
+    }
+
+    function getLogger(ns) {
+        const label = ns || deriveNsFromScriptName();
+        return TMUtils.makeLogger ? TMUtils.makeLogger(label) : {
+            log: (...a) => console.log(`${label} ▶️`, ...a),
+            info: (...a) => console.info(`${label} ℹ️`, ...a),
+            warn: (...a) => console.warn(`${label} ⚠️`, ...a),
+            error: (...a) => console.error(`${label} ✖️`, ...a),
+            ok: (...a) => console.log(`${label} ✅`, ...a),
+        };
+    }
+
+    // Optional: set a global `L` for convenience (avoid if you fear collisions)
+    function attachLoggerGlobal(ns) {
+        const logger = getLogger(ns);
+        window.L = logger;
+        if (typeof unsafeWindow !== 'undefined') unsafeWindow.L = logger;
+        return logger;
+    }
+
+    // ---------------------------------------------------------------------
     // 🔁 Global exposure for TamperMonkey sandbox
     // ---------------------------------------------------------------------
-    const TMUtils = {
-        // existing
+    Object.assign(TMUtils, {
+        // core
         getApiKey,
-        fetchData,
-        showMessage,
-        hideMessage,
-        observeInsert,
-        waitForModel,
-        waitForModelAsync,
-        selectOptionByText,
-        selectOptionByValue,
+        fetchData,        // low-level HTTP
+        ds, dsRows,       // DS helpers
+        getLogger, attachLoggerGlobal,
 
-        // new/standardized
-        toast,
-        log,
-        warn,
-        error,
-        ensureRoute,
-        onRouteChange,
-        matchRoute,
-        setDebug,
+        // UI / toast
+        showMessage, hideMessage, toast,
 
-        // exposed for completeness
+        // DOM/KO helpers
+        observeInsert, waitForModel, waitForModelAsync,
+        selectOptionByText, selectOptionByValue,
+
+        // routing + debug
+        ensureRoute, onRouteChange, matchRoute,
+        setDebug, makeLogger,
+
+        // internal (if you intend to expose it)
         _buildAuthHeader
-    };
+    });
 
-    window.TMUtils = TMUtils;
-    unsafeWindow.TMUtils = TMUtils;
 
     console.log('🐛 TMUtils loaded from local build:', {
-        waitForModelAsync: typeof waitForModelAsync,
-        observeInsert: typeof observeInsert,
-        fetchData: typeof fetchData,
-        toast: typeof toast,
-        ensureRoute: typeof ensureRoute
+        waitForModelAsync: typeof TMUtils.waitForModelAsync,
+        observeInsert: typeof TMUtils.observeInsert,
+        fetchData: typeof TMUtils.fetchData,
+        toast: typeof TMUtils.toast,
+        ensureRoute: typeof TMUtils.ensureRoute
     });
 
 })(window);
