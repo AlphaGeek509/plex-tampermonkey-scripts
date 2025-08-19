@@ -1,14 +1,14 @@
 ﻿// ==UserScript==
 // @name         CR&S10 ➜ Validate Certs Before Scheduling
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.97
+// @version      3.5.109
 // @author       Jeff Nichols
 // @description  Validate certs by OrderNo+PartNo+SerialNo (display), call DS8566 (Heat_Key/Serial_No) then DS14343 by Heat_Key. Show results, require Acknowledgement when issues exist, offer quick email for misses, and provide a small settings GUI.
 // @match        *://*.plex.com/SalesAndCRM/SalesReleases*
 // @run-at       document-idle
 // @noframes
-// @require      http://localhost:5000/lt-plex-auth.user.js
 // @require      http://localhost:5000/lt-plex-tm-utils.user.js
+// @require      http://localhost:5000/lt-plex-auth.user.js
 // @grant        GM_registerMenuCommand
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -19,8 +19,22 @@
 (async () => {
     'use strict';
 
-    const _logger = TMUtils.getLogger();   // ← one line, auto-uses “QT10” from @name
-    _logger.info('Loaded', { version: GM_info?.script?.version || 'dev' });
+    // ========= Config / Routing / Standard bootstraping =========
+    const IS_TEST_ENV = /test\.on\.plex\.com$/i.test(location.hostname);
+
+    // Only enable verbose logs on test; keep prod quiet
+    TMUtils.setDebug?.(IS_TEST_ENV);
+
+    // Namespaced logger + gated wrappers (match this label to the script)
+    const L = TMUtils.getLogger?.('CRS10');
+    const dlog = (...a) => { if (IS_TEST_ENV) L?.log?.(...a); };
+    const dwarn = (...a) => { if (IS_TEST_ENV) L?.warn?.(...a); };
+    const derror = (...a) => { if (IS_TEST_ENV) L?.error?.(...a); };
+    const dok = (...a) => { if (IS_TEST_ENV) L?.ok?.(...a); };
+
+    // Route allowlist (same across QT files)
+    const ROUTES = [/^\/SalesAndCRM\/SalesReleases(?:\/|$)/i];
+    if (!TMUtils.matchRoute?.(ROUTES)) return;
 
     // ---------- Guard cross-origin CSS access (SecurityError) ----------
     const _cssRulesDesc = Object.getOwnPropertyDescriptor(CSSStyleSheet.prototype, 'cssRules');
@@ -122,12 +136,12 @@
 
     // ---------- Ensure TMUtils + KO ----------
     if (typeof TMUtils === 'undefined') {
-        _logger.error('TMUtils helper not found; check @require URLs.');
+        derror('TMUtils helper not found; check @require URLs.');
         return;
     }
     const ko = unsafeWindow.ko;
     if (!ko) {
-        _logger.error('Knockout not found.');
+        derror('Knockout not found.');
         return;
     }
 
@@ -135,9 +149,9 @@
     let apiKey = '';
     try {
         apiKey = await TMUtils.getApiKey();
-        _logger.ok('PlexAPI ready');
+        dok('PlexAPI ready');
     } catch (e) {
-        _logger.error('Failed to get API key', e);
+        derror('Failed to get API key', e);
         return;
     }
 
@@ -252,17 +266,30 @@
 
     async function waitForRootVM() {
         if (typeof TMUtils.waitForModelAsync === 'function') {
-            const el = await TMUtils.waitForModelAsync('.plex-grid', { timeoutMs: 30000 });
-            const ctx = el && ko.contextFor(el);
-            return ctx?.$root?.data || ctx?.$root || null;
+            const { viewModel } = await TMUtils.waitForModelAsync('.plex-grid', {
+                pollMs: 250,
+                timeoutMs: 30000,
+                logger: IS_TEST_ENV ? L : null
+            });
+            return viewModel || null;
         }
+
+        // Fallback (if utils not loaded): poll DOM + KO safely
         return new Promise(resolve => {
+            const getKo = () =>
+                (typeof window !== 'undefined' && window.ko) ||
+                (typeof unsafeWindow !== 'undefined' && unsafeWindow.ko) || null;
+
             const tick = () => {
                 const el = document.querySelector('.plex-grid');
-                const ctx = el && ko.contextFor(el);
-                const vm = ctx?.$root?.data || ctx?.$root;
+                const koObj = getKo();
+                let vm = null;
+                if (el && koObj && typeof koObj.contextFor === 'function') {
+                    const ctx = koObj.contextFor(el);
+                    vm = ctx?.$root?.data || ctx?.$root || null;
+                }
                 if (vm) return resolve(vm);
-                setTimeout(tick, 200);
+                setTimeout(tick, 250);
             };
             tick();
         });
@@ -270,18 +297,18 @@
 
     function showMsg(msg, opts) {
         if (TMUtils?.showMessage) TMUtils.showMessage(msg, opts);
-        else _logger.info(msg);
+        else dlog(msg);
     }
 
     const vm = await waitForRootVM();
     if (!vm) {
-        _logger.error('Could not resolve root VM under .plex-grid');
+        derror?.('Could not resolve root VM under .plex-grid');
         return;
     }
 
     const btn = findScheduleButton();
     if (!btn) {
-        _logger.warn('Schedule button not found on the page.');
+        dwarn('Schedule button not found on the page.');
         return;
     }
     if (btn[HOOKED_FLAG]) return;
@@ -353,7 +380,7 @@
             );
 
 
-            _logger.log('Final status:', statusArray);
+            dlog('Final status:', statusArray);
             showMsg(`🔍 Checked ${statusArray.length} entries`, { type: 'info', autoClear: 2000 });
 
             // Determine what to display
@@ -371,7 +398,7 @@
             });
 
         } catch (err) {
-            _logger.error('Unexpected error', err);
+            derror('Unexpected error', err);
             showMsg(`❌ ${err}`, { type: 'error', autoClear: 4000 });
             // Fail open to avoid blocking ops
             btn.click();

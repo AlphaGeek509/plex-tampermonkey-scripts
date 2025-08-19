@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LT › Plex TM Utils
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.97
+// @version      3.5.109
 // @description  Shared utilities (fetchData, observeInsert, waitForModelAsync, matchRoute, etc.)
 // @match        https://*.on.plex.com/*
 // @match        https://*.plex.com/*
@@ -21,23 +21,52 @@
     // Create + expose first so we can safely attach props below
     const TMUtils = {};
     window.TMUtils = TMUtils;
-
     if (typeof unsafeWindow !== 'undefined') unsafeWindow.TMUtils = TMUtils;
-    
 
-    // ---------------------------------------------------------------------
-    // 1) Fetch Plex API key (now robust to PlexAuth or PlexAPI; async-safe)
-    //    - Back-compat: your original used PlexAPI.getKey()
-    //    - New: prefers PlexAuth.getKey() if present
-    // ---------------------------------------------------------------------
-    async function getApiKey() {
+    // ensure a place to cache the key lives on the shared object
+    if (!('__apiKeyCache' in TMUtils)) TMUtils.__apiKeyCache = null;
+
+
+    // Resolve Plex API key safely from page context (supports late load + caching)
+    async function getApiKey({
+        wait = true,          // poll for the getter if not present yet
+        timeoutMs = 5000,     // how long to wait
+        pollMs = 200,         // poll interval
+        useCache = true,      // return a cached key if fresh
+        cacheMs = 5 * 60_000  // consider cache fresh for 5 minutes
+    } = {}) {
+        // cache fast-path
+        const cached = TMUtils.__apiKeyCache;
+        if (useCache && cached && (Date.now() - cached.ts) < cacheMs) {
+            return cached.value;
+        }
+
+        const root = (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window);
+
+        const resolveGetter = () => {
+            const g1 = root?.PlexAuth && typeof root.PlexAuth.getKey === 'function' ? root.PlexAuth.getKey : null;
+            const g2 = root?.PlexAPI && typeof root.PlexAPI.getKey === 'function' ? root.PlexAPI.getKey : null;
+            return g1 || g2 || null;
+        };
+
+        let getter = resolveGetter();
+
+        if (!getter && wait) {
+            const start = Date.now();
+            while (!getter && (Date.now() - start) < timeoutMs) {
+                await new Promise(r => setTimeout(r, pollMs));
+                getter = resolveGetter();
+            }
+        }
+
+        if (!getter) return '';
+
         try {
-            const getter =
-                (window.PlexAuth && typeof window.PlexAuth.getKey === 'function' && window.PlexAuth.getKey) ||
-                (window.PlexAPI && typeof window.PlexAPI.getKey === 'function' && window.PlexAPI.getKey);
-            if (!getter) return '';
-            const val = getter();
-            return (val && typeof val.then === 'function') ? await val : val || '';
+            const val = getter.call(root);
+            const key = (val && typeof val.then === 'function') ? await val : val;
+            const out = (typeof key === 'string' ? key.trim() : '') || '';
+            if (useCache) TMUtils.__apiKeyCache = { value: out, ts: Date.now() };
+            return out;
         } catch {
             return '';
         }
@@ -53,7 +82,8 @@
 
     // Low-level: one place that actually executes the HTTP call
     TMUtils.fetchData = async function fetchData(url, { method = 'GET', headers = {}, body, timeoutMs = 15000, useXHR = false } = {}) {
-        const auth = await TMUtils.getApiKey().catch(() => '');
+        const auth = _buildAuthHeader(await TMUtils.getApiKey().catch(() => ''));
+
         const finalHeaders = {
             'Accept': 'application/json',
             ...(body ? { 'Content-Type': 'application/json;charset=UTF-8' } : {}),
@@ -66,7 +96,7 @@
             return new Promise((resolve, reject) => {
                 const timer = setTimeout(() => reject(new Error('Network timeout')), timeoutMs);
                 GM_xmlhttpRequest({
-                    method, url, headers: finalHeaders, data: payload,
+                    method, url, headers: finalHeaders, data: payload, timeout: timeoutMs,
                     onload: (res) => {
                         clearTimeout(timer);
                         const ok = res.status >= 200 && res.status < 300;
@@ -142,11 +172,6 @@
         showMessage(msg, { type: level, autoClear: ms ?? 4000 });
     }
 
-    // Dev logger
-    //function log(...args) {
-    //    if (DEV) log('TMUtils:', ...args);
-    //}
-
     // ---------------------------------------------------------------------
     // 4) DOM insertion observer (kept as-is)
     // ---------------------------------------------------------------------
@@ -166,40 +191,78 @@
     // 5) KO controller + VM waiters (kept; async variant preserved)
     // ---------------------------------------------------------------------
     function waitForModel(selector, cb, interval = 100, maxAttempts = 100) {
-        waitForModelAsync(selector, interval, maxAttempts)
+        waitForModelAsync(selector, { pollMs: interval, timeoutMs: interval * maxAttempts })
             .then(cb)
             .catch(e => console.error('waitForModel error:', e));
     }
 
-    async function waitForModelAsync(sel, interval = 250, max = 10000) {
+    // TMUtils v3.6.x — KO-aware waiter (standardized return)
+    function waitForModelAsync(sel, {
+        pollMs = 250,
+        timeoutMs = 30000,
+        requireKo = true,   // if false, resolve as soon as the element is found
+        logger = null,      // pass TMUtils.getLogger('QT10') / _logger, etc.
+        log = false         // set true to print debug with console.* even without a logger
+    } = {}) {
+        const start = Date.now();
+
+        const getKo = () =>
+            (typeof window !== 'undefined' && window.ko) ||
+            (typeof unsafeWindow !== 'undefined' && unsafeWindow.ko) || null;
+
+        const dbg = (fn, ...args) => {
+            if (logger && typeof logger[fn] === 'function') logger[fn](...args);
+            else if (log) (console[fn] || console.log)(...args);
+        };
+
         return new Promise((resolve, reject) => {
-            let tries = 0;
-            function go() {
+            function tick() {
                 const el = document.querySelector(sel);
-                if (!el || typeof ko?.contextFor !== 'function') return next();
+                if (!el) return schedule();
 
-                const ctrl = ko.contextFor(el).$data; // FormattedAddressController
-                const vm = ctrl && ctrl.model;        // QuoteWizard VM
-
-                console.groupCollapsed('🔍 waitForModelAsync');
-                console.debug('selector →', sel);
-                console.debug('controller →', ctrl);
-                console.debug('vm →', vm);
-                console.groupEnd();
-
-                if (vm) return resolve({ controller: ctrl, viewModel: vm });
-                next();
-            }
-            function next() {
-                if (++tries >= max) {
-                    console.warn(`⌛ waitForModelAsync timed out`);
-                    return reject(new Error('Timed out'));
+                if (!requireKo) {
+                    // return early without KO context
+                    log && console.debug('🔍 waitForModelAsync (no KO):', { sel, el });
+                    return resolve({ element: el, controller: null, viewModel: null });
                 }
-                setTimeout(go, interval);
+
+                const koObj = getKo();
+                if (!koObj || typeof koObj.contextFor !== 'function') return schedule();
+
+                let controller = null, viewModel = null;
+                try {
+                    const ctx = koObj.contextFor(el);
+                    controller = ctx && ctx.$data || null;                  // e.g., controller
+                    viewModel = (controller && controller.model) || null;  // e.g., VM on controller
+                    if (!viewModel && ctx) viewModel = ctx.$root?.data || ctx.$root || null; // VM fallback
+                } catch { /* not ready yet */ }
+
+                if (logger || log) {
+                    console.groupCollapsed('🔍 waitForModelAsync');
+                    dbg('debug', 'selector →', sel);
+                    dbg('debug', 'controller →', controller);
+                    dbg('debug', 'vm →', viewModel);
+                    console.groupEnd();
+                }
+
+                if (viewModel) return resolve({ element: el, controller, viewModel });
+                schedule();
             }
-            go();
+
+            function schedule() {
+                if ((Date.now() - start) >= timeoutMs) {
+                    const msg = `Timed out waiting for "${sel}" after ${timeoutMs}ms`;
+                    dbg('warn', '⌛ waitForModelAsync', msg);
+                    return reject(new Error(msg));
+                }
+                setTimeout(tick, pollMs);
+            }
+
+            tick();
         });
     }
+
+
 
     // ---------------------------------------------------------------------
     // 6) Select <option> helpers (kept)
@@ -225,6 +288,7 @@
     }
 
     function onRouteChange(handler) {
+        if (history.__tmWrapped) { handler(location.pathname); return; }
         const fire = () => {
             try { handler(location.pathname); } catch (e) { console.warn('onRouteChange handler error', e); }
         };
@@ -234,6 +298,7 @@
         history.replaceState = function () { _rs.apply(this, arguments); window.dispatchEvent(new Event('locationchange')); };
         window.addEventListener('popstate', fire);
         window.addEventListener('locationchange', fire);
+        history.__tmWrapped = true;
         fire(); // immediate fire for initial route
     }
 
@@ -250,6 +315,7 @@
     // ---------------------------------------------------------------------
     // Logger Helpers
     // ---------------------------------------------------------------------
+    let __tmDebug = false;            // declare this so setDebug works
     function setDebug(v) { __tmDebug = !!v; }
     function makeLogger(ns) {
         const label = ns || 'TM';
@@ -259,9 +325,15 @@
             info: (...a) => emit('info', 'ℹ️', ...a),
             warn: (...a) => emit('warn', '⚠️', ...a),
             error: (...a) => emit('error', '✖️', ...a),
-            ok: (...a) => emit('log', '✅', ...a)
+            ok: (...a) => emit('log', '✅', ...a),
         };
     }
+
+    // Simple global shims so TMUtils.log/warn/error exist (handy for your dlog/dwarn/derror)
+    function log(...a) { console.log('TM ▶️', ...a); }
+    function warn(...a) { console.warn('TM ⚠️', ...a); }
+    function error(...a) { console.error('TM ✖️', ...a); }
+    function ok(...a) { console.log('TM ✅', ...a); }
 
     function deriveNsFromScriptName() {
         try {
@@ -295,27 +367,18 @@
     // 🔁 Global exposure for TamperMonkey sandbox
     // ---------------------------------------------------------------------
     Object.assign(TMUtils, {
-        // core
         getApiKey,
-        fetchData,        // low-level HTTP
-        ds, dsRows,       // DS helpers
-        getLogger, attachLoggerGlobal,
-
-        // UI / toast
-        showMessage, hideMessage, toast,
-
-        // DOM/KO helpers
-        observeInsert, waitForModel, waitForModelAsync,
+        fetchData: TMUtils.fetchData, // ← reference the property you set earlier
+        showMessage, hideMessage, observeInsert,
+        waitForModel, waitForModelAsync,
         selectOptionByText, selectOptionByValue,
-
-        // routing + debug
+        toast,
+        log, warn, error, ok,
         ensureRoute, onRouteChange, matchRoute,
-        setDebug, makeLogger,
-
-        // internal (if you intend to expose it)
-        _buildAuthHeader
+        setDebug, makeLogger, getLogger, attachLoggerGlobal,
+        _buildAuthHeader,
+        ds: TMUtils.ds, dsRows: TMUtils.dsRows
     });
-
 
     console.log('🐛 TMUtils loaded from local build:', {
         waitForModelAsync: typeof TMUtils.waitForModelAsync,
