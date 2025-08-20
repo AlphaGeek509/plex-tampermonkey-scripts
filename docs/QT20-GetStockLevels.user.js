@@ -1,12 +1,12 @@
 ﻿// ==UserScript==
 // @name         QT20 > Part Detail > Get Stock Levels
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.109
+// @version      3.5.114
 // @description  Injects a "Get Stock Levels" button into the "Quote Part Detail" modal.
 //               On click, calls Plex DS 172 (Stock lookup) and appends `STK: <sum>` to NoteNew.
 //               Useful for quoting visibility—quick stock check without leaving the modal.
-// @match        https://*.on.plex.com/*
-// @match        https://*.plex.com/*
+// @match        https://*.on.plex.com/SalesAndCRM/QuoteWizard*
+// @match        https://*.plex.com/SalesAndCRM/QuoteWizard*
 // @require      http://localhost:5000/lt-plex-tm-utils.user.js
 // @require      http://localhost:5000/lt-plex-auth.user.js
 // @grant        GM_registerMenuCommand

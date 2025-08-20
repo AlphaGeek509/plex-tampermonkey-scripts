@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         Plex Loader
 // @namespace    http://tampermonkey.net/
-// @version      3.5.109
+// @version      3.5.114
 // @description  Bootstrap loader for Plex TM scripts (dev toggle enabled)
 // @match        *://*.plex.com/*
 // @grant        GM_registerMenuCommand

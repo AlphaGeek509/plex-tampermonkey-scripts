@@ -1,10 +1,11 @@
 ﻿// ==UserScript==
 // @name         CR&S10 ➜ Validate Certs Before Scheduling
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.109
+// @version      3.5.114
 // @author       Jeff Nichols
 // @description  Validate certs by OrderNo+PartNo+SerialNo (display), call DS8566 (Heat_Key/Serial_No) then DS14343 by Heat_Key. Show results, require Acknowledgement when issues exist, offer quick email for misses, and provide a small settings GUI.
 // @match        *://*.plex.com/SalesAndCRM/SalesReleases*
+// @match        *://*.on.plex.com/SalesAndCRM/SalesReleases*
 // @run-at       document-idle
 // @noframes
 // @require      http://localhost:5000/lt-plex-tm-utils.user.js
@@ -145,15 +146,6 @@
         return;
     }
 
-    // ---------- API key ----------
-    let apiKey = '';
-    try {
-        apiKey = await TMUtils.getApiKey();
-        dok('PlexAPI ready');
-    } catch (e) {
-        derror('Failed to get API key', e);
-        return;
-    }
 
     // ---------- Helpers ----------
     const unwrap = (v) => (typeof ko.unwrap === 'function' ? ko.unwrap(v) : (typeof v === 'function' ? v() : v));
@@ -257,13 +249,6 @@
     }
 
     // ---------- Core: hook Schedule button (once) and validate ----------
-    const HOOKED_FLAG = Symbol('crs10.hooked');
-
-    function findScheduleButton() {
-        const candidates = Array.from(document.querySelectorAll('a,button,input[type="button"],input[type="submit"]'));
-        return candidates.find(el => (el.textContent?.trim?.() ?? el.value ?? '').toLowerCase() === 'schedule') || null;
-    }
-
     async function waitForRootVM() {
         if (typeof TMUtils.waitForModelAsync === 'function') {
             const { viewModel } = await TMUtils.waitForModelAsync('.plex-grid', {
@@ -306,22 +291,49 @@
         return;
     }
 
-    const btn = findScheduleButton();
-    if (!btn) {
-        dwarn('Schedule button not found on the page.');
-        return;
-    }
-    if (btn[HOOKED_FLAG]) return;
-    btn[HOOKED_FLAG] = true;
+    // ---------- Core: robust "Schedule" interception (delegated) ----------
 
-    btn.addEventListener('click', async function (e) {
-        if (!e.isTrusted) return; // user-only
+    // Match both <a> and <button> (text-based)
+    function isScheduleControl(el) {
+        const btn = el?.closest?.('a,button,input[type="button"],input[type="submit"]');
+        if (!btn) return null;
+        const label = (btn.innerText || btn.textContent || btn.value || '').trim();
+        // allow "Schedule" and "Schedule..." (case-insensitive)
+        if (/^schedule(?:\s*\.\.\.)?$/i.test(label)) return btn;
+        return null;
+    }
+
+    async function onScheduleClick(e) {
+        // ---------- API key ----------
+        // Warm the key; if we don’t have one, prompt the user to set it
+        const apiKey = await TMUtils.getApiKey({ wait: true, timeoutMs: 8000 });
+        if (!apiKey) {
+            TMUtils.toast('🔐 No Plex API key found. Use “⚙️ Set Plex API Key” in the Tampermonkey menu.', 'error', 4000);
+            return;
+        }
+
+        const btn = isScheduleControl(e.target);
+        if (!btn) return;          // not our control
+        if (!e.isTrusted) return;  // ignore programmatic clicks (lets our later btn.click() pass through)
+
+        // intercept native click
         e.stopImmediatePropagation();
+        e.stopPropagation();
         e.preventDefault();
 
+        dlog('Intercepted Schedule click:', btn);
         showMsg('⏳ Validating certificates…', { type: 'info', autoClear: false });
 
         try {
+            // We already resolved the root VM above:
+            //   const vm = await waitForRootVM();
+            if (!vm) {
+                derror('Could not resolve root VM under .plex-grid');
+                showMsg('❌ Could not resolve grid VM.', { type: 'error', autoClear: 3500 });
+                return;
+            }
+
+            // Gather results
             const results = unwrap(vm.results) || [];
 
             // Filter “flagged for schedule”
@@ -338,10 +350,15 @@
 
             if (flagged.length === 0) {
                 showMsg('⚠️ No shipments flagged', { type: 'warning', autoClear: 2500 });
-                return btn.click(); // pass-through
+                return btn.click(); // pass-through to native Schedule
             }
 
-            // DS8566
+            if (IS_TEST_ENV) {
+                const peek = (await TMUtils.getApiKey()).toString();
+                L?.info?.('CRS10 auth present:', !!peek, 'prefix:', peek.slice(0, 10));
+            }
+
+            // DS8566: Heat_Key + Serial_No per flagged part
             const res8566 = await Promise.all(
                 flagged.map(item =>
                     TMUtils.ds(8566, { Part_Key: item.partKey })
@@ -349,7 +366,7 @@
                 )
             );
 
-            // Flatten -> combos
+            // Flatten unique combos
             const combos = [];
             const seen = new Set();
             res8566.forEach((data, idx) => {
@@ -364,7 +381,7 @@
                 });
             });
 
-            // DS14343
+            // DS14343: attachments by Heat_Key
             const statusArray = await Promise.all(
                 combos.map(async ({ orderNo, partNo, heatKey, serialNo }) => {
                     try {
@@ -379,31 +396,38 @@
                 })
             );
 
-
             dlog('Final status:', statusArray);
             showMsg(`🔍 Checked ${statusArray.length} entries`, { type: 'info', autoClear: 2000 });
 
-            // Determine what to display
-            const issuesOnly = showMissingOnly ? statusArray.filter(x => x.error || x.count === 0) : statusArray;
-            const hasIssues = statusArray.some(x => x.error || x.count === 0);
+            // Decide what to display
+            const issuesOnly = showMissingOnly
+                ? statusArray.filter(x => x.error || x.count === 0)
+                : statusArray;
 
+            const hasIssues = statusArray.some(x => x.error || x.count === 0);
             if (!hasIssues) {
                 showMsg('✅ All attachments present. Proceeding…', { type: 'success', autoClear: 1800 });
-                return btn.click();
+                return btn.click(); // continue to native Schedule
             }
 
+            // Require acknowledgement if any issues
             showDecisionTable(issuesOnly, () => {
                 showMsg('✅ Acknowledged', { type: 'success', autoClear: 1800 });
-                btn.click();
+                btn.click(); // programmatic click → not re-intercepted (we ignore !e.isTrusted)
             });
 
         } catch (err) {
-            derror('Unexpected error', err);
-            showMsg(`❌ ${err}`, { type: 'error', autoClear: 4000 });
-            // Fail open to avoid blocking ops
+            derror('Schedule validation failed:', err);
+            showMsg(`❌ ${err?.message || err}`, { type: 'error', autoClear: 4000 });
+            // Fail-open so ops aren’t blocked
             btn.click();
         }
-    }, true);
+    }
+
+    // Attach once, capture phase so we run before KO’s handlers
+    document.addEventListener('click', onScheduleClick, true);
+    dlog('Schedule interceptor attached (delegated)');
+
 
     // ---------- Menu command ----------
     GM_registerMenuCommand('🔧 Re-hook CR&S10 Schedule', () => location.reload());
