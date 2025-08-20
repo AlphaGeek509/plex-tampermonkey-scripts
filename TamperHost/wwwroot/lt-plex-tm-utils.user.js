@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LT › Plex TM Utils
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.109
+// @version      3.5.114
 // @description  Shared utilities (fetchData, observeInsert, waitForModelAsync, matchRoute, etc.)
 // @match        https://*.on.plex.com/*
 // @match        https://*.plex.com/*
@@ -26,16 +26,24 @@
     // ensure a place to cache the key lives on the shared object
     if (!('__apiKeyCache' in TMUtils)) TMUtils.__apiKeyCache = null;
 
+    // Normalize like the auth helper (accepts "user:pass", "Basic …", "Bearer …")
+    function _normalizeAuth(raw) {
+        if (!raw) return '';
+        if (/^(Basic|Bearer)\s/i.test(raw)) return raw.trim();
+        // Accept "user:pass" and encode as Basic
+        try { return `Basic ${btoa(raw.trim())}`; } catch { return ''; }
+    }
 
-    // Resolve Plex API key safely from page context (supports late load + caching)
+    // Resolve API key across routes: prefer PlexAuth/PlexAPI, fallback to GM/localStorage.
+    // Mirrors the resolved key to localStorage + GM so future loads on this subdomain don’t need to wait.
     async function getApiKey({
-        wait = true,          // poll for the getter if not present yet
-        timeoutMs = 5000,     // how long to wait
-        pollMs = 200,         // poll interval
-        useCache = true,      // return a cached key if fresh
-        cacheMs = 5 * 60_000  // consider cache fresh for 5 minutes
+        wait = false,       // set true on routes that load PlexAuth late
+        timeoutMs = 0,
+        pollMs = 200,
+        useCache = true,
+        cacheMs = 5 * 60_000
     } = {}) {
-        // cache fast-path
+        // cache fast-path (lives on TMUtils to avoid scope issues)
         const cached = TMUtils.__apiKeyCache;
         if (useCache && cached && (Date.now() - cached.ts) < cacheMs) {
             return cached.value;
@@ -43,15 +51,14 @@
 
         const root = (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window);
 
-        const resolveGetter = () => {
-            const g1 = root?.PlexAuth && typeof root.PlexAuth.getKey === 'function' ? root.PlexAuth.getKey : null;
-            const g2 = root?.PlexAPI && typeof root.PlexAPI.getKey === 'function' ? root.PlexAPI.getKey : null;
-            return g1 || g2 || null;
-        };
+        const resolveGetter = () =>
+            (root?.PlexAuth && typeof root.PlexAuth.getKey === 'function' && root.PlexAuth.getKey) ||
+            (root?.PlexAPI && typeof root.PlexAPI.getKey === 'function' && root.PlexAPI.getKey) ||
+            null;
 
         let getter = resolveGetter();
 
-        if (!getter && wait) {
+        if (!getter && wait && timeoutMs > 0) {
             const start = Date.now();
             while (!getter && (Date.now() - start) < timeoutMs) {
                 await new Promise(r => setTimeout(r, pollMs));
@@ -59,18 +66,45 @@
             }
         }
 
-        if (!getter) return '';
-
-        try {
-            const val = getter.call(root);
-            const key = (val && typeof val.then === 'function') ? await val : val;
-            const out = (typeof key === 'string' ? key.trim() : '') || '';
-            if (useCache) TMUtils.__apiKeyCache = { value: out, ts: Date.now() };
-            return out;
-        } catch {
-            return '';
+        // 1) Preferred: helper object if available
+        if (getter) {
+            try {
+                const val = getter.call(root);
+                const key = (val && typeof val.then === 'function') ? await val : val;
+                const out = _normalizeAuth(key);
+                if (out) {
+                    // Mirror so subsequent loads on this subdomain don’t depend on the helper being present
+                    try { localStorage.setItem('PlexApiKey', out); } catch { }
+                    try { if (typeof GM_setValue === 'function') GM_setValue('PlexApiKey', out); } catch { }
+                    if (useCache) TMUtils.__apiKeyCache = { value: out, ts: Date.now() };
+                    return out;
+                }
+            } catch { /* fall through */ }
         }
+
+        // 2) Fallback: GM store (authoritative if set via menu)
+        try {
+            const rawGM = typeof GM_getValue === 'function' ? GM_getValue('PlexApiKey', '') : '';
+            if (rawGM) {
+                const out = _normalizeAuth(rawGM);
+                if (useCache) TMUtils.__apiKeyCache = { value: out, ts: Date.now() };
+                return out;
+            }
+        } catch { }
+
+        // 3) Fallback: localStorage on this subdomain
+        try {
+            const rawLS = localStorage.getItem('PlexApiKey') || '';
+            if (rawLS) {
+                const out = _normalizeAuth(rawLS);
+                if (useCache) TMUtils.__apiKeyCache = { value: out, ts: Date.now() };
+                return out;
+            }
+        } catch { }
+
+        return '';
     }
+
 
     // Normalizes Authorization header
     function _buildAuthHeader(raw) {
@@ -82,7 +116,7 @@
 
     // Low-level: one place that actually executes the HTTP call
     TMUtils.fetchData = async function fetchData(url, { method = 'GET', headers = {}, body, timeoutMs = 15000, useXHR = false } = {}) {
-        const auth = _buildAuthHeader(await TMUtils.getApiKey().catch(() => ''));
+        const auth = _normalizeAuth(await TMUtils.getApiKey().catch(() => ''));
 
         const finalHeaders = {
             'Accept': 'application/json',
@@ -114,7 +148,14 @@
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), timeoutMs);
         try {
-            const resp = await fetch(url, { method, headers: finalHeaders, body: payload, signal: ctrl.signal });
+            const resp = await fetch(url, {
+                method,
+                headers: finalHeaders,
+                body: payload,
+                signal: ctrl.signal,
+                credentials: 'include'   // keep same-origin cookies where needed
+            });
+
             if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
             const text = await resp.text();
             return text ? JSON.parse(text) : {};

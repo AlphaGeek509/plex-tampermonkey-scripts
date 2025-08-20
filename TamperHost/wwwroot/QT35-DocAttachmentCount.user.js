@@ -1,10 +1,10 @@
 ﻿// ==UserScript==
 // @name         QT35 › Doc Attachment Count
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.109
+// @version      3.5.114
 // @description  Displays read-only “Attachment (N)” in the Quote Wizard action bar (DS 11713). Independent of pricing/button presence.
-// @match        https://*.on.plex.com/*
-// @match        https://*.plex.com/*
+// @match        https://*.on.plex.com/SalesAndCRM/QuoteWizard*
+// @match        https://*.plex.com/SalesAndCRM/QuoteWizard*
 // @require      http://localhost:5000/lt-plex-tm-utils.user.js
 // @require      http://localhost:5000/lt-plex-auth.user.js
 // @grant        GM_registerMenuCommand
