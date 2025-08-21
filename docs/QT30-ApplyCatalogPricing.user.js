@@ -1,12 +1,12 @@
 ﻿// ==UserScript==
 // @name         QT30 › Apply Catalog Pricing
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.114
+// @version      3.5.150
 // @description  Adds “LT Apply Catalog Pricing” button on Quote Wizard (Part Summary).
 //               Looks up Catalog_Key (DS 3156), loads breakpoints per part (DS 4809),
 //               applies the correct price by quantity, deletes zero-qty rows, and refreshes the wizard.
-// @match        https://*.on.plex.com/SalesAndCRM/QuoteWizard*
-// @match        https://*.plex.com/SalesAndCRM/QuoteWizard*
+// @match        https://*.plex.com/*
+// @match        https://*.on.plex.com/*
 // @require      http://localhost:5000/lt-plex-tm-utils.user.js
 // @require      http://localhost:5000/lt-plex-auth.user.js
 // @grant        GM_registerMenuCommand
@@ -16,26 +16,28 @@
 // @grant        unsafeWindow
 // @connect      *.plex.com
 // @connect      localhost
+// @run-at       document-idle
+// @noframes
 // ==/UserScript==
 
-(function (window) {
+(async function () {
     'use strict';
 
-    // ========= Config / Routing / Standard bootstraping =========
+    // ---------- Standard bootstrap ----------
     const IS_TEST_ENV = /test\.on\.plex\.com$/i.test(location.hostname);
-
-    // Only enable verbose logs on test; keep prod quiet
     TMUtils.setDebug?.(IS_TEST_ENV);
 
-    // Namespaced logger + gated wrappers (match this label to the script)
-    const L = TMUtils.getLogger?.('QT30');
+    const L = TMUtils.getLogger?.('QT30'); // rename per file: QT20, QT30, QT35
     const dlog = (...a) => { if (IS_TEST_ENV) L?.log?.(...a); };
     const dwarn = (...a) => { if (IS_TEST_ENV) L?.warn?.(...a); };
-    const derror = (...a) => { if (IS_TEST_ENV) L?.error?.(...a); };  // gate errors too if you want
+    const derror = (...a) => { if (IS_TEST_ENV) L?.error?.(...a); };
 
-    // Route allowlist (same across QT files)
+    // Route allowlist (CASE-INSENSITIVE)
     const ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
-    if (!TMUtils.matchRoute?.(ROUTES)) return;
+    if (!TMUtils.matchRoute?.(ROUTES)) {
+        dlog('Skipping route:', location.pathname);
+        return;
+    }
 
     // ---------- Config ----------
     const TARGET_WIZARD_PAGE = 'Part Summary';

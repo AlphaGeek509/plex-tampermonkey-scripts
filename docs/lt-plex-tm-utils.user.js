@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LT › Plex TM Utils
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.114
+// @version      3.5.150
 // @description  Shared utilities (fetchData, observeInsert, waitForModelAsync, matchRoute, etc.)
 // @match        https://*.on.plex.com/*
 // @match        https://*.plex.com/*
@@ -11,6 +11,17 @@
 // @grant        GM_setValue
 // @connect      *.plex.com
 // ==/UserScript==
+
+
+
+// -------------------------------------------------------------------------------------------------------------------------
+//  When to use what (cheat sheet)
+//      waitForModelAsync(sel): you need { controller, viewModel } (writeback, methods, grid data, etc.). Use once at init.
+//      watchByLabel({ labelText, onChange }): the field has a visible label (e.g., “Customer”). Best for forms.
+//      awaitValueByLabel({ labelText }): you just need the first value and you’re done.
+//      watchBySelector({ selector, onChange }): no label / grid / custom widget. Target the element directly.
+//  All of these can happily live in TMUtils so your page scripts stay tiny and consistent.
+// -------------------------------------------------------------------------------------------------------------------------
 
 (function (window) {
     'use strict';
@@ -113,6 +124,7 @@
         // Your current auth flow prefers Basic; keep that default
         return `Basic ${raw}`;
     }
+
 
     // Low-level: one place that actually executes the HTTP call
     TMUtils.fetchData = async function fetchData(url, { method = 'GET', headers = {}, body, timeoutMs = 15000, useXHR = false } = {}) {
@@ -328,6 +340,12 @@
         catch { return false; }
     }
 
+    // Helper used by both watchers
+    function __tmCreateQuietDispatcher(fn, delay) {
+        let t = null;
+        return () => { if (t) clearTimeout(t); t = setTimeout(() => { t = null; fn(); }, delay); };
+    }
+
     function onRouteChange(handler) {
         if (history.__tmWrapped) { handler(location.pathname); return; }
         const fire = () => {
@@ -404,14 +422,348 @@
         return logger;
     }
 
+    // Watch a field by its <label> text. Subscribes to KO if available; else falls back to DOM.
+    // Returns an unsubscribe() function.
+    // --------------------------- watchByLabel (DROP-IN) ---------------------------
+    TMUtils.watchByLabel = function watchByLabel({
+        labelText,
+        onChange: onValue,
+        initial = true,
+        fireOn = 'change',             // 'change' | 'blur'
+        settleMs = 250,
+        koPrefer = 'root',
+        bagKeys = ['value', 'displayValue', 'boundDisplayValue', 'textInput'],
+        widgetSelector = '.k-combobox,.k-dropdown,.k-dropdownlist,.k-autocomplete,[role="combobox"]',
+        timeoutMs = 30000,
+        logger = null
+    } = {}) {
+        const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
+        const isObs = (x) => (KO?.isObservable?.(x)) || (typeof x === 'function' && typeof x.subscribe === 'function');
+        const un = (x) => KO?.unwrap ? KO.unwrap(x) : (typeof x === 'function' ? x() : x);
+        const log = (...a) => logger?.log?.(...a);
+
+        const norm = (s) => String(s || '').toLowerCase().replace(/\u00a0/g, ' ').replace(/[*:]/g, '').replace(/\s+/g, ' ').trim();
+        const want = labelText instanceof RegExp ? labelText : norm(labelText);
+
+        const findLabel = () => {
+            const labels = [...document.querySelectorAll('label[for]')];
+            for (const l of labels) {
+                const txt = norm(l.textContent || l.getAttribute('data-original-text') || '');
+                if (labelText instanceof RegExp ? labelText.test(txt) : (txt === want || txt.startsWith(want))) return l;
+            }
+            return null;
+        };
+
+        function hookNow() {
+            const label = findLabel();
+            if (!label) return null;
+
+            const forId = label.getAttribute('for');
+            const el = forId && document.getElementById(forId);
+            if (!el) return null;
+
+            let bound = null;
+            if (KO?.contextFor) {
+                try {
+                    const ctx = KO.contextFor(el);
+                    const bag = (koPrefer === 'data' ? ctx?.$data?.elements?.[forId] : ctx?.$root?.elements?.[forId])
+                        || (koPrefer === 'data' ? ctx?.$root?.elements?.[forId] : ctx?.$data?.elements?.[forId]);
+                    if (bag) bound = bagKeys.map(k => bag[k]).find(Boolean) ?? null;
+
+                    if (!bound) {
+                        const dbRaw = el.getAttribute('data-bind') || '';
+                        const m = /(?:value|textInput)\s*:\s*([^,}]+)/.exec(dbRaw);
+                        if (m) {
+                            const expr = m[1].trim();
+                            const evalIn = (obj) => { try { return Function('with(this){return (' + expr + ')}').call(obj); } catch { return undefined; } };
+                            bound = evalIn(ctx?.$data);
+                            if (bound === undefined) bound = evalIn(ctx?.$root);
+                        }
+                    }
+                } catch { /* noop */ }
+            }
+
+            const kendoWrap = el.closest(widgetSelector);
+            const target = kendoWrap?.querySelector('input') || el;
+
+            const read = () => {
+                const v = bound !== null ? un(bound) : (el.value ?? '').toString();
+                return (Array.isArray(v) ? v[0] : v)?.toString().trim() || '';
+            };
+
+            const fire = () => {
+                const v = read();
+                if (v && typeof onValue === 'function') onValue(v);
+            };
+            const queueFire = __tmCreateQuietDispatcher(fire, settleMs);
+
+            const unsubs = [];
+
+            if (initial && fireOn !== 'blur') queueFire();
+
+            if (isObs(bound)) {
+                const sub = bound.subscribe(() => queueFire());
+                unsubs.push(() => sub.dispose?.());
+                log?.('watchByLabel: KO subscription attached for', labelText);
+            }
+
+            if (fireOn === 'blur') {
+                const onFocusOut = () => queueFire();
+                const onChange = () => queueFire();
+                const onKeyDown = (e) => { if (e.key === 'Tab' || e.key === 'Enter') setTimeout(queueFire, 0); };
+
+                target.addEventListener('focusout', onFocusOut, true);
+                target.addEventListener('change', onChange);
+                target.addEventListener('keydown', onKeyDown);
+
+                if (kendoWrap && kendoWrap !== target) {
+                    kendoWrap.addEventListener('focusout', onFocusOut, true);
+                    kendoWrap.addEventListener('change', onChange, true);
+                }
+
+                const mo = new MutationObserver(() => queueFire());
+                mo.observe(target, { childList: true, characterData: true, subtree: true });
+
+                unsubs.push(() => {
+                    target.removeEventListener('focusout', onFocusOut, true);
+                    target.removeEventListener('change', onChange);
+                    target.removeEventListener('keydown', onKeyDown);
+                    if (kendoWrap && kendoWrap !== target) {
+                        kendoWrap.removeEventListener('focusout', onFocusOut, true);
+                        kendoWrap.removeEventListener('change', onChange, true);
+                    }
+                    mo.disconnect();
+                });
+            } else {
+                const onChange = () => queueFire();
+                target.addEventListener('change', onChange);
+                unsubs.push(() => target.removeEventListener('change', onChange));
+            }
+
+
+            log?.('watchByLabel: listeners attached for', labelText, target);
+            return () => { unsubs.forEach(fn => { try { fn(); } catch { } }); };
+        }
+
+        let unsub = hookNow();
+        if (typeof unsub === 'function') return unsub;
+
+        const mo = new MutationObserver(() => {
+            unsub = hookNow();
+            if (typeof unsub === 'function') mo.disconnect();
+        });
+        mo.observe(document.body, { childList: true, subtree: true });
+        setTimeout(() => mo.disconnect(), timeoutMs);
+
+        return () => { try { typeof unsub === 'function' && unsub(); } catch { } try { mo.disconnect(); } catch { } };
+    };
+
+    // Resolve once with the first non-empty value, then auto-unsubscribe
+    TMUtils.awaitValueByLabel = function awaitValueByLabel({ labelText, timeoutMs = 30000, logger = null } = {}) {
+        return new Promise((resolve, reject) => {
+            let stop = null;
+            let done = false;
+            const timer = setTimeout(() => { if (!done) { done = true; stop?.(); reject(new Error('Timeout')); } }, timeoutMs);
+            stop = TMUtils.watchByLabel({
+                labelText,
+                initial: true,
+                logger,
+                onChange: (v) => {
+                    if (done || !v) return;
+                    done = true;
+                    clearTimeout(timer);
+                    stop?.();           // clean up
+                    resolve(v);
+                }
+            });
+        });
+    };
+
+
+    // --------------------------- watchBySelector (DROP-IN) ---------------------------
+    TMUtils.watchBySelector = function watchBySelector({
+        selector,
+        onChange: onValue,
+        initial = true,
+        fireOn = 'change',             // 'change' | 'blur'
+        settleMs = 250,                // wait for KO/Kendo/DOM to settle
+        koPrefer = 'root',
+        bagKeys = ['value', 'displayValue', 'boundDisplayValue', 'textInput'],
+        widgetSelector = '.k-combobox,.k-dropdown,.k-dropdownlist,.k-autocomplete,[role="combobox"]',
+        timeoutMs = 30000,
+        logger = null
+    } = {}) {
+        const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
+        const isObs = (x) => (KO?.isObservable?.(x)) || (typeof x === 'function' && typeof x.subscribe === 'function');
+        const un = (x) => KO?.unwrap ? KO.unwrap(x) : (typeof x === 'function' ? x() : x);
+        const log = (...a) => logger?.log?.(...a);
+
+        function hookNow() {
+            const el = document.querySelector(selector);
+            if (!el) return null;
+
+            let ctx = null, bag = null, obs = null;
+            try {
+                ctx = KO?.contextFor ? KO.contextFor(el) : null;
+                const id = el.id;
+                const fromRoot = id && ctx?.$root?.elements?.[id];
+                const fromData = id && ctx?.$data?.elements?.[id];
+                bag = (koPrefer === 'data' ? fromData : fromRoot) || (koPrefer === 'data' ? fromRoot : fromData) || null;
+
+                if (bag) {
+                    const cand = bagKeys.map(k => bag[k]).find(Boolean);
+                    if (isObs(cand)) obs = cand;
+                }
+
+                if (!obs && KO?.contextFor) {
+                    const dbRaw = el.getAttribute('data-bind') || '';
+                    const m = /(?:value|textInput)\s*:\s*([^,}]+)/.exec(dbRaw);
+                    if (m) {
+                        const expr = m[1].trim();
+                        const evalIn = (obj) => { try { return Function('with(this){return (' + expr + ')}').call(obj); } catch { return undefined; } };
+                        const probe = evalIn(ctx?.[koPrefer === 'data' ? '$data' : '$root']);
+                        if (isObs(probe)) obs = probe;
+                    }
+                }
+            } catch { /* noop */ }
+
+            const kendoWrap = el.closest(widgetSelector);
+            const target = kendoWrap?.querySelector('input') || el;
+
+            const read = () => {
+                let v;
+                if (obs) v = un(obs);
+                else if (bag) {
+                    const bagVal = bagKeys.map(k => bag[k]).find(Boolean);
+                    v = typeof bagVal === 'function' ? bagVal() : bagVal;
+                }
+                if (v == null || v === '') v = (el.value ?? el.textContent ?? '');
+                const s = Array.isArray(v) ? v[0] : v;
+                return (s ?? '').toString().trim();
+            };
+
+            const fire = () => {
+                const val = read();
+                if (val !== '' && typeof onValue === 'function') onValue(val);
+            };
+            const queueFire = __tmCreateQuietDispatcher(fire, settleMs);
+
+            const unsubs = [];
+
+            // Initial fire (skip if blur-mode, because user hasn’t confirmed yet)
+            if (initial && fireOn !== 'blur') queueFire();
+
+            // KO subscriptions collapse into a single queued fire
+            if (obs && typeof obs.subscribe === 'function') {
+                const sub = obs.subscribe(() => queueFire());
+                unsubs.push(() => sub.dispose?.());
+                log?.('watchBySelector: KO observable subscription attached for', selector);
+            }
+
+            // Bag wrappers (optional)
+            if (bag) {
+                const bagUnhooks = [];
+                const wrap = (obj, name) => {
+                    if (!obj || typeof obj[name] !== 'function') return;
+                    const orig = obj[name];
+                    obj[name] = function wrapped(...args) { try { queueFire(); } catch { } return orig.apply(this, args); };
+                    bagUnhooks.push(() => { obj[name] = orig; });
+                };
+                ['onchange', 'onblur', 'onkeyup', 'onkeydown'].forEach(n => wrap(bag, n));
+                unsubs.push(() => bagUnhooks.forEach(fn => { try { fn(); } catch { } }));
+                log?.('watchBySelector: bag event wrappers attached for', selector);
+            }
+
+            // DOM listeners — no 'input' handler in blur/change mode => no keystroke spam
+            if (fireOn === 'blur') {
+                const onFocusOut = () => queueFire();
+                const onChange = () => queueFire();
+                const onKeyDown = (e) => { if (e.key === 'Tab' || e.key === 'Enter') setTimeout(queueFire, 0); };
+
+                // Focus-out (bubbling) is more reliable with Kendo wrappers; use capture
+                target.addEventListener('focusout', onFocusOut, true);
+                target.addEventListener('change', onChange);
+                target.addEventListener('keydown', onKeyDown);
+
+                // If there is a widget wrapper, listen there too (some combos move focus)
+                if (kendoWrap && kendoWrap !== target) {
+                    kendoWrap.addEventListener('focusout', onFocusOut, true);
+                    kendoWrap.addEventListener('change', onChange, true);
+                }
+
+                const mo = new MutationObserver(() => queueFire());
+                mo.observe(target, { childList: true, characterData: true, subtree: true });
+
+                unsubs.push(() => {
+                    target.removeEventListener('focusout', onFocusOut, true);
+                    target.removeEventListener('change', onChange);
+                    target.removeEventListener('keydown', onKeyDown);
+                    if (kendoWrap && kendoWrap !== target) {
+                        kendoWrap.removeEventListener('focusout', onFocusOut, true);
+                        kendoWrap.removeEventListener('change', onChange, true);
+                    }
+                    mo.disconnect();
+                });
+            } else {
+                const onChange = () => queueFire();
+                target.addEventListener('change', onChange);
+                unsubs.push(() => target.removeEventListener('change', onChange));
+            }
+
+
+            log?.('watchBySelector: listeners attached for', selector, target);
+            return () => { unsubs.forEach(fn => { try { fn(); } catch { } }); };
+        }
+
+        let unsub = hookNow();
+        if (typeof unsub === 'function') return unsub;
+
+        const mo = new MutationObserver(() => {
+            unsub = hookNow();
+            if (typeof unsub === 'function') mo.disconnect();
+        });
+        mo.observe(document.body, { childList: true, subtree: true });
+        setTimeout(() => mo.disconnect(), timeoutMs);
+
+        return () => { try { typeof unsub === 'function' && unsub(); } catch { } try { mo.disconnect(); } catch { } };
+    };
+
+    (function installTmUrlObserver() {
+        if (window.__tmUrlObsInstalled) return;
+        window.__tmUrlObsInstalled = true;
+
+        const EV = 'tmutils:urlchange';
+        const fire = () => window.dispatchEvent(new CustomEvent(EV));
+
+        const origPush = history.pushState;
+        history.pushState = function () { const r = origPush.apply(this, arguments); fire(); return r; };
+
+        const origReplace = history.replaceState;
+        history.replaceState = function () { const r = origReplace.apply(this, arguments); fire(); return r; };
+
+        window.addEventListener('popstate', fire);
+
+        TMUtils.onUrlChange = function onUrlChange(cb) {
+            const h = () => cb(location);
+            window.addEventListener(EV, h);
+            return () => window.removeEventListener(EV, h);
+        };
+
+        TMUtils._dispatchUrlChange = fire; // optional: manual trigger
+    })();
+
+
     // ---------------------------------------------------------------------
     // 🔁 Global exposure for TamperMonkey sandbox
     // ---------------------------------------------------------------------
     Object.assign(TMUtils, {
         getApiKey,
-        fetchData: TMUtils.fetchData, // ← reference the property you set earlier
+        fetchData: TMUtils.fetchData, 
+        watchByLabel: TMUtils.watchByLabel,
+        awaitValueByLabel: TMUtils.awaitValueByLabel,
+        watchBySelector: TMUtils.watchBySelector,
         showMessage, hideMessage, observeInsert,
-        waitForModel, waitForModelAsync,
+        waitForModel, waitForModelAsync, 
         selectOptionByText, selectOptionByValue,
         toast,
         log, warn, error, ok,
@@ -421,12 +773,12 @@
         ds: TMUtils.ds, dsRows: TMUtils.dsRows
     });
 
-    console.log('🐛 TMUtils loaded from local build:', {
-        waitForModelAsync: typeof TMUtils.waitForModelAsync,
-        observeInsert: typeof TMUtils.observeInsert,
-        fetchData: typeof TMUtils.fetchData,
-        toast: typeof TMUtils.toast,
-        ensureRoute: typeof TMUtils.ensureRoute
-    });
+    //console.log('🐛 TMUtils loaded from local build:', {
+    //    waitForModelAsync: typeof TMUtils.waitForModelAsync,
+    //    observeInsert: typeof TMUtils.observeInsert,
+    //    fetchData: typeof TMUtils.fetchData,
+    //    toast: typeof TMUtils.toast,
+    //    ensureRoute: typeof TMUtils.ensureRoute
+    //});
 
 })(window);

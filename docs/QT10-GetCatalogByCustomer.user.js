@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         QT10 > Get Catalog by Customer
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.114
+// @version      3.5.150
 // @description  Lookup CatalogKey/Code for CustomerNo and write to VM (no dropdown sync)
-// @match        https://*.on.plex.com/SalesAndCRM/QuoteWizard*
-// @match        https://*.plex.com/SalesAndCRM/QuoteWizard*
+// @match        https://*.plex.com/*
+// @match        https://*.on.plex.com/*
 // @require      http://localhost:5000/lt-plex-tm-utils.user.js
 // @require      http://localhost:5000/lt-plex-auth.user.js
 // @grant        GM_registerMenuCommand
@@ -14,113 +14,143 @@
 // @grant        unsafeWindow
 // @connect      *.plex.com
 // @connect      localhost
+// @run-at       document-idle
+// @noframes
 // ==/UserScript==
 
 (async function () {
     'use strict';
 
-    // ========= Config / Routing / Standard bootstraping =========
+    // ---------- Standard bootstrap ----------
     const IS_TEST_ENV = /test\.on\.plex\.com$/i.test(location.hostname);
-
-    // Only enable verbose logs on test; keep prod quiet
     TMUtils.setDebug?.(IS_TEST_ENV);
 
-    // Namespaced logger + gated wrappers (match this label to the script)
-    const L = TMUtils.getLogger?.('QT10');
+    const L = TMUtils.getLogger?.('QT10'); // rename per file: QT20, QT30, QT35
     const dlog = (...a) => { if (IS_TEST_ENV) L?.log?.(...a); };
     const dwarn = (...a) => { if (IS_TEST_ENV) L?.warn?.(...a); };
-    const derror = (...a) => { if (IS_TEST_ENV) L?.error?.(...a); };  // gate errors too if you want
+    const derror = (...a) => { if (IS_TEST_ENV) L?.error?.(...a); };
 
-    // Route allowlist (same across QT files)
+    // Route allowlist (CASE-INSENSITIVE)
     const ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
-    if (!TMUtils.matchRoute?.(ROUTES)) return;
-
-
-    try {
-        // Ensure key is available (uses PlexAuth/PlexAPI via TMUtils)
-        await TMUtils.getApiKey();
-
-        const { controller, viewModel, element } = await TMUtils.waitForModelAsync('.plex-formatted-address', {
-            pollMs: 250,
-            timeoutMs: 15000,   
-            logger: IS_TEST_ENV ? L : null
-        });
-
-        if (!controller || !viewModel) {
-            TMUtils.toast('❌ Could not resolve KO bindings for .plex-formatted-address', 'error', 3000);
-            return;
-        }
-
-        // Safe KO reference (avoid bare `ko`)
-        const KO =
-            (typeof window !== 'undefined' && window.ko) ||
-            (typeof unsafeWindow !== 'undefined' && unsafeWindow.ko) ||
-            null;
-
-        if (!KO?.isObservable?.(controller.address)) {
-            TMUtils.toast('❌ controller.address is not observable', 'error', 3000);
-            return;
-        }
-
-        // React once the formatted address is populated
-        const sub = controller.address.subscribe(async formattedAddress => {
-            if (!formattedAddress) return; // still waiting
-
-            sub.dispose();
-            dlog('QT10: formatted address ready →', formattedAddress);
-
-            // Pull CustomerNo off the VM (can be observable or array)
-            const unwrapped = ko.unwrap(viewModel.CustomerNo);
-            const customerNo = Array.isArray(unwrapped) ? unwrapped[0] : unwrapped;
-            if (!customerNo) {
-                TMUtils.toast('❌ No CustomerNo found on VM', 'error');
-                return;
-            }
-
-            try {
-                // 1) Customer → CatalogKey
-                //    (Your existing datasource IDs preserved)
-                const [row1] = await TMUtils.dsRows(319, { Customer_No: customerNo });
-                const catalogKey = row1?.Catalog_Key || 0;
-                if (!catalogKey) {
-                    TMUtils.toast(`⚠️ No catalog for ${customerNo}`, 'warn');
-                    return;
-                }
-
-                // 2) CatalogKey → CatalogCode
-                const rows2 = await TMUtils.dsRows(22696, { Catalog_Key: catalogKey });
-                const catalogCode = rows2.map(r => r.Catalog_Code).find(Boolean) || '';
-
-                // 3) Write back to KO VM (prefer observables, fallback to arrays)
-                if (typeof viewModel.CatalogKey === 'function') {
-                    viewModel.CatalogKey(catalogKey);
-                } else if (Array.isArray(viewModel.CatalogKey)) {
-                    viewModel.CatalogKey.length = 0;
-                    viewModel.CatalogKey.push(catalogKey);
-                }
-
-                if (typeof viewModel.CatalogCode === 'function') {
-                    viewModel.CatalogCode(catalogCode);
-                } else if (Array.isArray(viewModel.CatalogCode)) {
-                    viewModel.CatalogCode.length = 0;
-                    viewModel.CatalogCode.push(catalogCode);
-                }
-
-                TMUtils.toast(
-                    `✅ Customer: ${customerNo}\nCatalogKey: ${catalogKey}\nCatalogCode: ${catalogCode}`,
-                    'success'
-                );
-
-                dlog('QT10 done', { customerNo, catalogKey, catalogCode });
-            } catch (err) {
-                TMUtils.toast(`❌ Lookup failed: ${err.message}`, 'error');
-                derror(err);
-            }
-        });
-
-        dlog('QT10: subscribed — waiting for address change…');
-    } catch (e) {
-        TMUtils.toast(`❌ QT10 init failed: ${e.message}`, 'error');
-        derror(e);
+    if (!TMUtils.matchRoute?.(ROUTES)) {
+        dlog('Skipping route:', location.pathname);
+        return;
     }
+
+    // ✅ Anchor to the actual Customer field on this step
+    const ANCHOR = '[data-val-property-name="CustomerNo"]';
+    let booted = false;
+    let unsubscribeUrl = null;
+
+    // tiny helper: wait briefly for an element to appear (no throw)
+    async function anchorAppears(sel, { timeoutMs = 5000, pollMs = 150 } = {}) {
+        const t0 = Date.now();
+        while (Date.now() - t0 < timeoutMs) {
+            if (document.querySelector(sel)) return true;
+            await new Promise(r => setTimeout(r, pollMs));
+        }
+        return !!document.querySelector(sel);
+    }
+
+    async function maybeBoot() {
+        if (booted) return;
+
+        // Route may change after our userscript starts (SPA!)
+        if (!TMUtils.matchRoute?.(ROUTES)) return;
+
+        // Don’t hang: only proceed when our field actually exists on this step
+        const hasAnchor = await anchorAppears(ANCHOR, { timeoutMs: 2000, pollMs: 150 });
+        if (!hasAnchor) return;
+
+        // From here on, we own it once.
+        booted = true;
+        unsubscribeUrl?.();
+
+        try {
+            await TMUtils.getApiKey();
+
+            const { controller, viewModel } = await TMUtils.waitForModelAsync(ANCHOR, {
+                pollMs: 200,
+                timeoutMs: 8000,
+                logger: IS_TEST_ENV ? L : null
+            });
+            if (!controller || !viewModel) return;
+
+            function readCustomerNoFromVM() {
+                const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
+                try {
+                    const raw = KO?.unwrap ? KO.unwrap(viewModel.CustomerNo)
+                        : (typeof viewModel.CustomerNo === 'function' ? viewModel.CustomerNo() : viewModel.CustomerNo);
+                    const v = Array.isArray(raw) ? raw[0] : raw;
+                    return (v ?? '').toString().trim();
+                } catch { return ''; }
+            }
+
+            let lastCustomerNo = null;
+
+            TMUtils.watchBySelector({
+                selector: ANCHOR,
+                initial: false,
+                fireOn: 'blur',
+                settleMs: 350,
+                logger: IS_TEST_ENV ? L : null,
+                onChange: () => {
+                    const customerNo = readCustomerNoFromVM();     // ✅ true number from VM
+                    if (!customerNo || customerNo === lastCustomerNo) return;
+                    lastCustomerNo = customerNo;
+                    dlog('QT10: CustomerNo →', customerNo);
+                    applyCatalogFor(customerNo);                   // your existing function
+                }
+            });
+
+
+            // Your core lookup/writeback logic extracted so we can call it on init + every change
+            async function applyCatalogFor(customerNo) {
+                if (!customerNo) return;
+
+                try {
+                    // 1) Customer → CatalogKey
+                    const [row1] = await TMUtils.dsRows(319, { Customer_No: customerNo });
+                    const catalogKey = row1?.Catalog_Key || 0;
+                    if (!catalogKey) {
+                        TMUtils.toast(`⚠️ No catalog for ${customerNo}`, 'warn');
+                        return;
+                    }
+
+                    // 2) CatalogKey → CatalogCode
+                    const rows2 = await TMUtils.dsRows(22696, { Catalog_Key: catalogKey });
+                    const catalogCode = rows2.map(r => r.Catalog_Code).find(Boolean) || '';
+
+                    // 3) Write back to KO VM (observables or arrays)
+                    if (typeof viewModel.CatalogKey === 'function') {
+                        viewModel.CatalogKey(catalogKey);
+                    } else if (Array.isArray(viewModel.CatalogKey)) {
+                        viewModel.CatalogKey.length = 0; viewModel.CatalogKey.push(catalogKey);
+                    }
+
+                    if (typeof viewModel.CatalogCode === 'function') {
+                        viewModel.CatalogCode(catalogCode);
+                    } else if (Array.isArray(viewModel.CatalogCode)) {
+                        viewModel.CatalogCode.length = 0; viewModel.CatalogCode.push(catalogCode);
+                    }
+
+                    TMUtils.toast(
+                        `✅ Customer: ${customerNo}\nCatalogKey: ${catalogKey}\nCatalogCode: ${catalogCode}`,
+                        'success'
+                    );
+                    dlog('QT10 done', { customerNo, catalogKey, catalogCode });
+                } catch (err) {
+                    TMUtils.toast(`❌ Lookup failed: ${err.message}`, 'error');
+                    derror(err);
+                }
+            }
+        } catch (e) {
+            derror('QT10 init failed:', e);
+        }
+    }
+
+    // Run now, and also whenever the SPA changes URL
+    unsubscribeUrl = TMUtils.onUrlChange?.(() => { setTimeout(maybeBoot, 0); });
+    TMUtils._dispatchUrlChange?.(); // trigger an initial check immediately
+    maybeBoot();
 })();
