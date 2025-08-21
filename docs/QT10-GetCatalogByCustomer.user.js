@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         QT10 > Get Catalog by Customer
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.150
+// @version      3.5.159
 // @description  Lookup CatalogKey/Code for CustomerNo and write to VM (no dropdown sync)
 // @match        https://*.plex.com/*
 // @match        https://*.on.plex.com/*
@@ -40,9 +40,10 @@
     // ✅ Anchor to the actual Customer field on this step
     const ANCHOR = '[data-val-property-name="CustomerNo"]';
     let booted = false;
+    let booting = false;     // 👈 re-entrancy guard
+    let disposeWatcher = null;
     let unsubscribeUrl = null;
 
-    // tiny helper: wait briefly for an element to appear (no throw)
     async function anchorAppears(sel, { timeoutMs = 5000, pollMs = 150 } = {}) {
         const t0 = Date.now();
         while (Date.now() - t0 < timeoutMs) {
@@ -52,21 +53,27 @@
         return !!document.querySelector(sel);
     }
 
+    function readCustomerNoFromVM(viewModel) {
+        const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
+        try {
+            const raw = KO?.unwrap ? KO.unwrap(viewModel.CustomerNo)
+                : (typeof viewModel.CustomerNo === 'function' ? viewModel.CustomerNo() : viewModel.CustomerNo);
+            const v = Array.isArray(raw) ? raw[0] : raw;
+            return (v ?? '').toString().trim();
+        } catch { return ''; }
+    }
+
     async function maybeBoot() {
-        if (booted) return;
-
-        // Route may change after our userscript starts (SPA!)
-        if (!TMUtils.matchRoute?.(ROUTES)) return;
-
-        // Don’t hang: only proceed when our field actually exists on this step
-        const hasAnchor = await anchorAppears(ANCHOR, { timeoutMs: 2000, pollMs: 150 });
-        if (!hasAnchor) return;
-
-        // From here on, we own it once.
-        booted = true;
-        unsubscribeUrl?.();
+        if (booted || booting) return;       // 👈 prevent overlap
+        booting = true;
 
         try {
+            if (!TMUtils.matchRoute?.(ROUTES)) { booting = false; return; }
+            if (!(await anchorAppears(ANCHOR, { timeoutMs: 2000 }))) { booting = false; return; }
+
+            // mark as booted ASAP to defeat racing callers
+            booted = true;
+
             await TMUtils.getApiKey();
 
             const { controller, viewModel } = await TMUtils.waitForModelAsync(ANCHOR, {
@@ -74,32 +81,23 @@
                 timeoutMs: 8000,
                 logger: IS_TEST_ENV ? L : null
             });
-            if (!controller || !viewModel) return;
-
-            function readCustomerNoFromVM() {
-                const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
-                try {
-                    const raw = KO?.unwrap ? KO.unwrap(viewModel.CustomerNo)
-                        : (typeof viewModel.CustomerNo === 'function' ? viewModel.CustomerNo() : viewModel.CustomerNo);
-                    const v = Array.isArray(raw) ? raw[0] : raw;
-                    return (v ?? '').toString().trim();
-                } catch { return ''; }
-            }
+            if (!controller || !viewModel) { booted = false; booting = false; return; }
 
             let lastCustomerNo = null;
 
-            TMUtils.watchBySelector({
+            // store the disposer so we can detach if we navigate away
+            disposeWatcher = TMUtils.watchBySelector({
                 selector: ANCHOR,
                 initial: false,
                 fireOn: 'blur',
                 settleMs: 350,
                 logger: IS_TEST_ENV ? L : null,
                 onChange: () => {
-                    const customerNo = readCustomerNoFromVM();     // ✅ true number from VM
+                    const customerNo = readCustomerNoFromVM(viewModel); // ✅ true number from VM
                     if (!customerNo || customerNo === lastCustomerNo) return;
                     lastCustomerNo = customerNo;
                     dlog('QT10: CustomerNo →', customerNo);
-                    applyCatalogFor(customerNo);                   // your existing function
+                    applyCatalogFor(customerNo);                         // your existing function
                 }
             });
 
@@ -145,12 +143,27 @@
                 }
             }
         } catch (e) {
+            booted = false;
             derror('QT10 init failed:', e);
+        } finally {
+            booting = false;                 // 👈 release the lock
         }
     }
 
-    // Run now, and also whenever the SPA changes URL
-    unsubscribeUrl = TMUtils.onUrlChange?.(() => { setTimeout(maybeBoot, 0); });
-    TMUtils._dispatchUrlChange?.(); // trigger an initial check immediately
-    maybeBoot();
+    // React to SPA route changes: detach when leaving, try boot when entering
+    unsubscribeUrl = TMUtils.onUrlChange?.(() => {
+        if (!TMUtils.matchRoute?.(ROUTES)) {
+            // leaving the wizard — clean up
+            try { disposeWatcher?.(); } catch { }
+            disposeWatcher = null;
+            booted = false;
+            booting = false;
+            return;
+        }
+        // still in wizard — attempt a boot (guarded)
+        setTimeout(maybeBoot, 0);
+    });
+
+    // Single initial kick. (No manual _dispatchUrlChange to avoid duplicate.)
+    setTimeout(maybeBoot, 0);
 })();

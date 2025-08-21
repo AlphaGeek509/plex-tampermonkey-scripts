@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LT › Plex TM Utils
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.150
+// @version      3.5.159
 // @description  Shared utilities (fetchData, observeInsert, waitForModelAsync, matchRoute, etc.)
 // @match        https://*.on.plex.com/*
 // @match        https://*.plex.com/*
