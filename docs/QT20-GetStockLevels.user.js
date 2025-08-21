@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         QT20 > Part Detail > Get Stock Levels
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.159
+// @version      3.5.164
 // @description  Injects a "Get Stock Levels" button into the "Quote Part Detail" modal.
 //               On click, calls Plex DS 172 (Stock lookup) and appends `STK: <sum>` to NoteNew.
 //               Useful for quoting visibility—quick stock check without leaving the modal.
@@ -66,9 +66,18 @@
     }
 
     // ========= ENTRY POINTS =========
-    TMUtils.observeInsert('.plex-dialog-has-buttons .plex-actions-wrapper ul.plex-actions', injectStockButton);
-    document.querySelectorAll('.plex-dialog-has-buttons .plex-actions-wrapper ul.plex-actions')
-        .forEach(injectStockButton);
+    // Persistently inject the button(s) for every new modal instance
+    const stopQT20Observe = TMUtils.observeInsertMany(
+        '.plex-dialog-has-buttons .plex-actions-wrapper ul.plex-actions',
+        injectStockButton
+    );
+
+    // Optional: detach observer when leaving the wizard
+    TMUtils.onUrlChange?.(() => {
+        if (!TMUtils.matchRoute?.(ROUTES)) {
+            try { stopQT20Observe?.(); } catch { }
+        }
+    });
 
     if (typeof GM_registerMenuCommand === 'function') {
         GM_registerMenuCommand('🔎 QT20: Diagnostics', () =>
@@ -76,12 +85,7 @@
         );
     }
 
-    // Re-inject on SPA URL changes
-    TMUtils.onUrlChange?.(() => {
-        if (!TMUtils.matchRoute?.(ROUTES)) return;
-        document.querySelectorAll('.plex-dialog-has-buttons .plex-actions-wrapper ul.plex-actions')
-            .forEach(injectStockButton);
-    });
+    
 
     // ========= UI INJECTION =========
     function injectStockButton(ul) {
@@ -189,6 +193,13 @@
             // Mount panel inside the modal (absolute relative to modal box)
             // Prefer a content region; fallback to modal root.
             (modal.querySelector('.plex-dialog-content') || modal).appendChild(panel);
+
+            // When the Part Detail modal closes, tell listeners (e.g., QT35) to refresh attachments.
+            onNodeRemoved(modal, () => {
+                window.dispatchEvent(new CustomEvent('LT:AttachmentRefreshRequested', {
+                    detail: { source: 'QT20', ts: Date.now() }
+                }));
+            });
 
         } catch (e) {
             derror('QT20 inject:', e);
@@ -375,5 +386,20 @@
         // 2025-08-21 09:14 (local)
         const pad = (x) => String(x).padStart(2, '0');
         return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    // Fire once when a node leaves the DOM; returns a disposer
+    function onNodeRemoved(node, cb) {
+        if (!node || !node.ownerDocument) return () => { };
+        const mo = new MutationObserver(muts => {
+            for (const m of muts) for (const n of m.removedNodes || []) {
+                if (n === node || (n.contains && n.contains(node))) {
+                    try { cb(); } finally { mo.disconnect(); }
+                    return;
+                }
+            }
+        });
+        mo.observe(node.ownerDocument.body, { childList: true, subtree: true });
+        return () => mo.disconnect();
     }
 })();

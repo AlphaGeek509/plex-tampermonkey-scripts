@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         zDev Tools > Dump Any ViewModel
 // @namespace    http://tampermonkey.net/
-// @version      3.5.159
+// @version      3.5.164
 // @description  Inspect Knockout viewmodels on Plex pages via menu or floating panel (with persistence)
 // @match        *://*.plex.com/*
 // @grant        unsafeWindow

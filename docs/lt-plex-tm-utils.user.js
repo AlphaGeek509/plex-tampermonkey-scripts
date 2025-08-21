@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LT › Plex TM Utils
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.159
+// @version      3.5.164
 // @description  Shared utilities (fetchData, observeInsert, waitForModelAsync, matchRoute, etc.)
 // @match        https://*.on.plex.com/*
 // @match        https://*.plex.com/*
@@ -752,6 +752,42 @@
         TMUtils._dispatchUrlChange = fire; // optional: manual trigger
     })();
 
+    TMUtils.observeInsertMany = function observeInsertMany(selector, callback, { root = document.body, subtree = true } = {}) {
+        const seen = new WeakSet();
+
+        function runOn(ctx) {
+            if (ctx && ctx.nodeType === 1) {
+                if (typeof ctx.matches === 'function' && ctx.matches(selector) && !seen.has(ctx)) {
+                    seen.add(ctx);
+                    try { callback(ctx); } catch (e) { console.error('observeInsertMany callback error:', e); }
+                }
+                if (typeof ctx.querySelectorAll === 'function') {
+                    ctx.querySelectorAll(selector).forEach(el => {
+                        if (!seen.has(el)) {
+                            seen.add(el);
+                            try { callback(el); } catch (e) { console.error('observeInsertMany callback error:', e); }
+                        }
+                    });
+                }
+            }
+        }
+
+        const mo = new MutationObserver(muts => {
+            for (const m of muts) {
+                if (m.addedNodes && m.addedNodes.length) {
+                    m.addedNodes.forEach(runOn);
+                }
+            }
+        });
+
+        mo.observe(root, { childList: true, subtree });
+        // fire for anything already on the page
+        runOn(root);
+
+        // return disposer
+        return () => mo.disconnect();
+    };
+
 
     // ---------------------------------------------------------------------
     // 🔁 Global exposure for TamperMonkey sandbox
@@ -762,6 +798,7 @@
         watchByLabel: TMUtils.watchByLabel,
         awaitValueByLabel: TMUtils.awaitValueByLabel,
         watchBySelector: TMUtils.watchBySelector,
+        observeInsertMany: TMUtils.observeInsertMany,
         showMessage, hideMessage, observeInsert,
         waitForModel, waitForModelAsync, 
         selectOptionByText, selectOptionByValue,

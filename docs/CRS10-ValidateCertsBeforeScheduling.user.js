@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         CR&S10 ➜ Validate Certs Before Scheduling
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.159
+// @version      3.5.164
 // @author       Jeff Nichols
 // @description  Validate certs by OrderNo+PartNo+SerialNo (display), call DS8566 (Heat_Key/Serial_No) then DS14343 by Heat_Key. Show results, require Acknowledgement when issues exist, offer quick email for misses, and provide a small settings GUI.
 // @match        https://*.plex.com/*
