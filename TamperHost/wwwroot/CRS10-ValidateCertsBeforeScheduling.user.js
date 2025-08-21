@@ -1,13 +1,11 @@
 ﻿// ==UserScript==
 // @name         CR&S10 ➜ Validate Certs Before Scheduling
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.114
+// @version      3.5.150
 // @author       Jeff Nichols
 // @description  Validate certs by OrderNo+PartNo+SerialNo (display), call DS8566 (Heat_Key/Serial_No) then DS14343 by Heat_Key. Show results, require Acknowledgement when issues exist, offer quick email for misses, and provide a small settings GUI.
-// @match        *://*.plex.com/SalesAndCRM/SalesReleases*
-// @match        *://*.on.plex.com/SalesAndCRM/SalesReleases*
-// @run-at       document-idle
-// @noframes
+// @match        https://*.plex.com/*
+// @match        https://*.on.plex.com/*
 // @require      http://localhost:5000/lt-plex-tm-utils.user.js
 // @require      http://localhost:5000/lt-plex-auth.user.js
 // @grant        GM_registerMenuCommand
@@ -15,27 +13,31 @@
 // @grant        GM_setValue
 // @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
+// @connect      *.plex.com
+// @connect      localhost
+// @run-at       document-idle
+// Don’t run in iframes
+// @noframes
 // ==/UserScript==
 
-(async () => {
+(async function () {
     'use strict';
 
-    // ========= Config / Routing / Standard bootstraping =========
+    // ---------- Standard bootstrap ----------
     const IS_TEST_ENV = /test\.on\.plex\.com$/i.test(location.hostname);
-
-    // Only enable verbose logs on test; keep prod quiet
     TMUtils.setDebug?.(IS_TEST_ENV);
 
-    // Namespaced logger + gated wrappers (match this label to the script)
-    const L = TMUtils.getLogger?.('CRS10');
+    const L = TMUtils.getLogger?.('CRS10'); // rename per file: QT20, QT30, QT35
     const dlog = (...a) => { if (IS_TEST_ENV) L?.log?.(...a); };
     const dwarn = (...a) => { if (IS_TEST_ENV) L?.warn?.(...a); };
     const derror = (...a) => { if (IS_TEST_ENV) L?.error?.(...a); };
-    const dok = (...a) => { if (IS_TEST_ENV) L?.ok?.(...a); };
 
-    // Route allowlist (same across QT files)
+    // Route allowlist (CASE-INSENSITIVE)
     const ROUTES = [/^\/SalesAndCRM\/SalesReleases(?:\/|$)/i];
-    if (!TMUtils.matchRoute?.(ROUTES)) return;
+    if (!TMUtils.matchRoute?.(ROUTES)) {
+        dlog('Skipping route:', location.pathname);
+        return;
+    }
 
     // ---------- Guard cross-origin CSS access (SecurityError) ----------
     const _cssRulesDesc = Object.getOwnPropertyDescriptor(CSSStyleSheet.prototype, 'cssRules');

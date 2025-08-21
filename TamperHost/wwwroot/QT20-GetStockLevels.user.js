@@ -1,12 +1,12 @@
 ﻿// ==UserScript==
 // @name         QT20 > Part Detail > Get Stock Levels
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.114
+// @version      3.5.150
 // @description  Injects a "Get Stock Levels" button into the "Quote Part Detail" modal.
 //               On click, calls Plex DS 172 (Stock lookup) and appends `STK: <sum>` to NoteNew.
 //               Useful for quoting visibility—quick stock check without leaving the modal.
-// @match        https://*.on.plex.com/SalesAndCRM/QuoteWizard*
-// @match        https://*.plex.com/SalesAndCRM/QuoteWizard*
+// @match        https://*.plex.com/*
+// @match        https://*.on.plex.com/*
 // @require      http://localhost:5000/lt-plex-tm-utils.user.js
 // @require      http://localhost:5000/lt-plex-auth.user.js
 // @grant        GM_registerMenuCommand
@@ -16,26 +16,54 @@
 // @grant        unsafeWindow
 // @connect      *.plex.com
 // @connect      localhost
+// @run-at       document-idle
+// @noframes
 // ==/UserScript==
 
-(function () {
+(async function () {
     'use strict';
 
-    // ========= Config / Routing / Standard bootstraping =========
+    // ---------- Standard bootstrap ----------
     const IS_TEST_ENV = /test\.on\.plex\.com$/i.test(location.hostname);
-
-    // Only enable verbose logs on test; keep prod quiet
     TMUtils.setDebug?.(IS_TEST_ENV);
 
-    // Namespaced logger + gated wrappers (match this label to the script)
-    const L = TMUtils.getLogger?.('QT20');
+    const L = TMUtils.getLogger?.('QT20'); // rename per file: QT20, QT30, QT35
     const dlog = (...a) => { if (IS_TEST_ENV) L?.log?.(...a); };
     const dwarn = (...a) => { if (IS_TEST_ENV) L?.warn?.(...a); };
-    const derror = (...a) => { if (IS_TEST_ENV) L?.error?.(...a); };  // gate errors too if you want
+    const derror = (...a) => { if (IS_TEST_ENV) L?.error?.(...a); };
 
-    // Route allowlist (same across QT files)
+    // Route allowlist (CASE-INSENSITIVE)
     const ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
-    if (!TMUtils.matchRoute?.(ROUTES)) return;
+    if (!TMUtils.matchRoute?.(ROUTES)) {
+        dlog('Skipping route:', location.pathname);
+        return;
+    }
+
+    //const STEP = 'Lines';
+    //const ANCHOR = '[data-val-property-name="PartNo"], input[name="PartNo"]';
+
+    //// Fast bail if not the intended step
+    //if (!isWizardStepActive(STEP)) return;
+
+    //// Fast bail if the field we need isn’t even on this page (avoids timeouts)
+    //if (!(await anchorAppears(ANCHOR, { timeoutMs: 1200 }))) return;
+
+    // Drop-in guard for all QT scripts
+    function isWizardStepActive(nameOrRegex) {
+        const el = document.querySelector('.plex-wizard-page-list .active, .plex-wizard-page-list [aria-current="page"]');
+        const txt = (el?.textContent || '').trim();
+        return nameOrRegex instanceof RegExp ? nameOrRegex.test(txt) : txt.toLowerCase() === String(nameOrRegex).toLowerCase();
+    }
+
+    // Wait (briefly) for an anchor selector to appear; resolve true/false (no throw)
+    async function anchorAppears(selector, { timeoutMs = 1500, pollMs = 150 } = {}) {
+        const t0 = Date.now();
+        while (Date.now() - t0 < timeoutMs) {
+            if (document.querySelector(selector)) return true;
+            await new Promise(r => setTimeout(r, pollMs));
+        }
+        return !!document.querySelector(selector);
+    }
 
     // ========= Config / Routing =========
     const DS_STOCK = 172;                                        // Plex datasource: stock levels

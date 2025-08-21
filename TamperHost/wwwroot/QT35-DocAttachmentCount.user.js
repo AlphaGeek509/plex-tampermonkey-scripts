@@ -1,10 +1,10 @@
 ﻿// ==UserScript==
 // @name         QT35 › Doc Attachment Count
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.114
+// @version      3.5.150
 // @description  Displays read-only “Attachment (N)” in the Quote Wizard action bar (DS 11713). Independent of pricing/button presence.
-// @match        https://*.on.plex.com/SalesAndCRM/QuoteWizard*
-// @match        https://*.plex.com/SalesAndCRM/QuoteWizard*
+// @match        https://*.plex.com/*
+// @match        https://*.on.plex.com/*
 // @require      http://localhost:5000/lt-plex-tm-utils.user.js
 // @require      http://localhost:5000/lt-plex-auth.user.js
 // @grant        GM_registerMenuCommand
@@ -14,26 +14,28 @@
 // @grant        unsafeWindow
 // @connect      *.plex.com
 // @connect      localhost
+// @run-at       document-idle
+// @noframes
 // ==/UserScript==
 
-(function (window) {
+(async function () {
     'use strict';
 
-    // ========= Config / Routing / Standard bootstraping =========
+    // ---------- Standard bootstrap ----------
     const IS_TEST_ENV = /test\.on\.plex\.com$/i.test(location.hostname);
-
-    // Only enable verbose logs on test; keep prod quiet
     TMUtils.setDebug?.(IS_TEST_ENV);
 
-    // Namespaced logger + gated wrappers (match this label to the script)
-    const L = TMUtils.getLogger?.('QT35');
+    const L = TMUtils.getLogger?.('QT35'); // rename per file: QT20, QT30, QT35
     const dlog = (...a) => { if (IS_TEST_ENV) L?.log?.(...a); };
     const dwarn = (...a) => { if (IS_TEST_ENV) L?.warn?.(...a); };
-    const derror = (...a) => { if (IS_TEST_ENV) L?.error?.(...a); };  // gate errors too if you want
+    const derror = (...a) => { if (IS_TEST_ENV) L?.error?.(...a); };
 
-    // Route allowlist (same across QT files)
+    // Route allowlist (CASE-INSENSITIVE)
     const ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
-    if (!TMUtils.matchRoute?.(ROUTES)) return;
+    if (!TMUtils.matchRoute?.(ROUTES)) {
+        dlog('Skipping route:', location.pathname);
+        return;
+    }
 
     // Datasource + params
     const DS_ATTACH_COUNT = 11713;
