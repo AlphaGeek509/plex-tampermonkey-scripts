@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         QT20 > Part Detail > Get Stock Levels
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.164
+// @version      3.5.167
 // @description  Injects a "Get Stock Levels" button into the "Quote Part Detail" modal.
 //               On click, calls Plex DS 172 (Stock lookup) and appends `STK: <sum>` to NoteNew.
 //               Useful for quoting visibility—quick stock check without leaving the modal.
@@ -92,11 +92,10 @@
         try {
             const modal = ul.closest('.plex-dialog');
             const title = modal?.querySelector('.plex-dialog-title')?.textContent?.trim();
-            const looksRight = title === CONFIG.modalTitle
-                || modal?.querySelector('textarea[name="NoteNew"]');
+            const looksRight = title === CONFIG.modalTitle || modal?.querySelector('textarea[name="NoteNew"]');
             if (!looksRight) return;
 
-            if (ul.dataset.qt20StockInjected) return;
+            if (ul.dataset.qt20StockInjected) return; // idempotent per modal instance
             ul.dataset.qt20StockInjected = '1';
             dlog('QT20: injecting buttons');
 
@@ -105,8 +104,20 @@
             const btn = document.createElement('a');
             btn.href = 'javascript:void(0)';
             btn.textContent = 'LT Get Stock Levels';
-            btn.style.cursor = 'pointer';
+            btn.title = 'Click to append normalized stock levels to Note';   // ✅ tooltip
+            btn.setAttribute('aria-label', 'Get stock levels');
+            btn.setAttribute('role', 'button');
+            Object.assign(btn.style, {
+                cursor: 'pointer',
+                transition: 'filter .15s, text-decoration-color .15s'         // ✅ smooth hover
+            });
             btn.addEventListener('click', () => handleClick(btn, modal));
+            // ✅ subtle hover + focus ring
+            btn.addEventListener('mouseenter', () => { btn.style.filter = 'brightness(1.08)'; btn.style.textDecoration = 'underline'; });
+            btn.addEventListener('mouseleave', () => { btn.style.filter = ''; btn.style.textDecoration = ''; });
+            btn.addEventListener('focus', () => { btn.style.outline = '2px solid #4a90e2'; btn.style.outlineOffset = '2px'; });
+            btn.addEventListener('blur', () => { btn.style.outline = ''; btn.style.outlineOffset = ''; });
+
             liMain.appendChild(btn);
             ul.appendChild(liMain);
 
@@ -114,42 +125,35 @@
             const liGear = document.createElement('li');
             const gear = document.createElement('a');
             gear.href = 'javascript:void(0)';
-            gear.title = 'QT20 Settings';
+            gear.title = 'QT20 Settings (breakdown / timestamp)';           // ✅ tooltip
             gear.setAttribute('aria-label', 'QT20 Settings');
             gear.textContent = '⚙️';
-            gear.style.marginLeft = '8px';
-            gear.style.fontSize = '16px';
-            gear.style.lineHeight = '1';
-            gear.style.cursor = 'pointer';
-            liGear.appendChild(gear);
-            ul.appendChild(liGear);
-
-            // --- Settings popover (inside the modal for easy positioning) ---
+            Object.assign(gear.style, {
+                marginLeft: '8px',
+                fontSize: '16px',
+                lineHeight: '1',
+                cursor: 'pointer',
+                transition: 'transform .15s, filter .15s'                     // ✅ smooth hover
+            });
+            // panel scaffold
             const panel = document.createElement('div');
             panel.className = 'qt20-settings';
             Object.assign(panel.style, {
-                position: 'absolute',
-                top: '40px', right: '16px',
-                minWidth: '220px',
-                padding: '10px 12px',
-                border: '1px solid #ccc',
-                borderRadius: '8px',
-                background: '#fff',
-                boxShadow: '0 6px 20px rgba(0,0,0,0.15)',
-                zIndex: '9999',
-                display: 'none'
+                position: 'absolute', top: '40px', right: '16px',
+                minWidth: '220px', padding: '10px 12px',
+                border: '1px solid #ccc', borderRadius: '8px',
+                background: '#fff', boxShadow: '0 6px 20px rgba(0,0,0,0.15)',
+                zIndex: '9999', display: 'none'
             });
-
-            // Build panel contents
-            const S = loadSettings();
+            const S0 = loadSettings();
             panel.innerHTML = `
       <div style="font-weight:600; margin-bottom:8px;">QT20 Settings</div>
       <label style="display:flex; gap:8px; align-items:center; margin:6px 0;">
-        <input type="checkbox" id="qt20-breakdown" ${S.includeBreakdown ? 'checked' : ''}>
+        <input type="checkbox" id="qt20-breakdown" ${S0.includeBreakdown ? 'checked' : ''}>
         <span>Include breakdown</span>
       </label>
       <label style="display:flex; gap:8px; align-items:center; margin:6px 0;">
-        <input type="checkbox" id="qt20-timestamp" ${S.includeTimestamp ? 'checked' : ''}>
+        <input type="checkbox" id="qt20-timestamp" ${S0.includeTimestamp ? 'checked' : ''}>
         <span>Include timestamp</span>
       </label>
       <div style="margin-top:10px; display:flex; gap:8px; justify-content:flex-end;">
@@ -157,9 +161,8 @@
       </div>
     `;
 
-            // Wire interactions
+            // toggle panel
             function openPanel() {
-                // anchor panel inside the modal; adjust coarse position if needed
                 panel.style.display = 'block';
                 document.addEventListener('mousedown', outsideClose, true);
                 document.addEventListener('keydown', escClose, true);
@@ -169,36 +172,32 @@
                 document.removeEventListener('mousedown', outsideClose, true);
                 document.removeEventListener('keydown', escClose, true);
             }
-            function outsideClose(e) {
-                if (!panel.contains(e.target) && e.target !== gear) closePanel();
-            }
+            function outsideClose(e) { if (!panel.contains(e.target) && e.target !== gear) closePanel(); }
             function escClose(e) { if (e.key === 'Escape') closePanel(); }
 
-            gear.addEventListener('click', (e) => {
-                e.preventDefault();
-                panel.style.display === 'none' ? openPanel() : closePanel();
-            });
-            panel.querySelector('#qt20-close')?.addEventListener('click', closePanel);
+            // gear interactions (hover/focus polish)
+            gear.addEventListener('click', (e) => { e.preventDefault(); panel.style.display === 'none' ? openPanel() : closePanel(); });
+            gear.addEventListener('mouseenter', () => { gear.style.filter = 'brightness(1.08)'; gear.style.transform = 'rotate(15deg)'; });
+            gear.addEventListener('mouseleave', () => { gear.style.filter = ''; gear.style.transform = ''; });
+            gear.addEventListener('focus', () => { gear.style.outline = '2px solid #4a90e2'; gear.style.outlineOffset = '2px'; });
+            gear.addEventListener('blur', () => { gear.style.outline = ''; gear.style.outlineOffset = ''; });
 
-            // Save on change
+            // panel events
+            panel.querySelector('#qt20-close')?.addEventListener('click', closePanel);
             panel.querySelector('#qt20-breakdown')?.addEventListener('change', (ev) => {
-                const cur = loadSettings();
-                saveSettings({ ...cur, includeBreakdown: !!ev.target.checked });
+                const cur = loadSettings(); saveSettings({ ...cur, includeBreakdown: !!ev.target.checked });
             });
             panel.querySelector('#qt20-timestamp')?.addEventListener('change', (ev) => {
-                const cur = loadSettings();
-                saveSettings({ ...cur, includeTimestamp: !!ev.target.checked });
+                const cur = loadSettings(); saveSettings({ ...cur, includeTimestamp: !!ev.target.checked });
             });
 
-            // Mount panel inside the modal (absolute relative to modal box)
-            // Prefer a content region; fallback to modal root.
+            liGear.appendChild(gear);
+            ul.appendChild(liGear);
             (modal.querySelector('.plex-dialog-content') || modal).appendChild(panel);
 
             // When the Part Detail modal closes, tell listeners (e.g., QT35) to refresh attachments.
             onNodeRemoved(modal, () => {
-                window.dispatchEvent(new CustomEvent('LT:AttachmentRefreshRequested', {
-                    detail: { source: 'QT20', ts: Date.now() }
-                }));
+                window.dispatchEvent(new CustomEvent('LT:AttachmentRefreshRequested', { detail: { source: 'QT20', ts: Date.now() } }));
             });
 
         } catch (e) {

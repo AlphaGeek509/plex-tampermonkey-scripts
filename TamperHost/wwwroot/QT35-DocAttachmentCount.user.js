@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         QT35 › Doc Attachment Count
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.164
+// @version      3.5.167
 // @description  Displays read-only “Attachment (N)” in the Quote Wizard action bar (DS 11713). Independent of pricing/button presence.
 // @match        https://*.plex.com/*
 // @match        https://*.on.plex.com/*
@@ -83,19 +83,28 @@
 
             const a = document.createElement('a');
             a.href = 'javascript:void(0)';
-            a.title = 'Refresh attachments';
+            a.title = 'Click to refresh attachments';
             a.style.cursor = 'pointer';
             a.innerHTML = `
-        <span id="${LABEL_PILL_ID}"
-              style="display:inline-block; padding:2px 8px; border-radius:999px; background:#999; color:#fff; font-weight:600">
-          Attachments: …
-        </span>
-      `;
+      <span id="${LABEL_PILL_ID}"
+            style="display:inline-block; padding:2px 8px; border-radius:999px; background:#999; color:#fff; font-weight:600; transition:filter .15s;">
+        Attachments: …
+      </span>
+    `;
             a.addEventListener('click', () => refreshBadge(li, { forceToast: true }));
+
+            // subtle hover hint on the pill
+            a.addEventListener('mouseenter', () => {
+                const pill = a.querySelector('#' + CSS.escape(LABEL_PILL_ID));
+                if (pill) pill.style.filter = 'brightness(1.08)';
+            });
+            a.addEventListener('mouseleave', () => {
+                const pill = a.querySelector('#' + CSS.escape(LABEL_PILL_ID));
+                if (pill) pill.style.filter = '';
+            });
 
             li.appendChild(a);
 
-            // Prefer placing after QT30 button if present
             const afterNode = document.getElementById(QT30_BTN_ID) || document.getElementById(QT30_BTN_ID_LEGACY);
             if (afterNode && afterNode.parentNode === actionBarUl) {
                 afterNode.parentNode.insertBefore(li, afterNode.nextSibling);
@@ -109,6 +118,7 @@
             derror('injectBadge:', e);
         }
     }
+
 
     // ---------- Page visibility ----------
     function watchWizardPage(li) {
