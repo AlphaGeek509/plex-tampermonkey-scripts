@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         QT30 › Apply Catalog Pricing
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.150
+// @version      3.5.159
 // @description  Adds “LT Apply Catalog Pricing” button on Quote Wizard (Part Summary).
 //               Looks up Catalog_Key (DS 3156), loads breakpoints per part (DS 4809),
 //               applies the correct price by quantity, deletes zero-qty rows, and refreshes the wizard.
