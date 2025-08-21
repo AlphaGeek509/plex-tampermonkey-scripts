@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         QT35 › Doc Attachment Count
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.159
+// @version      3.5.164
 // @description  Displays read-only “Attachment (N)” in the Quote Wizard action bar (DS 11713). Independent of pricing/button presence.
 // @match        https://*.plex.com/*
 // @match        https://*.on.plex.com/*
@@ -21,202 +21,196 @@
 (async function () {
     'use strict';
 
-    // ---------- Standard bootstrap ----------
+    // ---------- Bootstrap ----------
     const IS_TEST_ENV = /test\.on\.plex\.com$/i.test(location.hostname);
     TMUtils.setDebug?.(IS_TEST_ENV);
-
-    const L = TMUtils.getLogger?.('QT35'); // rename per file: QT20, QT30, QT35
+    const L = TMUtils.getLogger?.('QT35');
     const dlog = (...a) => { if (IS_TEST_ENV) L?.log?.(...a); };
-    const dwarn = (...a) => { if (IS_TEST_ENV) L?.warn?.(...a); };
     const derror = (...a) => { if (IS_TEST_ENV) L?.error?.(...a); };
+    const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
 
-    // Route allowlist (CASE-INSENSITIVE)
+    // ---------- Config ----------
     const ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
-    if (!TMUtils.matchRoute?.(ROUTES)) {
-        dlog('Skipping route:', location.pathname);
-        return;
-    }
+    if (!TMUtils.matchRoute?.(ROUTES)) return;
 
-    // Datasource + params
-    const DS_ATTACH_COUNT = 11713;
-    const ATTACHMENT_GROUP_KEY = 11;
+    const CONFIG = {
+        DS_ATTACHMENTS_BY_QUOTE: 11713,       // your DS 11713
+        ATTACHMENT_GROUP_KEY: 11,             // Attachment group key
+        ACTION_BAR_SEL: '#QuoteWizardSharedActionBar',
+        SHOW_ON_PAGES_RE: /review|summary|submit/i
+    };
 
-    // Limit visibility to these wizard page names (empty [] = show on all)
-    const SHOW_ON_PAGES = ['Part Summary'];
+    // ---------- IDs ----------
+    const LABEL_LI_ID = 'lt-attachments-badge';
+    const LABEL_PILL_ID = 'lt-attach-pill';
+    const QT30_BTN_ID = 'lt-apply-catalog-pricing';
+    const QT30_BTN_ID_LEGACY = 'lt-catalog-pricing-button';
 
-    // Our element IDs
-    const ACTION_BAR_SEL = '#QuoteWizardSharedActionBar';       // <ul class="plex-actions" id="QuoteWizardSharedActionBar">
-    const BTN_QT30_ID = 'lt-apply-catalog-pricing';          // preferred anchor (if present)
-    const LEGACY_BTN_ID = 'lt-catalog-pricing-button';         // legacy anchor (if present)
-    const LABEL_LI_ID = 'lt-attachment-count-item';
-    const LABEL_SPAN_ID = 'lt-attachment-count';
-
-    if (!TMUtils.matchRoute(ROUTES)) return;
-
-    // ---------- State ----------
-    let lastQuoteKey = null;
-    let pollTimer = null;
-
-    // ---------- Dev Menu ----------
+    // ---------- Dev menu ----------
     if (typeof GM_registerMenuCommand === 'function') {
-        GM_registerMenuCommand('🔄 QT35: Refresh now', forceFetch);
-        GM_registerMenuCommand('🔎 QT35: Diagnostics', () => {
-            TMUtils.toast('QT35: see console', 'info');
-            if (IS_TEST_ENV) console.table({
-                route: location.pathname,
-                lastQuoteKey,
-                onTargetPage: isOnTargetWizardPage(),
-                actionBar: !!document.querySelector(ACTION_BAR_SEL)
-            });
+        GM_registerMenuCommand('🔄 QT35: Refresh now', () => {
+            const li = document.getElementById(LABEL_LI_ID);
+            if (li) refreshBadge(li, { forceToast: true, ignoreVisibility: true });
         });
     }
 
-    // ---------- Mount ----------
-    TMUtils.observeInsert(ACTION_BAR_SEL, (ul) => {
-        ensureLabelInjected(ul);
-        startWatchingWizardPage();
-        startPolling();
+    // ---------- Persistent injection ----------
+    const injectOnce = (ul) => injectBadge(ul);
+    const stopObserve = TMUtils.observeInsertMany?.(CONFIG.ACTION_BAR_SEL, injectOnce)
+        || TMUtils.observeInsert(CONFIG.ACTION_BAR_SEL, injectOnce);
+    document.querySelectorAll(CONFIG.ACTION_BAR_SEL).forEach(injectOnce);
+
+    TMUtils.onUrlChange?.(() => {
+        if (!TMUtils.matchRoute?.(ROUTES)) return;
+        document.querySelectorAll(CONFIG.ACTION_BAR_SEL).forEach(injectOnce);
     });
 
-    // also try immediately if already present
-    const maybeUl = document.querySelector(ACTION_BAR_SEL);
-    if (maybeUl) {
-        ensureLabelInjected(maybeUl);
-        startWatchingWizardPage();
-        startPolling();
-    }
-
-    // SPA safety
-    TMUtils.onRouteChange(() => {
-        if (!TMUtils.matchRoute(ROUTES)) return;
-        const ul = document.querySelector(ACTION_BAR_SEL);
-        if (ul) {
-            ensureLabelInjected(ul);
-            startWatchingWizardPage();
-            startPolling();
-        }
+    // Re-check when QT20 closes its modal and broadcasts a refresh request
+    window.addEventListener('LT:AttachmentRefreshRequested', () => {
+        const li = document.getElementById(LABEL_LI_ID);
+        if (li) refreshBadge(li, { forceToast: false, ignoreVisibility: false });
     });
 
     // ---------- UI injection ----------
-    function ensureLabelInjected(ul) {
-        if (!ul || ul.nodeName !== 'UL') return;
+    function injectBadge(actionBarUl) {
+        try {
+            if (!actionBarUl || actionBarUl.nodeName !== 'UL') return;
+            if (document.getElementById(LABEL_LI_ID)) return; // already injected
 
-        if (document.getElementById(LABEL_LI_ID)) return; // already there
+            const li = document.createElement('li');
+            li.id = LABEL_LI_ID;
+            li.style.display = 'none';
 
-        // Build: <li><span>Attachment (0)</span></li>
-        const li = document.createElement('li');
-        li.id = LABEL_LI_ID;
+            const a = document.createElement('a');
+            a.href = 'javascript:void(0)';
+            a.title = 'Refresh attachments';
+            a.style.cursor = 'pointer';
+            a.innerHTML = `
+        <span id="${LABEL_PILL_ID}"
+              style="display:inline-block; padding:2px 8px; border-radius:999px; background:#999; color:#fff; font-weight:600">
+          Attachments: …
+        </span>
+      `;
+            a.addEventListener('click', () => refreshBadge(li, { forceToast: true }));
 
-        const span = document.createElement('span');
-        span.id = LABEL_SPAN_ID;
-        span.textContent = 'Attachment (0)';
-        span.style.paddingLeft = '0.5em';
+            li.appendChild(a);
 
-        li.appendChild(span);
+            // Prefer placing after QT30 button if present
+            const afterNode = document.getElementById(QT30_BTN_ID) || document.getElementById(QT30_BTN_ID_LEGACY);
+            if (afterNode && afterNode.parentNode === actionBarUl) {
+                afterNode.parentNode.insertBefore(li, afterNode.nextSibling);
+            } else {
+                actionBarUl.appendChild(li);
+            }
 
-        // Place after QT30 button if present; else append at end
-        const qt30Li = document.getElementById(BTN_QT30_ID) || document.getElementById(LEGACY_BTN_ID);
-        if (qt30Li && qt30Li.parentNode === ul) {
-            qt30Li.parentNode.insertBefore(li, qt30Li.nextSibling);
-        } else {
-            ul.appendChild(li);
+            watchWizardPage(li);
+            dlog('QT35: badge injected');
+        } catch (e) {
+            derror('injectBadge:', e);
         }
     }
 
-    // ---------- Wizard page visibility ----------
-    function startWatchingWizardPage() {
-        let __qt35Shown = null;
+    // ---------- Page visibility ----------
+    function watchWizardPage(li) {
         const toggle = () => {
-            const li = document.getElementById(LABEL_LI_ID);
-            if (!li) return;
             const show = isOnTargetWizardPage();
             li.style.display = show ? '' : 'none';
-
-            if (show !== __qt35Shown) {
-                __qt35Shown = show;
-                dlog(`QT35: page="${getActiveWizardPageName()}", label ${show ? 'shown' : 'hidden'}`);
-            }
+            if (show) refreshBadge(li);
         };
 
         const list = document.querySelector('.plex-wizard-page-list');
-        if (!list) return;
-
-        new MutationObserver(toggle).observe(list, { childList: true, subtree: true });
-        toggle(); // run once now
-
-        dlog('QT35: label injected');
+        if (list) {
+            const mo = new MutationObserver(toggle);
+            mo.observe(list, { childList: true, subtree: true, attributes: true });
+            toggle();
+        } else {
+            toggle();
+        }
     }
 
     function getActiveWizardPageName() {
-        const active = document.querySelector('.plex-wizard-page.active');
-        const vm = active ? ko.dataFor(active) : null;
-        return vm ? ko.unwrap(vm.name) : '';
+        const activeEl = document.querySelector('.plex-wizard-page.active, .plex-wizard-page[aria-current="page"]');
+        const vm = activeEl ? KO?.dataFor?.(activeEl) : null;
+        const name = vm ? (KO?.unwrap?.(vm.name) ?? (typeof vm.name === 'function' ? vm.name() : vm.name)) : '';
+        if (name) return String(name);
+        const nav = document.querySelector('.plex-wizard-page-list .active, .plex-wizard-page-list [aria-current="page"]');
+        return (nav?.textContent || '').trim();
     }
 
     function isOnTargetWizardPage() {
-        if (!SHOW_ON_PAGES.length) return true;
-        return SHOW_ON_PAGES.includes(getActiveWizardPageName());
+        const nm = getActiveWizardPageName();
+        return CONFIG.SHOW_ON_PAGES_RE.test(String(nm || ''));
     }
 
     // ---------- Fetching ----------
-    async function fetchAttachmentCount(qk) {
-        try {
-            const rows = await TMUtils.dsRows(DS_ATTACH_COUNT, {
-                Attachment_Group_Key: ATTACHMENT_GROUP_KEY,
-                Record_Key_Value: String(qk)
-            });
-            return Array.isArray(rows) ? rows.length : 0;
-        } catch (err) {
-            derror('QT35: fetchAttachmentCount error:', err);
-            return null;
-        }
-    }
+    let lastQuoteKey = null;
 
-    function setLabel(value) {
-        const span = document.getElementById(LABEL_SPAN_ID);
-        if (!span) return;
-        if (typeof value === 'number') span.textContent = `Attachment (${value})`;
-        else span.textContent = String(value);
-    }
+    function unwrap(v) { return KO?.unwrap ? KO.unwrap(v) : (typeof v === 'function' ? v() : v); }
 
-    async function checkAndFetch() {
-        // respect page visibility (if configured)
-        if (!isOnTargetWizardPage()) return;
-
+    function resolveQuoteKey() {
+        // Try grid datasource first
         const grid = document.querySelector('.plex-grid');
-        const raw = grid && ko.dataFor(grid)?.datasource?.raw;
-        const qk = raw?.length ? ko.unwrap(raw[0].QuoteKey) : null;
-        if (!qk) return;
+        const gridVM = grid ? KO?.dataFor?.(grid) : null;
+        const raw = gridVM?.datasource?.raw;
+        const fromGrid = raw?.length ? unwrap(raw[0]?.QuoteKey) : null;
+        if (fromGrid) return fromGrid;
 
-        // Fetch once per Quote_Key
-        if (qk !== lastQuoteKey) {
-            lastQuoteKey = qk;
-            setLabel('Attachment (...)');
+        // Try root VM
+        const rootEl = document.querySelector('.plex-wizard, .plex-page');
+        const rootVM = rootEl ? KO?.dataFor?.(rootEl) : null;
+        const fromRoot = rootVM ? (unwrap(rootVM?.QuoteKey) || unwrap(rootVM?.Quote?.QuoteKey)) : null;
+        if (fromRoot) return fromRoot;
+
+        // Fallback: URL
+        const m = /[?&]QuoteKey=(\d+)/i.exec(location.search);
+        return m ? Number(m[1]) : null;
+    }
+
+    async function fetchAttachmentCount(quoteKey) {
+        const rows = await TMUtils.dsRows(CONFIG.DS_ATTACHMENTS_BY_QUOTE, {
+            Attachment_Group_Key: CONFIG.ATTACHMENT_GROUP_KEY,
+            Record_Key_Value: String(quoteKey)
+        });
+        return Array.isArray(rows) ? rows.length : 0;
+    }
+
+    function setBadge(countOrText) {
+        const pill = document.getElementById(LABEL_PILL_ID);
+        if (!pill) return;
+        if (typeof countOrText === 'number') {
+            pill.textContent = `Attachments: ${countOrText}`;
+            pill.style.background = countOrText > 0 ? '#27ae60' : '#c0392b'; // green if present, red if none
+        } else {
+            pill.textContent = String(countOrText);
+            pill.style.background = '#999';
+        }
+    }
+
+    async function refreshBadge(li, { forceToast = false, ignoreVisibility = false } = {}) {
+        try {
+            if (!ignoreVisibility && !isOnTargetWizardPage()) return;
+
+            setBadge('Attachments: …');
+
+            const qk = resolveQuoteKey();
+            if (!qk) {
+                setBadge('Attachments: ?');
+                if (forceToast) TMUtils.toast('⚠️ Quote Key not found on this page', 'warn', 2500);
+                return;
+            }
+
+            // If the QuoteKey changed since last, always refresh
             const count = await fetchAttachmentCount(qk);
-            if (typeof count === 'number') setLabel(count);
-            stopPolling(); // stop after successful fetch for this key
-            dlog('QT35: fetched count and stopped polling', { qk, count });
+            setBadge(count);
+            lastQuoteKey = qk;
+
+            if (forceToast) {
+                TMUtils.toast(count > 0 ? `✅ ${count} attachment(s)` : '⚠️ No attachments', count > 0 ? 'success' : 'warn', 2200);
+            }
+            dlog('QT35: attachments', { qk, count });
+        } catch (e) {
+            TMUtils.toast(`❌ Attachments refresh failed: ${e.message}`, 'error', 5000);
+            derror('refreshBadge:', e);
         }
     }
-
-    function startPolling(immediate = false) {
-        if (!pollTimer) {
-            pollTimer = setInterval(checkAndFetch, 1200);
-            dlog('QT35: polling started');
-        }
-        if (immediate) checkAndFetch();
-    }
-
-    function stopPolling() {
-        if (pollTimer) {
-            clearInterval(pollTimer);
-            pollTimer = null;
-        }
-    }
-
-    async function forceFetch() {
-        lastQuoteKey = null; // force next run to fetch
-        startPolling(true);
-    }
-
-})(window);
+})();

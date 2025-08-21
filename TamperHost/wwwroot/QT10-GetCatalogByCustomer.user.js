@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         QT10 > Get Catalog by Customer
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.159
+// @version      3.5.164
 // @description  Lookup CatalogKey/Code for CustomerNo and write to VM (no dropdown sync)
 // @match        https://*.plex.com/*
 // @match        https://*.on.plex.com/*
