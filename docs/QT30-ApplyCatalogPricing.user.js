@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         QT30 › Apply Catalog Pricing
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.164
+// @version      3.5.167
 // @description  Adds “LT Apply Catalog Pricing” button on Quote Wizard (Part Summary).
 //               Looks up Catalog_Key (DS 3156), loads breakpoints per part (DS 4809),
 //               applies the correct price by quantity, deletes zero-qty rows, and refreshes the wizard.
@@ -79,18 +79,44 @@
             const a = document.createElement('a');
             a.href = 'javascript:void(0)';
             a.textContent = 'LT Apply Catalog Pricing';
+            a.title = 'Click to apply customer specific catalog pricing';       // ✅ tooltip
+            a.setAttribute('aria-label', 'Apply catalog pricing');
+            a.setAttribute('role', 'button');
             a.style.cursor = 'pointer';
+            a.style.transition = 'filter .15s, text-decoration-color .15s';  // ✅ smooth hover
+
+            // Run your existing handler
             a.addEventListener('click', runCatalogPricing);
+
+            // ✅ subtle hover/focus affordances (matches QT35 feel)
+            a.addEventListener('mouseenter', () => {
+                a.style.filter = 'brightness(1.08)';
+                a.style.textDecoration = 'underline';
+            });
+            a.addEventListener('mouseleave', () => {
+                a.style.filter = '';
+                a.style.textDecoration = '';
+            });
+            a.addEventListener('focus', () => {
+                a.style.outline = '2px solid #4a90e2';
+                a.style.outlineOffset = '2px';
+            });
+            a.addEventListener('blur', () => {
+                a.style.outline = '';
+                a.style.outlineOffset = '';
+            });
 
             li.appendChild(a);
             actionBarUl.appendChild(li);
 
+            // keep your existing step visibility logic
             watchWizardPage(li);
-            dlog('QT30: button injected');
+            dlog('QT30: button injected (hover+tooltip enabled)');
         } catch (e) {
             derror('injectPricingButton:', e);
         }
     }
+
 
     // Toggle button only on the intended wizard step
     function watchWizardPage(buttonLi) {
