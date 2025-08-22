@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "main": "index.js",
+  "engines": { "node": ">=20 <21" },
   "scripts": {
     "test": "vitest",
     "test:watch": "vitest --watch",
