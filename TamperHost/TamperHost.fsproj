@@ -9,10 +9,26 @@
     <None Include="build-plus.js" />
     <None Include=".gitattributes" />
     <None Include=".gitignore" />
+    <None Include="tm-tdd\banners\QT10.dev.header.js" />
+    <None Include="tm-tdd\src\qt10\main.js" />
+    <None Include="tm-tdd\src\qt10\customerFlow.js" />
+    <None Include="tm-tdd\src\common\index.js" />
+    <None Include="tm-tdd\src\common\userStart.js" />
+    <None Include="tm-tdd\src\common\storage.js" />
+    <None Include="tm-tdd\src\common\payload.js" />
+    <None Include="tm-tdd\src\common\computeGate.js" />
+    <None Include="tm-tdd\src\qt30\init.js" />
+    <None Include="tm-tdd\tests\qt10.customerFlow.spec.js" />
+    <None Include="tm-tdd\tests\userStart.spec.js" />
+    <None Include="tm-tdd\tests\storage.spec.js" />
+    <None Include="tm-tdd\tests\payload.spec.js" />
+    <None Include="tm-tdd\tests\ko.timing.spec.js" />
+    <None Include="tm-tdd\tests\qt30.modal.spec.js" />
+    <None Include="tm-tdd\tests\smoke.spec.js" />
+    <None Include="tm-tdd\tests\setup.js" />
+    <None Include="tm-tdd\vitest.config.js" />
     <Compile Include="Program.fs" />
   </ItemGroup>
-
-  <ItemGroup />
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.StaticFiles" Version="2.3.0" />
@@ -32,6 +48,10 @@
 
   <ItemGroup>
     <PackageReference Update="FSharp.Core" Version="9.0.300" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="wwwroot\dist\" />
   </ItemGroup>
 
 </Project>

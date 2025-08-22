@@ -1,4 +1,4 @@
-// ==UserScript==
+﻿// ==UserScript==
 // @name         QT10 > Get Catalog by Customer
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
 // @version      3.5.173
@@ -81,6 +81,28 @@
                 timeoutMs: 8000,
                 logger: IS_TEST_ENV ? L : null
             });
+
+            // Find an input tied to CustomerNo (adjust selectors as needed)
+            let gate = null;
+            if (DEV) {
+                const inputEl =
+                    document.querySelector('[data-val-property-name="CustomerNo"] input') ||
+                    document.querySelector('input[name="CustomerNo"]') ||
+                    document.querySelector('[data-val-property-name="CustomerNo"]');
+
+                if (inputEl && window.ko) {
+                    gate = createGatedComputed({ ko: window.ko, read: () => true }); // boolean gate
+                    startGateOnFirstUserEdit({ gate, inputEl });
+                    console.debug('[QT10 DEV] gate armed on', inputEl);
+                } else {
+                    console.debug('[QT10 DEV] gate not armed (missing ko/input)');
+                }
+            }
+
+            // Helper so the rest of your code can stay unchanged
+            const gateIsStarted = () =>
+                !DEV || !gate || (typeof gate.isStarted === 'function' ? !!gate.isStarted() : !!gate.isStarted);
+
             if (!controller || !viewModel) { booted = false; booting = false; return; }
 
             let lastCustomerNo = null;
@@ -98,6 +120,13 @@
                     lastCustomerNo = customerNo;
                     dlog('QT10: CustomerNo →', customerNo);
                     applyCatalogFor(customerNo);                         // your existing function
+
+                    // DEV guard: ignore early programmatic changes until the first user edit
+                    if (!gateIsStarted()) {
+                        if (DEV) console.debug('[QT10 DEV] change ignored until first user edit');
+                        return;
+                    }
+
                 }
             });
 
