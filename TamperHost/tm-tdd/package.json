@@ -22,13 +22,21 @@
     "pre:release": "vitest run",
 
     "build:qt10:dev": "esbuild src/qt10/main.js --bundle --format=iife --define:DEV=true --outfile=../wwwroot/QT10.dev.body.js && node -e \"const fs=require('fs'),p=require('path');const hdr=fs.readFileSync(p.join(__dirname,'banners','QT10.dev.header.js'),'utf8');const body=fs.readFileSync(p.join(__dirname,'..','wwwroot','QT10.dev.body.js'),'utf8');const out=p.join(__dirname,'..','wwwroot','QT10.dev.user.js');fs.writeFileSync(out, hdr+'\\n'+body, 'utf8');fs.unlinkSync(p.join(__dirname,'..','wwwroot','QT10.dev.body.js'));console.log('Wrote',out);\"",
-
     "release:qt10": "esbuild src/qt10/main.js --bundle --format=iife --minify --define:DEV=false --banner:js=\"// ==UserScript==\\n// @name         QT10 → Get Catalog by Customer\\n// @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts\\n// @version      3.5.177\\n// @description  Production build (no DEV code)\\n// @match        https://*.plex.com/*\\n// @match        https://*.on.plex.com/*\\n// @require      http://localhost:5000/lt-plex-tm-utils.user.js\\n// @require      http://localhost:5000/lt-plex-auth.user.js\\n// @grant        GM_registerMenuCommand\\n// @grant        GM_getValue\\n// @grant        GM_setValue\\n// @grant        GM_xmlHttpRequest\\n// @grant        unsafeWindow\\n// @connect      *.plex.com\\n// @run-at       document-idle\\n// @noframes\\n// ==/UserScript==\\n\" --outfile=../release/QT10.user.js",
-
     "release:qt10:prep": "powershell -NoProfile -Command \"New-Item -ItemType Directory -Force ..\\release | Out-Null; Copy-Item ..\\wwwroot\\QT10-GetCatalogByCustomer.user.js ..\\release\\QT10.user.js -Force\"",
     "release:qt10:patch": "npm run release:qt10 && node ..\\build-plus.js --patch --files .\\release\\QT10.user.js && npm run verify:release",
     "release:qt10:minor": "npm run release:qt10 && node ..\\build-plus.js --minor --files .\\release\\QT10.user.js && npm run verify:release",
-    "release:qt10:major": "npm run release:qt10 && node ..\\build-plus.js --major --files .\\release\\QT10.user.js && npm run verify:release"
+    "release:qt10:major": "npm run release:qt10 && node ..\\build-plus.js --major --files .\\release\\QT10.user.js && npm run verify:release",
+
+    "build:qt20:dev": "esbuild src/qt20/main.js --bundle --format=iife --define:DEV=true --outfile=../wwwroot/QT20.dev.body.js && node -e \"const fs=require('fs'),p=require('path');const hdr=fs.readFileSync(p.join(__dirname,'banners','QT20.dev.header.js'),'utf8');const body=fs.readFileSync(p.join(__dirname,'..','wwwroot','QT20.dev.body.js'),'utf8');const out=p.join(__dirname,'..','wwwroot','QT20.dev.user.js');fs.writeFileSync(out,hdr+'\\n'+body,'utf8');fs.unlinkSync(p.join(__dirname,'..','wwwroot','QT20.dev.body.js'));\"",
+    "dev:bump:qt20": "node ..\\build-plus.js --patch --files .\\tm-tdd\\banners\\QT20.dev.header.js && npm run build:qt20:dev",
+    "dev:open:qt20": "start http://localhost:5000/QT20.dev.user.js",
+    "dev:push:qt20": "npm run dev:bump:qt20 && npm run dev:open:qt20",
+
+    "release:qt20": "esbuild src/qt20/main.js --bundle --format=iife --minify --define:DEV=false --outfile=../release/QT20.body.js && node -e \"const fs=require('fs'),p=require('path');const hdr=fs.readFileSync(p.join(__dirname,'banners','QT20.prod.header.js'),'utf8');const body=fs.readFileSync(p.join(__dirname,'..','release','QT20.body.js'),'utf8');const outDir=p.join(__dirname,'..','release');const out=p.join(outDir,'QT20.user.js');fs.mkdirSync(outDir,{recursive:true});fs.writeFileSync(out,hdr+'\\n'+body,'utf8');fs.unlinkSync(p.join(__dirname,'..','release','QT20.body.js'));\"",
+    "release:qt20:patch": "npm run release:qt20 && node ..\\build-plus.js --patch --files .\\release\\QT20.user.js && npm run verify:release",
+    "release:qt20:minor": "npm run release:qt20 && node ..\\build-plus.js --minor --files .\\release\\QT20.user.js && npm run verify:release",
+    "release:qt20:major": "npm run release:qt20 && node ..\\build-plus.js --major --files .\\release\\QT20.user.js && npm run verify:release"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.1",
