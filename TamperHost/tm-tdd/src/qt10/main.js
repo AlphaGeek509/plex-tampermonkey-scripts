@@ -76,6 +76,12 @@
 
             await TMUtils.getApiKey();
 
+            if (!(await ensureAuthOrToast())) {
+                // bail out; onUrlChange/maybeBoot will try again after you sign in
+                booting = false;
+                return;
+            }
+
             const { controller, viewModel } = await TMUtils.waitForModelAsync(ANCHOR, {
                 pollMs: 200,
                 timeoutMs: 8000,
@@ -115,18 +121,18 @@
                 settleMs: 350,
                 logger: IS_TEST_ENV ? L : null,
                 onChange: () => {
-                    const customerNo = readCustomerNoFromVM(viewModel); // ✅ true number from VM
-                    if (!customerNo || customerNo === lastCustomerNo) return;
-                    lastCustomerNo = customerNo;
-                    dlog('QT10: CustomerNo →', customerNo);
-                    applyCatalogFor(customerNo);                         // your existing function
-
-                    // DEV guard: ignore early programmatic changes until the first user edit
+                    // DEV guard: ignore early programmatic changes until first real user edit
                     if (!gateIsStarted()) {
-                        if (DEV) console.debug('[QT10 DEV] change ignored until first user edit');
+                        console.debug("[QT10 DEV] change ignored until first user edit");
                         return;
                     }
 
+                    const customerNo = readCustomerNoFromVM(viewModel);
+                    if (!customerNo || customerNo === lastCustomerNo) return;
+
+                    lastCustomerNo = customerNo;
+                    dlog("QT10: CustomerNo →", customerNo);
+                    applyCatalogFor(customerNo);
                 }
             });
 
@@ -195,4 +201,27 @@
 
     // Single initial kick. (No manual _dispatchUrlChange to avoid duplicate.)
     setTimeout(maybeBoot, 0);
+
+    // Put near the top inside your IIFE/module
+    async function withFreshAuth(run) {
+        try {
+            return await run();
+        } catch (err) {
+            const status = err?.status || (/\b(\d{3})\b/.exec(err?.message || '') || [])[1];
+            if (+status === 419) {
+                await TMUtils.getApiKey({ force: true }); // refresh key
+                return await run();                       // retry once
+            }
+            throw err;
+        }
+    }
+
+    async function ensureAuthOrToast() {
+        try {
+            const key = await TMUtils.getApiKey();
+            if (key) return true;
+        } catch { }
+        TMUtils.toast('Sign-in required. Please log in, then retry.', 'warn');
+        return false;
+    }
 })();

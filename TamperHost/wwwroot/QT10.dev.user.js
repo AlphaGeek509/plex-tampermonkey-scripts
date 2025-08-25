@@ -1,7 +1,7 @@
-// ==UserScript==
+﻿// ==UserScript==
 // @name        QT10_DEV
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     3.5.180
+// @version     3.5.186
 // @description DEV-only build; includes user-start gate
 // @match       https://*.plex.com/*
 // @match       https://*.on.plex.com/*
@@ -16,6 +16,7 @@
 // @run-at      document-idle
 // @noframes
 // ==/UserScript==
+
 (() => {
   // src/qt10/main.js
   (async function() {
@@ -74,6 +75,10 @@
         }
         booted = true;
         await TMUtils.getApiKey();
+        if (!await ensureAuthOrToast()) {
+          booting = false;
+          return;
+        }
         const { controller, viewModel } = await TMUtils.waitForModelAsync(ANCHOR, {
           pollMs: 200,
           timeoutMs: 8e3,
@@ -104,15 +109,15 @@
           settleMs: 350,
           logger: IS_TEST_ENV ? L : null,
           onChange: () => {
+            if (!gateIsStarted()) {
+              console.debug("[QT10 DEV] change ignored until first user edit");
+              return;
+            }
             const customerNo = readCustomerNoFromVM(viewModel);
             if (!customerNo || customerNo === lastCustomerNo) return;
             lastCustomerNo = customerNo;
             dlog("QT10: CustomerNo \u2192", customerNo);
             applyCatalogFor(customerNo);
-            if (!gateIsStarted()) {
-              if (true) console.debug("[QT10 DEV] change ignored until first user edit");
-              return;
-            }
           }
         });
         async function applyCatalogFor(customerNo) {
@@ -171,5 +176,26 @@ CatalogCode: ${catalogCode}`,
       setTimeout(maybeBoot, 0);
     });
     setTimeout(maybeBoot, 0);
+    async function withFreshAuth(run) {
+      try {
+        return await run();
+      } catch (err) {
+        const status = err?.status || (/\b(\d{3})\b/.exec(err?.message || "") || [])[1];
+        if (+status === 419) {
+          await TMUtils.getApiKey({ force: true });
+          return await run();
+        }
+        throw err;
+      }
+    }
+    async function ensureAuthOrToast() {
+      try {
+        const key = await TMUtils.getApiKey();
+        if (key) return true;
+      } catch {
+      }
+      TMUtils.toast("Sign-in required. Please log in, then retry.", "warn");
+      return false;
+    }
   })();
 })();
