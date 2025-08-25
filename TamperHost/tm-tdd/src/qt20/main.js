@@ -1,8 +1,9 @@
 ﻿// tm-tdd/src/qt20/main.js
+/* Build-time dev flag (esbuild sets __BUILD_DEV__), with a runtime fallback for tests */
+const DEV = (typeof __BUILD_DEV__ !== 'undefined')
+    ? __BUILD_DEV__
+    : !!(typeof globalThis !== 'undefined' && globalThis.__TM_DEV__);
 
-// DEV flag is injected by esbuild: --define:DEV=true|false
-// eslint-disable-next-line no-undef
-const DEV = typeof DEV !== 'undefined' ? DEV : false;
 
 (() => {
     // ---------- Config ----------
@@ -22,7 +23,9 @@ const DEV = typeof DEV !== 'undefined' ? DEV : false;
     const dwarn = (...a) => { if (DEV || IS_TEST_ENV) L?.warn?.(...a); };
     const derror = (...a) => { if (DEV || IS_TEST_ENV) L?.error?.(...a); };
 
-    const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
+    const KO = (typeof unsafeWindow !== 'undefined' && unsafeWindow.ko)
+        ? unsafeWindow.ko
+        : window.ko;
 
     const ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
     if (!TMUtils.matchRoute?.(ROUTES)) { dlog('QT20: wrong route, skipping'); return; }
@@ -207,7 +210,13 @@ const DEV = typeof DEV !== 'undefined' ? DEV : false;
 
             // When the modal closes, let others refresh (e.g., attachments)
             onNodeRemoved(modal, () => {
-                window.dispatchEvent(new CustomEvent('LT:AttachmentRefreshRequested', { detail: { source: 'QT20', ts: Date.now() } }));
+                const W = (typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : null));
+                const CE = (W && ('CustomEvent' in W) ? W.CustomEvent : globalThis.CustomEvent);
+                if (W && W.dispatchEvent && CE) {
+                    try {
+                        W.dispatchEvent(new CE('LT:AttachmentRefreshRequested', { detail: { source: 'QT20', ts: Date.now() } }));
+                    } catch { }
+                }
             });
 
         } catch (e) {
@@ -243,7 +252,8 @@ const DEV = typeof DEV !== 'undefined' ? DEV : false;
             // Writable NoteNew setter
             const noteSetter =
                 (unsafeWindow.plex?.data?.getObservableOrValue?.(vm, 'NoteNew')) ||
-                (typeof vm.NoteNew === 'function' ? vm.NoteNew : null);
+                (typeof vm.NoteNew === 'function' ? ((...a) => vm.NoteNew.call(vm, ...a)) : null);
+
             if (typeof noteSetter !== 'function') throw new Error('NoteNew not writable');
 
             // DS calls (retry once on 419)
@@ -267,9 +277,15 @@ const DEV = typeof DEV !== 'undefined' ? DEV : false;
             const stamp = parts.join(' ');
 
             // Read and sanitize existing note, then append
-            const rawNote =
-                (KO?.unwrap ? KO.unwrap(vm.NoteNew)
-                    : (typeof vm.NoteNew === 'function' ? vm.NoteNew() : vm.NoteNew));
+            let rawNote;
+            if (unsafeWindow.plex?.data?.getObservableOrValue) {
+                rawNote = unsafeWindow.plex.data.getObservableOrValue(vm, 'NoteNew');
+            } else if (typeof vm.NoteNew === 'function') {
+                rawNote = vm.NoteNew.call(vm);
+            } else {
+                rawNote = vm.NoteNew;
+            }
+
             const current = (rawNote == null) ? '' : String(rawNote).trim();
             const baseNote = (/^(null|undefined)$/i.test(current) ? '' : current);
 
@@ -373,4 +389,17 @@ const DEV = typeof DEV !== 'undefined' ? DEV : false;
         mo.observe(node.ownerDocument.body, { childList: true, subtree: true });
         return () => mo.disconnect();
     }
+
+    // Expose a tiny test seam in DEV/tests (no effect in PROD runtime)
+    if (DEV && typeof window !== 'undefined') {
+        window.__QT20__ = {
+            injectStockControls,
+            splitBaseAndPack,
+            toBasePart,
+            normalizeRowToPieces,
+            summarizeStockNormalized,
+            handleClick,
+        };
+    }
+
 })();

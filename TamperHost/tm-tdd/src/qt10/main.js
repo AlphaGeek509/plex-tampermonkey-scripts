@@ -1,7 +1,8 @@
 ﻿// tm-tdd/src/qt10/main.js
-
-// DEV flag is injected by esbuild: --define:DEV=true|false
-// eslint-disable-next-line no-undef
+/* Build-time dev flag (esbuild sets __BUILD_DEV__), with a runtime fallback for tests */
+const DEV = (typeof __BUILD_DEV__ !== 'undefined')
+    ? __BUILD_DEV__
+    : !!(typeof globalThis !== 'undefined' && globalThis.__TM_DEV__);
 
 (() {
     'use strict';
