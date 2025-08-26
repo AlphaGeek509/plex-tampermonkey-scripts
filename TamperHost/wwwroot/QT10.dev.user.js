@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name        QT10_DEV
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     3.5.186
+// @version     3.5.189
 // @description DEV-only build; includes user-start gate
 // @match       https://*.plex.com/*
 // @match       https://*.on.plex.com/*
@@ -19,11 +19,21 @@
 
 (() => {
   // src/qt10/main.js
-  (async function() {
+  var DEV = true ? true : !!(typeof globalThis !== "undefined" && globalThis.__TM_DEV__);
+  (function() {
     "use strict";
+    const CFG = {
+      NAME: "QT10",
+      ROUTES: [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i],
+      ANCHOR: '[data-val-property-name="CustomerNo"]',
+      GATE_USER_EDIT: true,
+      // wait for first *real* user edit before reacting
+      TOAST_SUCCESS: true
+      // show green toast when writes succeed
+    };
     const IS_TEST_ENV = /test\.on\.plex\.com$/i.test(location.hostname);
     TMUtils.setDebug?.(IS_TEST_ENV);
-    const L = TMUtils.getLogger?.("QT10");
+    const L = TMUtils.getLogger?.(CFG.NAME);
     const dlog = (...a) => {
       if (IS_TEST_ENV) L?.log?.(...a);
     };
@@ -33,149 +43,49 @@
     const derror = (...a) => {
       if (IS_TEST_ENV) L?.error?.(...a);
     };
-    const ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
-    if (!TMUtils.matchRoute?.(ROUTES)) {
+    const toastDev = (msg, level = "info") => {
+      const prefix = `[${CFG.NAME} DEV]`;
+      if (TMUtils.toast) TMUtils.toast(`${prefix} ${msg}`, level);
+      else (level === "error" ? console.error : level === "warn" ? console.warn : console.debug)(prefix, msg);
+    };
+    if (!TMUtils.matchRoute?.(CFG.ROUTES)) {
       dlog("Skipping route:", location.pathname);
       return;
     }
-    const ANCHOR = '[data-val-property-name="CustomerNo"]';
-    let booted = false;
-    let booting = false;
-    let disposeWatcher = null;
-    let unsubscribeUrl = null;
-    async function anchorAppears(sel, { timeoutMs = 5e3, pollMs = 150 } = {}) {
-      const t0 = Date.now();
-      while (Date.now() - t0 < timeoutMs) {
-        if (document.querySelector(sel)) return true;
-        await new Promise((r) => setTimeout(r, pollMs));
+    const KO = typeof unsafeWindow !== "undefined" ? unsafeWindow.ko : window.ko;
+    const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+    function getObs(vm, prop) {
+      if (unsafeWindow?.plex?.data?.getObservableOrValue) {
+        return unsafeWindow.plex.data.getObservableOrValue(vm, prop);
       }
-      return !!document.querySelector(sel);
+      const cur = vm?.[prop];
+      return typeof cur === "function" ? cur.call(vm) : cur;
     }
-    function readCustomerNoFromVM(viewModel) {
-      const KO = typeof unsafeWindow !== "undefined" ? unsafeWindow.ko : window.ko;
-      try {
-        const raw = KO?.unwrap ? KO.unwrap(viewModel.CustomerNo) : typeof viewModel.CustomerNo === "function" ? viewModel.CustomerNo() : viewModel.CustomerNo;
-        const v = Array.isArray(raw) ? raw[0] : raw;
-        return (v ?? "").toString().trim();
-      } catch {
-        return "";
+    function setObs(vm, prop, value) {
+      if (unsafeWindow?.plex?.data?.getObservableOrValue) {
+        const setter = unsafeWindow.plex.data.getObservableOrValue(vm, prop);
+        return typeof setter === "function" ? setter(value) : vm[prop] = value;
       }
-    }
-    async function maybeBoot() {
-      if (booted || booting) return;
-      booting = true;
-      try {
-        if (!TMUtils.matchRoute?.(ROUTES)) {
-          booting = false;
-          return;
-        }
-        if (!await anchorAppears(ANCHOR, { timeoutMs: 2e3 })) {
-          booting = false;
-          return;
-        }
-        booted = true;
-        await TMUtils.getApiKey();
-        if (!await ensureAuthOrToast()) {
-          booting = false;
-          return;
-        }
-        const { controller, viewModel } = await TMUtils.waitForModelAsync(ANCHOR, {
-          pollMs: 200,
-          timeoutMs: 8e3,
-          logger: IS_TEST_ENV ? L : null
-        });
-        let gate = null;
-        if (true) {
-          const inputEl = document.querySelector('[data-val-property-name="CustomerNo"] input') || document.querySelector('input[name="CustomerNo"]') || document.querySelector('[data-val-property-name="CustomerNo"]');
-          if (inputEl && window.ko) {
-            gate = createGatedComputed({ ko: window.ko, read: () => true });
-            startGateOnFirstUserEdit({ gate, inputEl });
-            console.debug("[QT10 DEV] gate armed on", inputEl);
-          } else {
-            console.debug("[QT10 DEV] gate not armed (missing ko/input)");
-          }
-        }
-        const gateIsStarted = () => !gate || (typeof gate.isStarted === "function" ? !!gate.isStarted() : !!gate.isStarted);
-        if (!controller || !viewModel) {
-          booted = false;
-          booting = false;
-          return;
-        }
-        let lastCustomerNo = null;
-        disposeWatcher = TMUtils.watchBySelector({
-          selector: ANCHOR,
-          initial: false,
-          fireOn: "blur",
-          settleMs: 350,
-          logger: IS_TEST_ENV ? L : null,
-          onChange: () => {
-            if (!gateIsStarted()) {
-              console.debug("[QT10 DEV] change ignored until first user edit");
-              return;
-            }
-            const customerNo = readCustomerNoFromVM(viewModel);
-            if (!customerNo || customerNo === lastCustomerNo) return;
-            lastCustomerNo = customerNo;
-            dlog("QT10: CustomerNo \u2192", customerNo);
-            applyCatalogFor(customerNo);
-          }
-        });
-        async function applyCatalogFor(customerNo) {
-          if (!customerNo) return;
-          try {
-            const [row1] = await TMUtils.dsRows(319, { Customer_No: customerNo });
-            const catalogKey = row1?.Catalog_Key || 0;
-            if (!catalogKey) {
-              TMUtils.toast(`\u26A0\uFE0F No catalog for ${customerNo}`, "warn");
-              return;
-            }
-            const rows2 = await TMUtils.dsRows(22696, { Catalog_Key: catalogKey });
-            const catalogCode = rows2.map((r) => r.Catalog_Code).find(Boolean) || "";
-            if (typeof viewModel.CatalogKey === "function") {
-              viewModel.CatalogKey(catalogKey);
-            } else if (Array.isArray(viewModel.CatalogKey)) {
-              viewModel.CatalogKey.length = 0;
-              viewModel.CatalogKey.push(catalogKey);
-            }
-            if (typeof viewModel.CatalogCode === "function") {
-              viewModel.CatalogCode(catalogCode);
-            } else if (Array.isArray(viewModel.CatalogCode)) {
-              viewModel.CatalogCode.length = 0;
-              viewModel.CatalogCode.push(catalogCode);
-            }
-            TMUtils.toast(
-              `\u2705 Customer: ${customerNo}
-CatalogKey: ${catalogKey}
-CatalogCode: ${catalogCode}`,
-              "success"
-            );
-            dlog("QT10 done", { customerNo, catalogKey, catalogCode });
-          } catch (err) {
-            TMUtils.toast(`\u274C Lookup failed: ${err.message}`, "error");
-            derror(err);
-          }
-        }
-      } catch (e) {
-        booted = false;
-        derror("QT10 init failed:", e);
-      } finally {
-        booting = false;
-      }
-    }
-    unsubscribeUrl = TMUtils.onUrlChange?.(() => {
-      if (!TMUtils.matchRoute?.(ROUTES)) {
-        try {
-          disposeWatcher?.();
-        } catch {
-        }
-        disposeWatcher = null;
-        booted = false;
-        booting = false;
+      const cur = vm?.[prop];
+      if (typeof cur === "function") return cur.call(vm, value);
+      if (Array.isArray(cur)) {
+        cur.length = 0;
+        cur.push(value);
         return;
       }
-      setTimeout(maybeBoot, 0);
-    });
-    setTimeout(maybeBoot, 0);
+      vm[prop] = value;
+    }
+    function createGate() {
+      let started = false;
+      return { isStarted: () => started, start: () => {
+        started = true;
+      } };
+    }
+    function startGateOnFirstUserEdit({ gate: gate2, inputEl }) {
+      const start = () => gate2.start();
+      inputEl?.addEventListener("input", start, { once: true });
+      inputEl?.addEventListener("change", start, { once: true });
+    }
     async function withFreshAuth(run) {
       try {
         return await run();
@@ -194,8 +104,130 @@ CatalogCode: ${catalogCode}`,
         if (key) return true;
       } catch {
       }
-      TMUtils.toast("Sign-in required. Please log in, then retry.", "warn");
+      TMUtils.toast?.("Sign-in required. Please log in, then retry.", "warn");
       return false;
     }
+    async function anchorAppears(sel, { timeoutMs = 5e3, pollMs = 150 } = {}) {
+      const t0 = Date.now();
+      while (Date.now() - t0 < timeoutMs) {
+        if (document.querySelector(sel)) return true;
+        await delay(pollMs);
+      }
+      return !!document.querySelector(sel);
+    }
+    let booted = false;
+    let booting = false;
+    let disposeWatcher = null;
+    let unsubscribeUrl = null;
+    let gate = null;
+    async function maybeBoot() {
+      if (booted || booting) return;
+      booting = true;
+      try {
+        if (!TMUtils.matchRoute?.(CFG.ROUTES)) {
+          booting = false;
+          return;
+        }
+        if (!await anchorAppears(CFG.ANCHOR, { timeoutMs: 2e3 })) {
+          booting = false;
+          return;
+        }
+        booted = true;
+        if (!await ensureAuthOrToast()) {
+          booting = false;
+          return;
+        }
+        const { controller, viewModel } = await TMUtils.waitForModelAsync(CFG.ANCHOR, {
+          pollMs: 200,
+          timeoutMs: 8e3,
+          logger: IS_TEST_ENV ? L : null
+        });
+        if (!controller || !viewModel) {
+          booted = false;
+          booting = false;
+          return;
+        }
+        if (DEV && CFG.GATE_USER_EDIT) {
+          const inputEl = document.querySelector(`${CFG.ANCHOR} input`) || document.querySelector('input[name="CustomerNo"]') || document.querySelector(CFG.ANCHOR);
+          if (inputEl && KO) {
+            gate = createGate();
+            startGateOnFirstUserEdit({ gate, inputEl });
+            toastDev("Gate armed: waiting for first user edit\u2026");
+          } else {
+            toastDev("Gate not armed (missing KO or input).", "warn");
+          }
+        }
+        let lastCustomerNo = null;
+        disposeWatcher = TMUtils.watchBySelector({
+          selector: CFG.ANCHOR,
+          initial: true,
+          // fire once on init
+          fireOn: "blur",
+          // then on blur (tweak to taste)
+          settleMs: 350,
+          logger: IS_TEST_ENV ? L : null,
+          onChange: () => {
+            if (DEV && gate && !gate.isStarted()) {
+              dlog(`${CFG.NAME}] change ignored until first user edit`);
+              return;
+            }
+            const raw = getObs(viewModel, "CustomerNo");
+            const val = Array.isArray(raw) ? raw[0] : raw;
+            const customerNo = (val ?? "").toString().trim();
+            if (!customerNo || customerNo === lastCustomerNo) return;
+            lastCustomerNo = customerNo;
+            dlog(`${CFG.NAME}: CustomerNo \u2192`, customerNo);
+            applyCatalogFor(customerNo, viewModel);
+          }
+        });
+      } catch (e) {
+        booted = false;
+        derror(`${CFG.NAME} init failed:`, e);
+      } finally {
+        booting = false;
+      }
+    }
+    async function applyCatalogFor(customerNo, vm) {
+      if (!customerNo) return;
+      try {
+        const [row1] = await withFreshAuth(() => TMUtils.dsRows(319, { Customer_No: customerNo }));
+        const catalogKey = row1?.Catalog_Key || 0;
+        if (!catalogKey) {
+          TMUtils.toast?.(`\u26A0\uFE0F No catalog for ${customerNo}`, "warn");
+          return;
+        }
+        const rows2 = await withFreshAuth(() => TMUtils.dsRows(22696, { Catalog_Key: catalogKey }));
+        const catalogCode = rows2.map((r) => r.Catalog_Code).find(Boolean) || "";
+        setObs(vm, "CatalogKey", catalogKey);
+        setObs(vm, "CatalogCode", catalogCode);
+        if (CFG.TOAST_SUCCESS) {
+          TMUtils.toast?.(
+            `\u2705 Customer: ${customerNo}
+CatalogKey: ${catalogKey}
+CatalogCode: ${catalogCode}`,
+            "success"
+          );
+        }
+        dlog(`${CFG.NAME} done`, { customerNo, catalogKey, catalogCode });
+      } catch (err) {
+        TMUtils.toast?.(`\u274C Lookup failed: ${err?.message || err}`, "error");
+        derror(err);
+      }
+    }
+    unsubscribeUrl = TMUtils.onUrlChange?.(() => {
+      if (!TMUtils.matchRoute?.(CFG.ROUTES)) {
+        try {
+          disposeWatcher?.();
+        } catch {
+        }
+        disposeWatcher = null;
+        gate = null;
+        booted = false;
+        booting = false;
+        return;
+      }
+      setTimeout(maybeBoot, 0);
+    });
+    setTimeout(maybeBoot, 0);
   })();
 })();
