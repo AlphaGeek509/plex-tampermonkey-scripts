@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         QT20_DEV
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.188
+// @version      3.5.194
 // @description  DEV-only build; includes user-start gate
 // @match        https://*.plex.com/*
 // @match        https://*.on.plex.com/*
@@ -18,7 +18,7 @@
 // ==/UserScript==
 (() => {
   // src/qt20/main.js
-  var DEV = typeof DEV !== "undefined" ? DEV : false;
+  var DEV = true ? true : !!(typeof globalThis !== "undefined" && globalThis.__TM_DEV__);
   (() => {
     const CONFIG = {
       DS_STOCK: 172,
@@ -39,7 +39,7 @@
     const derror = (...a) => {
       if (DEV || IS_TEST_ENV) L?.error?.(...a);
     };
-    const KO = typeof unsafeWindow !== "undefined" ? unsafeWindow.ko : window.ko;
+    const KO = typeof unsafeWindow !== "undefined" && unsafeWindow.ko ? unsafeWindow.ko : window.ko;
     const ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
     if (!TMUtils.matchRoute?.(ROUTES)) {
       dlog("QT20: wrong route, skipping");
@@ -250,7 +250,14 @@
         ul.appendChild(liGear);
         (modal.querySelector(".plex-dialog-content") || modal).appendChild(panel);
         onNodeRemoved(modal, () => {
-          window.dispatchEvent(new CustomEvent("LT:AttachmentRefreshRequested", { detail: { source: "QT20", ts: Date.now() } }));
+          const W = typeof window !== "undefined" ? window : typeof globalThis !== "undefined" ? globalThis : null;
+          const CE = W && "CustomEvent" in W ? W.CustomEvent : globalThis.CustomEvent;
+          if (W && W.dispatchEvent && CE) {
+            try {
+              W.dispatchEvent(new CE("LT:AttachmentRefreshRequested", { detail: { source: "QT20", ts: Date.now() } }));
+            } catch {
+            }
+          }
         });
       } catch (e) {
         derror("QT20 inject:", e);
@@ -274,7 +281,7 @@
         const partNo = readPartFromVM(vm, KO);
         if (!partNo) throw new Error("PartNo not available");
         const basePart = toBasePart(partNo);
-        const noteSetter = unsafeWindow.plex?.data?.getObservableOrValue?.(vm, "NoteNew") || (typeof vm.NoteNew === "function" ? vm.NoteNew : null);
+        const noteSetter = unsafeWindow.plex?.data?.getObservableOrValue?.(vm, "NoteNew") || (typeof vm.NoteNew === "function" ? ((...a) => vm.NoteNew.call(vm, ...a)) : null);
         if (typeof noteSetter !== "function") throw new Error("NoteNew not writable");
         const rows = await withFreshAuth(() => TMUtils.dsRows(CONFIG.DS_STOCK, {
           Part_No: basePart,
@@ -290,7 +297,14 @@
         }
         if (S.includeTimestamp) parts.push(`@${formatTimestamp(/* @__PURE__ */ new Date())}`);
         const stamp = parts.join(" ");
-        const rawNote = KO?.unwrap ? KO.unwrap(vm.NoteNew) : typeof vm.NoteNew === "function" ? vm.NoteNew() : vm.NoteNew;
+        let rawNote;
+        if (unsafeWindow.plex?.data?.getObservableOrValue) {
+          rawNote = unsafeWindow.plex.data.getObservableOrValue(vm, "NoteNew");
+        } else if (typeof vm.NoteNew === "function") {
+          rawNote = vm.NoteNew.call(vm);
+        } else {
+          rawNote = vm.NoteNew;
+        }
         const current = rawNote == null ? "" : String(rawNote).trim();
         const baseNote = /^(null|undefined)$/i.test(current) ? "" : current;
         const cleaned = baseNote.replace(
@@ -377,6 +391,16 @@
       });
       mo.observe(node.ownerDocument.body, { childList: true, subtree: true });
       return () => mo.disconnect();
+    }
+    if (DEV && typeof window !== "undefined") {
+      window.__QT20__ = {
+        injectStockControls,
+        splitBaseAndPack,
+        toBasePart,
+        normalizeRowToPieces,
+        summarizeStockNormalized,
+        handleClick
+      };
     }
   })();
 })();

@@ -1,8 +1,8 @@
-﻿// ==UserScript==
-// @name         QT20_DEV
+// ==UserScript==
+// @name         QT30_DEV
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.194
-// @description  DEV-only build; includes user-start gate
+// @version      3.5.195
+// @description  Shell that loads QT30 from the tm-tdd dev server bundle
 // @match        https://*.plex.com/*
 // @match        https://*.on.plex.com/*
 // @require      http://localhost:5000/lt-plex-tm-utils.user.js

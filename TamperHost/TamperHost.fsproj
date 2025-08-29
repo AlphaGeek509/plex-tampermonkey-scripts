@@ -10,6 +10,8 @@
     <None Include=".gitattributes" />
     <None Include=".gitignore" />
     <None Include="tm-tdd\tools\dev-start.ps1" />
+    <None Include="tm-tdd\banners\QT30.prod.header.js" />
+    <None Include="tm-tdd\banners\QT30.dev.header.js" />
     <None Include="tm-tdd\banners\QT20.prod.header.js" />
     <None Include="tm-tdd\banners\QT20.dev.header.js" />
     <None Include="tm-tdd\banners\QT10.dev.header.js" />
@@ -672,29 +674,13 @@
     <None Include="tm-tdd\src\qt10\main.js" />
     <None Include="tm-tdd\src\qt10\customerFlow.js" />
     <None Include="tm-tdd\src\qt20\main.js" />
+    <None Include="tm-tdd\src\qt30\main.js" />
     <None Include="tm-tdd\src\qt30\init.js" />
     <None Include="tm-tdd\src\common\index.js" />
     <None Include="tm-tdd\src\common\userStart.js" />
     <None Include="tm-tdd\src\common\storage.js" />
     <None Include="tm-tdd\src\common\payload.js" />
     <None Include="tm-tdd\src\common\computeGate.js" />
-    <None Include="tm-tdd\tests\qt20.authRetry.spec.js" />
-    <None Include="tm-tdd\tests\qt20.click.success.spec.js" />
-    <None Include="tm-tdd\tests\qt20.inject.spec.js" />
-    <None Include="tm-tdd\tests\qt20.helpers.specs.js" />
-    <None Include="tm-tdd\tests\qt10.authRetry.spec.js" />
-    <None Include="tm-tdd\tests\qt10.success.spec.js" />
-    <None Include="tm-tdd\tests\qt10.noCatalog.spec.js" />
-    <None Include="tm-tdd\tests\qt10.gate.spec.js" />
-    <None Include="tm-tdd\tests\qt10.customerFlow.spec.js" />
-    <None Include="tm-tdd\tests\userStart.spec.js" />
-    <None Include="tm-tdd\tests\storage.spec.js" />
-    <None Include="tm-tdd\tests\payload.spec.js" />
-    <None Include="tm-tdd\tests\ko.timing.spec.js" />
-    <None Include="tm-tdd\tests\qt30.modal.spec.js" />
-    <None Include="tm-tdd\tests\smoke.spec.js" />
-    <None Include="tm-tdd\tests\setup.js" />
-    <None Include="tm-tdd\vitest.config.js" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
