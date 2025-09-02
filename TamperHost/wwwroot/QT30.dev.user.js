@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         QT30_DEV
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.220
+// @version      3.5.235
 // @description  Shell that loads QT30 from the tm-tdd dev server bundle
 // @match        https://*.plex.com/*
 // @match        https://*.on.plex.com/*
@@ -102,7 +102,7 @@
     }
     async function ensureAuthOrToast() {
       try {
-        const key = await TMUtils.getApiKey();
+        const key = await TMUtils.getApiKey({ wait: true, timeoutMs: 3e3, pollMs: 150 });
         if (key) return true;
       } catch {
       }
@@ -199,7 +199,7 @@
         const gridVM = KO?.dataFor?.(grid);
         const raw = gridVM?.datasource?.raw || [];
         if (!raw.length) throw new Error("No rows found");
-        const quoteKey = unwrap(raw[0], "QuoteKey");
+        const quoteKey = TMUtils.getObsValue(raw[0], "QuoteKey", { first: true, trim: true });
         if (!quoteKey) throw new Error("Quote_Key missing");
         devToast("\u23F3 Fetching Catalog Key\u2026", "info");
         const rows1 = await withFreshAuth(() => TMUtils.dsRows(CONFIG.DS_CatalogKeyByQuoteKey, { Quote_Key: quoteKey }));
@@ -210,7 +210,7 @@
         }
         devToast(`\u2705 Catalog Key: ${catalogKey}`, "success", 1800);
         const now = /* @__PURE__ */ new Date();
-        const partNos = [...new Set(raw.map((r) => unwrap(r, "PartNo")).filter(Boolean))];
+        const partNos = [...new Set(raw.map((r) => TMUtils.getObsValue(r, "PartNo", { first: true, trim: true })).filter(Boolean))];
         if (!partNos.length) {
           devToast("\u26A0\uFE0F No PartNo values found", "warn", 4e3);
           return;
@@ -228,11 +228,11 @@
         const base = location.origin;
         for (let i = 0; i < raw.length; i++) {
           const row = raw[i];
-          const qty = +unwrap(row, "Quantity") || 0;
+          const qty = +(TMUtils.getObsValue(row, "Quantity", { first: true, trim: true }) || 0);
           if (qty <= 0 && S.deleteZeroQtyRows) {
-            const qk = unwrap(row, "QuoteKey");
-            const qpk = unwrap(row, "QuotePartKey");
-            const qpr = unwrap(row, "QuotePriceKey");
+            const qk = TMUtils.getObsValue(row, "QuoteKey", { first: true, trim: true });
+            const qpk = TMUtils.getObsValue(row, "QuotePartKey", { first: true, trim: true });
+            const qpr = TMUtils.getObsValue(row, "QuotePriceKey", { first: true, trim: true });
             if (qk && qpk && qpr) {
               try {
                 const res = await fetch(`${base}/SalesAndCRM/QuotePart/DeleteQuotePrice`, {
@@ -249,7 +249,7 @@
             continue;
           }
           if (qty > 0) {
-            const partNo = unwrap(row, "PartNo");
+            const partNo = TMUtils.getObsValue(row, "PartNo", { first: true, trim: true });
             const bp = pickPrice(priceMap[partNo], qty);
             if (bp == null) continue;
             applyPriceToRow(row, round(bp));
@@ -275,14 +275,6 @@
         restore();
       }
     }
-    function unwrap(obj, key) {
-      try {
-        const v = KO?.unwrap ? KO.unwrap(obj[key]) : typeof obj[key] === "function" ? obj[key]() : obj[key];
-        return Array.isArray(v) ? v[0] : v;
-      } catch {
-        return obj?.[key];
-      }
-    }
     function pickPrice(bps, qty) {
       if (!bps?.length) return null;
       if (qty < bps[0].Breakpoint_Quantity) return bps[0].Breakpoint_Price;
@@ -294,9 +286,7 @@
       return null;
     }
     function applyPriceToRow(row, price) {
-      const setter = unsafeWindow.plex?.data?.getObservableOrValue?.(row, "RvCustomizedUnitPrice") || (typeof row.RvCustomizedUnitPrice === "function" ? row.RvCustomizedUnitPrice : null);
-      if (KO?.isObservable?.(setter)) setter(price);
-      else if (typeof setter === "function") setter(price);
+      TMUtils.setObsValue(row, "RvCustomizedUnitPrice", price);
     }
     const NO_CATALOG_MESSAGES = [
       "\u{1F6AB} No catalog selected \u2013 cannot fetch prices.",

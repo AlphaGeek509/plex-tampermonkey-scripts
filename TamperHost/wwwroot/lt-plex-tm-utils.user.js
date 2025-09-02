@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LT › Plex TM Utils
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.231
+// @version      3.5.238
 // @description  Shared utilities
 // @match        https://*.on.plex.com/*
 // @match        https://*.plex.com/*
@@ -297,27 +297,70 @@
          * - If the target is an array, replaces contents with a single value
          * - Else assigns directly
          */
+        // Array-aware write: respects KO observableArray, KO observable, or plain prop
         TMUtils.setObsValue = function setObsValue(vm, path, value) {
             if (!vm || !path) return;
 
-            // If Plex provides a read/write accessor, it usually returns the setter when passed a value
-            const plexGet = _plexGetter(vm, path);
+            const root = (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window);
+            const KO = root.ko;
+
+            // Helper to coerce to array iff target is array-shaped
+            const toArrayIf = (isArrayTarget, v) => isArrayTarget ? (Array.isArray(v) ? v : [v]) : v;
+
+            // Try Plex accessor first (usually returns a KO observable function)
+            const plexGet = root?.plex?.data?.getObservableOrValue;
             if (typeof plexGet === 'function') {
-                plexGet.call(vm, value);
-                return;
+                const acc = plexGet(vm, path);            // getter/setter function or value
+                if (typeof acc === 'function') {
+                    // Detect observableArray via method presence
+                    const isObsArray = !!(acc && typeof acc.push === 'function' && typeof acc.removeAll === 'function');
+                    if (isObsArray) {
+                        acc.removeAll();
+                        const arr = toArrayIf(true, value);
+                        if (arr.length) acc.push(...arr);
+                        return;
+                    }
+                    // For normal observable/computed: coerce only if current is array
+                    let cur;
+                    try { cur = acc(); } catch { cur = undefined; }
+                    const isArrayTarget = Array.isArray(cur);
+                    acc(toArrayIf(isArrayTarget, value));
+                    return;
+                }
+                // If plex gave us a plain value (rare), fall through to direct path
             }
 
-            // Walk to the parent and final key
+            // Direct path: walk to parent + key
             const keys = path.split('.');
             const finalKey = keys.pop();
             const parent = keys.reduce((acc, k) => (acc == null ? acc : acc[k]), vm);
             if (!parent) return;
 
             const cur = parent[finalKey];
-            if (typeof cur === 'function') { cur.call(parent, value); return; }
-            if (Array.isArray(cur)) { cur.length = 0; cur.push(value); return; }
-            parent[finalKey] = value;
+
+            // KO observableArray
+            if (KO && typeof KO.isObservable === 'function' && KO.isObservable(cur) &&
+                typeof cur.push === 'function' && typeof cur.removeAll === 'function') {
+                cur.removeAll();
+                const arr = toArrayIf(true, value);
+                if (arr.length) cur.push(...arr);
+                return;
+            }
+
+            // KO observable scalar
+            if (typeof cur === 'function') {
+                let currentVal;
+                try { currentVal = cur(); } catch { currentVal = undefined; }
+                const isArrayTarget = Array.isArray(currentVal);
+                cur(toArrayIf(isArrayTarget, value));
+                return;
+            }
+
+            // Plain property (array or scalar)
+            const isArrayTarget = Array.isArray(cur);
+            parent[finalKey] = toArrayIf(isArrayTarget, value);
         };
+
 
         /** Convenience: coerce any obs/plain/array to a trimmed string id */
         TMUtils.coerceId = function coalesceToId(v) {

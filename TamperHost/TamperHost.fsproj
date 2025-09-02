@@ -10,11 +10,12 @@
     <None Include=".gitattributes" />
     <None Include=".gitignore" />
     <None Include="tm-tdd\tools\dev-start.ps1" />
-    <None Include="tm-tdd\banners\QT30.prod.header.js" />
-    <None Include="tm-tdd\banners\QT30.dev.header.js" />
-    <None Include="tm-tdd\banners\QT20.prod.header.js" />
-    <None Include="tm-tdd\banners\QT20.dev.header.js" />
     <None Include="tm-tdd\banners\QT10.dev.header.js" />
+    <None Include="tm-tdd\banners\QT20.dev.header.js" />
+    <None Include="tm-tdd\banners\QT20.prod.header.js" />
+    <None Include="tm-tdd\banners\QT30.dev.header.js" />
+    <None Include="tm-tdd\banners\QT30.prod.header.js" />
+    <None Include="tm-tdd\banners\QT35.dev.header.js" />
     <None Include="tm-tdd\node_modules\%40asamuzakjp\css-color\dist\esm\js\cache.js" />
     <None Include="tm-tdd\node_modules\%40asamuzakjp\css-color\dist\esm\js\cache.js.map" />
     <None Include="tm-tdd\node_modules\%40asamuzakjp\css-color\dist\esm\js\color.js" />
@@ -678,10 +679,9 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <None Include="tm-tdd\src\qt10\main.js" />
-    <None Include="tm-tdd\src\qt10\customerFlow.js" />
     <None Include="tm-tdd\src\qt20\main.js" />
     <None Include="tm-tdd\src\qt30\main.js" />
-    <None Include="tm-tdd\src\qt30\init.js" />
+    <None Include="tm-tdd\src\qt35\main.js" />
     <None Include="tm-tdd\src\common\index.js" />
     <None Include="tm-tdd\src\common\userStart.js" />
     <None Include="tm-tdd\src\common\storage.js" />

@@ -60,7 +60,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : !!(globalTh
         }
     }
     async function ensureAuthOrToast() {
-        try { const key = await TMUtils.getApiKey(); if (key) return true; } catch { }
+        try { const key = await TMUtils.getApiKey({ wait: true, timeoutMs: 3000, pollMs: 150 }); if (key) return true; } catch { }
         devToast('Sign-in required. Please log in, then click again.', 'warn', 5000);
         return false;
     }
@@ -139,7 +139,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : !!(globalTh
             const raw = gridVM?.datasource?.raw || [];
             if (!raw.length) throw new Error('No rows found');
 
-            const quoteKey = unwrap(raw[0], 'QuoteKey');
+            const quoteKey = TMUtils.getObsValue(raw[0], 'QuoteKey', { first: true, trim: true });
             if (!quoteKey) throw new Error('Quote_Key missing');
 
             // 1) Catalog key
@@ -151,7 +151,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : !!(globalTh
 
             // 2) Breakpoints by part
             const now = new Date();
-            const partNos = [...new Set(raw.map(r => unwrap(r, 'PartNo')).filter(Boolean))];
+            const partNos = [...new Set(raw.map(r => TMUtils.getObsValue(r, 'PartNo', { first: true, trim: true })).filter(Boolean))];
             if (!partNos.length) { devToast('⚠️ No PartNo values found', 'warn', 4000); return; }
 
             devToast(`⏳ Loading ${partNos.length} part(s)…`, 'info');
@@ -172,13 +172,14 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : !!(globalTh
 
             for (let i = 0; i < raw.length; i++) {
                 const row = raw[i];
-                const qty = +unwrap(row, 'Quantity') || 0;
+                const qty = +(TMUtils.getObsValue(row, 'Quantity', { first: true, trim: true }) || 0);
 
                 // Delete zero-qty rows (ported)
                 if (qty <= 0 && S.deleteZeroQtyRows) {
-                    const qk = unwrap(row, 'QuoteKey');
-                    const qpk = unwrap(row, 'QuotePartKey');
-                    const qpr = unwrap(row, 'QuotePriceKey');
+                    const qk = TMUtils.getObsValue(row, 'QuoteKey', { first: true, trim: true });
+                    const qpk = TMUtils.getObsValue(row, 'QuotePartKey', { first: true, trim: true });
+                    const qpr = TMUtils.getObsValue(row, 'QuotePriceKey', { first: true, trim: true });
+
                     if (qk && qpk && qpr) {
                         try {
                             const res = await fetch(`${base}/SalesAndCRM/QuotePart/DeleteQuotePrice`, {
@@ -196,7 +197,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : !!(globalTh
 
                 // Apply price
                 if (qty > 0) {
-                    const partNo = unwrap(row, 'PartNo');
+                    const partNo = TMUtils.getObsValue(row, 'PartNo', { first: true, trim: true });
                     const bp = pickPrice(priceMap[partNo], qty);
                     if (bp == null) continue;
                     applyPriceToRow(row, round(bp));
@@ -220,10 +221,6 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : !!(globalTh
     }
 
     // ---------- Helpers ----------
-    function unwrap(obj, key) {
-        try { const v = KO?.unwrap ? KO.unwrap(obj[key]) : (typeof obj[key] === 'function' ? obj[key]() : obj[key]); return Array.isArray(v) ? v[0] : v; }
-        catch { return obj?.[key]; }
-    }
     function pickPrice(bps, qty) {
         if (!bps?.length) return null;
         if (qty < bps[0].Breakpoint_Quantity) return bps[0].Breakpoint_Price;
@@ -235,11 +232,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : !!(globalTh
         return null;
     }
     function applyPriceToRow(row, price) {
-        const setter =
-            unsafeWindow.plex?.data?.getObservableOrValue?.(row, 'RvCustomizedUnitPrice') ||
-            (typeof row.RvCustomizedUnitPrice === 'function' ? row.RvCustomizedUnitPrice : null);
-        if (KO?.isObservable?.(setter)) setter(price);
-        else if (typeof setter === 'function') setter(price);
+        TMUtils.setObsValue(row, 'RvCustomizedUnitPrice', price);
     }
 
     // ---------- Messages (ported) ----------
