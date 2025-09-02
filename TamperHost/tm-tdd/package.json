@@ -7,13 +7,12 @@
   "scripts": {
     "dev:build": "esbuild src/qt10/main.js --bundle --format=iife --define:DEV=true --outfile=../wwwroot/QT10.dev.body.js && node -e \"const fs=require('fs'),p=require('path');const hdr=fs.readFileSync(p.join(__dirname,'banners','QT10.dev.header.js'),'utf8');const body=fs.readFileSync(p.join(__dirname,'..','wwwroot','QT10.dev.body.js'),'utf8');const out=p.join(__dirname,'..','wwwroot','QT10.dev.user.js');fs.writeFileSync(out,hdr+'\\n'+body,'utf8');fs.unlinkSync(p.join(__dirname,'..','wwwroot','QT10.dev.body.js'));\"",
     "dev:bump": "node ..\\build-plus.js --patch --files .\\tm-tdd\\banners\\QT10.dev.header.js && npm run dev:build",
-    "dev:bump:all": "npm run dev:bump:shared && npm run dev:bump:qt10 && npm run dev:bump:qt20 && npm run dev:bump:qt30",
-    "dev:bump:utils": "node ..\\build-plus.js --patch --files .\\tm-tdd\\src\\lt-plex-tm-utils.user.js && node -e \"const fs=require('fs'),p=require('path');const src=p.join(__dirname,'src','lt-plex-tm-utils.user.js');const dstDir=p.join(__dirname,'..','wwwroot');fs.mkdirSync(dstDir,{recursive:true});fs.copyFileSync(src,p.join(dstDir,'lt-plex-tm-utils.user.js'));console.log('Copied utils  →',dstDir);\"",
+    "dev:bump:all": "npm run dev:bump:shared && npm run dev:bump:qt10 && npm run dev:bump:qt20 && npm run dev:bump:qt30 && npm run dev:bump:qt35",
 
+    "dev:bump:utils": "node ..\\build-plus.js --patch --files .\\tm-tdd\\src\\lt-plex-tm-utils.user.js && node -e \"const fs=require('fs'),p=require('path');const src=p.join(__dirname,'src','lt-plex-tm-utils.user.js');const dstDir=p.join(__dirname,'..','wwwroot');fs.mkdirSync(dstDir,{recursive:true});fs.copyFileSync(src,p.join(dstDir,'lt-plex-tm-utils.user.js'));console.log('Copied utils  →',dstDir);\"",
     "dev:bump:auth": "node ..\\build-plus.js --patch --files .\\tm-tdd\\src\\lt-plex-auth.user.js && node -e \"const fs=require('fs'),p=require('path');const src=p.join(__dirname,'src','lt-plex-auth.user.js');const dstDir=p.join(__dirname,'..','wwwroot');fs.mkdirSync(dstDir,{recursive:true});fs.copyFileSync(src,p.join(dstDir,'lt-plex-auth.user.js'));console.log('Copied auth   →',dstDir);\"",
 
     "dev:bump:shared": "node ..\\build-plus.js --patch --files .\\tm-tdd\\src\\lt-plex-tm-utils.user.js .\\tm-tdd\\src\\lt-plex-auth.user.js && node -e \"const fs=require('fs'),p=require('path');const srcDir=p.join(__dirname,'src');const dstDir=p.join(__dirname,'..','wwwroot');fs.mkdirSync(dstDir,{recursive:true});for(const f of ['lt-plex-tm-utils.user.js','lt-plex-auth.user.js']){fs.copyFileSync(p.join(srcDir,f),p.join(dstDir,f));}console.log('Copied shared →',dstDir);\"",
-
     "dev:copy:shared": "node -e \"const fs=require('fs'),p=require('path');const srcDir=p.join(__dirname,'src');const dstDir=p.join(__dirname,'..','wwwroot');fs.mkdirSync(dstDir,{recursive:true});for(const f of ['lt-plex-tm-utils.user.js','lt-plex-auth.user.js']){fs.copyFileSync(p.join(srcDir,f),p.join(dstDir,f));}console.log('Copied shared →',dstDir);\"",
     "dev:bump:shared:minor": "node ..\\build-plus.js --minor --files .\\tm-tdd\\src\\lt-plex-tm-utils.user.js .\\tm-tdd\\src\\lt-plex-auth.user.js",
     "dev:bump:shared:major": "node ..\\build-plus.js --major --files .\\tm-tdd\\src\\lt-plex-tm-utils.user.js .\\tm-tdd\\src\\lt-plex-auth.user.js",
@@ -43,7 +42,15 @@
     "release:qt30": "esbuild src/qt30/main.js --bundle --format=iife --minify --define:__BUILD_DEV__=false --outfile=../release/QT30.body.js && node -e \"const fs=require('fs'),p=require('path');const hdr=fs.readFileSync(p.join(__dirname,'banners','QT30.prod.header.js'),'utf8');const body=fs.readFileSync(p.join(__dirname,'..','release','QT30.body.js'),'utf8');const outDir=p.join(__dirname,'..','release');const out=p.join(outDir,'QT30.user.js');fs.mkdirSync(outDir,{recursive:true});fs.writeFileSync(out,hdr+'\\n'+body,'utf8');fs.unlinkSync(p.join(__dirname,'..','release','QT30.body.js'));\"",
     "release:qt30:patch": "npm run release:qt30 && node ..\\build-plus.js --patch --files .\\release\\QT30.user.js && npm run verify:release",
     "release:qt30:minor": "npm run release:qt30 && node ..\\build-plus.js --minor --files .\\release\\QT30.user.js && npm run verify:release",
-    "release:qt30:major": "npm run release:qt30 && node ..\\build-plus.js --major --files .\\release\\QT30.user.js && npm run verify:release"
+    "release:qt30:major": "npm run release:qt30 && node ..\\build-plus.js --major --files .\\release\\QT30.user.js && npm run verify:release",
+
+    "build:qt35:dev": "esbuild src/qt35/main.js --bundle --format=iife --define:__BUILD_DEV__=true --outfile=../wwwroot/QT35.dev.body.js && node -e \"const fs=require('fs'),p=require('path');const hdr=fs.readFileSync(p.join(__dirname,'banners','QT35.dev.header.js'),'utf8');const body=fs.readFileSync(p.join(__dirname,'..','wwwroot','QT35.dev.body.js'),'utf8');const out=p.join(__dirname,'..','wwwroot','QT35.dev.user.js');fs.writeFileSync(out,hdr+'\\n'+body,'utf8');fs.unlinkSync(p.join(__dirname,'..','wwwroot','QT35.dev.body.js'));console.log('Wrote',out);\"",
+    "dev:bump:qt35": "node ..\\build-plus.js --patch --files .\\tm-tdd\\banners\\QT35.dev.header.js && npm run build:qt35:dev",
+    "release:qt35": "esbuild src/qt35/main.js --bundle --format=iife --minify --define:__BUILD_DEV__=false --outfile=../release/QT35.body.js && node -e \"const fs=require('fs'),p=require('path');const hdr=fs.readFileSync(p.join(__dirname,'banners','QT35.prod.header.js'),'utf8');const body=fs.readFileSync(p.join(__dirname,'..','release','QT35.body.js'),'utf8');const outDir=p.join(__dirname,'..','release');const out=p.join(outDir,'QT35.user.js');fs.mkdirSync(outDir,{recursive:true});fs.writeFileSync(out,hdr+'\\n'+body,'utf8');fs.unlinkSync(p.join(__dirname,'..','release','QT35.body.js'));console.log('Wrote',out);\"",
+    "release:qt35:patch": "npm run release:qt35 && node ..\\build-plus.js --patch --files .\\release\\QT35.user.js && npm run verify:release",
+    "release:qt35:minor": "npm run release:qt35 && node ..\\build-plus.js --minor --files .\\release\\QT35.user.js && npm run verify:release",
+    "release:qt35:major": "npm run release:qt35 && node ..\\build-plus.js --major --files .\\release\\QT35.user.js && npm run verify:release"
+
   },
   "devDependencies": {
     "esbuild": "^0.25.9"
