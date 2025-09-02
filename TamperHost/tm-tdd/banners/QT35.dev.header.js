@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         QT35_DEV
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.239
+// @version      3.6.2
 // @description  Displays read-only “Attachments: N” in the Quote Wizard action bar.
 // @match        https://*.plex.com/*
 // @match        https://*.on.plex.com/*
