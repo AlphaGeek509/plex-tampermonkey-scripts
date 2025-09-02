@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LT › Plex TM Utils
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.215
-// @description  Shared utilities (fetchData, observeInsert, waitForModelAsync, matchRoute, etc.)
+// @version      3.5.231
+// @description  Shared utilities
 // @match        https://*.on.plex.com/*
 // @match        https://*.plex.com/*
 // @grant        GM_xmlhttpRequest
@@ -11,17 +11,6 @@
 // @grant        GM_setValue
 // @connect      *.plex.com
 // ==/UserScript==
-
-
-
-// -------------------------------------------------------------------------------------------------------------------------
-//  When to use what (cheat sheet)
-//      waitForModelAsync(sel): you need { controller, viewModel } (writeback, methods, grid data, etc.). Use once at init.
-//      watchByLabel({ labelText, onChange }): the field has a visible label (e.g., “Customer”). Best for forms.
-//      awaitValueByLabel({ labelText }): you just need the first value and you’re done.
-//      watchBySelector({ selector, onChange }): no label / grid / custom widget. Target the element directly.
-//  All of these can happily live in TMUtils so your page scripts stay tiny and consistent.
-// -------------------------------------------------------------------------------------------------------------------------
 
 (function (window) {
     'use strict';
@@ -114,15 +103,6 @@
         } catch { }
 
         return '';
-    }
-
-
-    // Normalizes Authorization header
-    function _buildAuthHeader(raw) {
-        if (!raw) return '';
-        if (/^(Basic|Bearer)\s/i.test(raw)) return raw;
-        // Your current auth flow prefers Basic; keep that default
-        return `Basic ${raw}`;
     }
 
 
@@ -401,13 +381,6 @@
     // ---------------------------------------------------------------------
     // 5) KO controller + VM waiters (kept; async variant preserved)
     // ---------------------------------------------------------------------
-    function waitForModel(selector, cb, interval = 100, maxAttempts = 100) {
-        waitForModelAsync(selector, { pollMs: interval, timeoutMs: interval * maxAttempts })
-            .then(cb)
-            .catch(e => console.error('waitForModel error:', e));
-    }
-
-    // TMUtils v3.6.x — KO-aware waiter (standardized return)
     function waitForModelAsync(sel, {
         pollMs = 250,
         timeoutMs = 30000,
@@ -472,6 +445,8 @@
             tick();
         });
     }
+    // ✅ add this right after the waitForModelAsync function definition
+    //TMUtils.waitForModelAsync = waitForModelAsync;
 
 
 
@@ -536,7 +511,7 @@
     function setDebug(v) { __tmDebug = !!v; }
     function makeLogger(ns) {
         const label = ns || 'TM';
-        const emit = (m, badge, ...a) => (console[m] || console.log)(`${label} ${badge}`, ...a);
+        const emit = (m, badge, ...a) => (console[m] || console.log).call(console, `${label} ${badge}`, ...a);
         return {
             log: (...a) => emit('log', '▶️', ...a),
             info: (...a) => emit('info', 'ℹ️', ...a),
@@ -946,6 +921,7 @@
         return () => mo.disconnect();
     };
 
+    TMUtils.sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
     // ---------------------------------------------------------------------
     // 🔁 Global exposure for TamperMonkey sandbox
@@ -953,27 +929,18 @@
     Object.assign(TMUtils, {
         getApiKey,
         fetchData: TMUtils.fetchData, 
+        waitForModelAsync,
         watchByLabel: TMUtils.watchByLabel,
         awaitValueByLabel: TMUtils.awaitValueByLabel,
         watchBySelector: TMUtils.watchBySelector,
         observeInsertMany: TMUtils.observeInsertMany,
         showMessage, hideMessage, observeInsert,
-        waitForModel, waitForModelAsync, 
         selectOptionByText, selectOptionByValue,
         toast,
         log, warn, error, ok,
         ensureRoute, onRouteChange, matchRoute,
         setDebug, makeLogger, getLogger, attachLoggerGlobal,
-        _buildAuthHeader,
         ds: TMUtils.ds, dsRows: TMUtils.dsRows
+
     });
-
-    //console.log('🐛 TMUtils loaded from local build:', {
-    //    waitForModelAsync: typeof TMUtils.waitForModelAsync,
-    //    observeInsert: typeof TMUtils.observeInsert,
-    //    fetchData: typeof TMUtils.fetchData,
-    //    toast: typeof TMUtils.toast,
-    //    ensureRoute: typeof TMUtils.ensureRoute
-    //});
-
 })(window);

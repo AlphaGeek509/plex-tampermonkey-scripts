@@ -37,40 +37,6 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
         return;
     }
 
-    // ===== Small utils =====
-    const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
-    const delay = (ms) => new Promise(r => setTimeout(r, ms));
-
-    // KO observables: **bind this** and keep spies intact (QT20-compatible)
-    function getObs(vm, prop) {
-        if (unsafeWindow?.plex?.data?.getObservableOrValue) {
-            return unsafeWindow.plex.data.getObservableOrValue(vm, prop);
-        }
-        const cur = vm?.[prop];
-        return typeof cur === 'function' ? cur.call(vm) : cur;
-    }
-    function setObs(vm, prop, value) {
-        if (unsafeWindow?.plex?.data?.getObservableOrValue) {
-            const setter = unsafeWindow.plex.data.getObservableOrValue(vm, prop);
-            return (typeof setter === 'function') ? setter(value) : (vm[prop] = value);
-        }
-        const cur = vm?.[prop];
-        if (typeof cur === 'function') return cur.call(vm, value);
-        if (Array.isArray(cur)) { cur.length = 0; cur.push(value); return; }
-        vm[prop] = value;
-    }
-
-    // Gate until the *first* genuine user edit (prevents early programmatic triggers)
-    function createGate() {
-        let started = false;
-        return { isStarted: () => started, start: () => { started = true; } };
-    }
-    function startGateOnFirstUserEdit({ gate, inputEl }) {
-        const start = () => gate.start();
-        inputEl?.addEventListener('input', start, { once: true });
-        inputEl?.addEventListener('change', start, { once: true });
-    }
-
     // Auth helpers (QT20-style)
     async function withFreshAuth(run) {
         try {
@@ -86,7 +52,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
     }
     async function ensureAuthOrToast() {
         try {
-            const key = await TMUtils.getApiKey();
+            const key = await TMUtils.getApiKey({ wait: true, timeoutMs: 3000 });
             if (key) return true;
         } catch { /*noop*/ }
         TMUtils.toast?.('Sign-in required. Please log in, then retry.', 'warn');
@@ -97,10 +63,11 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
         const t0 = Date.now();
         while (Date.now() - t0 < timeoutMs) {
             if (document.querySelector(sel)) return true;
-            await delay(pollMs);
+            await TMUtils.sleep(pollMs)   // ← was: await delay(pollMs)
         }
         return !!document.querySelector(sel);
     }
+
 
     // ===== Bootstrap (re-entrancy safe) =====
     let booted = false;
@@ -126,22 +93,6 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
                 pollMs: 200, timeoutMs: 8000, logger: IS_TEST_ENV ? L : null
             });
             if (!controller || !viewModel) { booted = false; booting = false; return; }
-
-            // DEV: arm gate on first *user* edit of CustomerNo
-            if (DEV && CFG.GATE_USER_EDIT) {
-                const inputEl =
-                    document.querySelector(`${CFG.ANCHOR} input`) ||
-                    document.querySelector('input[name="CustomerNo"]') ||
-                    document.querySelector(CFG.ANCHOR);
-
-                if (inputEl && KO) {
-                    gate = createGate();
-                    startGateOnFirstUserEdit({ gate, inputEl });
-                    toastDev('Gate armed: waiting for first user edit…');
-                } else {
-                    toastDev('Gate not armed (missing KO or input).', 'warn');
-                }
-            }
 
             // watch CustomerNo changes
             let lastCustomerNo = null;
@@ -194,9 +145,6 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             // 3) Write back (KO or arrays)
             TMUtils.setObsValue(vm, 'CatalogKey', catalogKey);
             TMUtils.setObsValue(vm, 'CatalogCode', catalogCode);
-
-            setObs(vm, 'CatalogKey', catalogKey);
-            setObs(vm, 'CatalogCode', catalogCode);
 
             if (CFG.TOAST_SUCCESS) {
                 TMUtils.toast?.(

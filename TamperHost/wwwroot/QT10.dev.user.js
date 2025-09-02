@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name        QT10_DEV
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     3.5.216
+// @version     3.5.232
 // @description DEV-only build; includes user-start gate
 // @match       https://*.plex.com/*
 // @match       https://*.on.plex.com/*
@@ -52,40 +52,6 @@
       dlog("Skipping route:", location.pathname);
       return;
     }
-    const KO = typeof unsafeWindow !== "undefined" ? unsafeWindow.ko : window.ko;
-    const delay = (ms) => new Promise((r) => setTimeout(r, ms));
-    function getObs(vm, prop) {
-      if (unsafeWindow?.plex?.data?.getObservableOrValue) {
-        return unsafeWindow.plex.data.getObservableOrValue(vm, prop);
-      }
-      const cur = vm?.[prop];
-      return typeof cur === "function" ? cur.call(vm) : cur;
-    }
-    function setObs(vm, prop, value) {
-      if (unsafeWindow?.plex?.data?.getObservableOrValue) {
-        const setter = unsafeWindow.plex.data.getObservableOrValue(vm, prop);
-        return typeof setter === "function" ? setter(value) : vm[prop] = value;
-      }
-      const cur = vm?.[prop];
-      if (typeof cur === "function") return cur.call(vm, value);
-      if (Array.isArray(cur)) {
-        cur.length = 0;
-        cur.push(value);
-        return;
-      }
-      vm[prop] = value;
-    }
-    function createGate() {
-      let started = false;
-      return { isStarted: () => started, start: () => {
-        started = true;
-      } };
-    }
-    function startGateOnFirstUserEdit({ gate: gate2, inputEl }) {
-      const start = () => gate2.start();
-      inputEl?.addEventListener("input", start, { once: true });
-      inputEl?.addEventListener("change", start, { once: true });
-    }
     async function withFreshAuth(run) {
       try {
         return await run();
@@ -100,7 +66,7 @@
     }
     async function ensureAuthOrToast() {
       try {
-        const key = await TMUtils.getApiKey();
+        const key = await TMUtils.getApiKey({ wait: true, timeoutMs: 3e3 });
         if (key) return true;
       } catch {
       }
@@ -111,7 +77,7 @@
       const t0 = Date.now();
       while (Date.now() - t0 < timeoutMs) {
         if (document.querySelector(sel)) return true;
-        await delay(pollMs);
+        await TMUtils.sleep(pollMs);
       }
       return !!document.querySelector(sel);
     }
@@ -146,16 +112,6 @@
           booted = false;
           booting = false;
           return;
-        }
-        if (DEV && CFG.GATE_USER_EDIT) {
-          const inputEl = document.querySelector(`${CFG.ANCHOR} input`) || document.querySelector('input[name="CustomerNo"]') || document.querySelector(CFG.ANCHOR);
-          if (inputEl && KO) {
-            gate = createGate();
-            startGateOnFirstUserEdit({ gate, inputEl });
-            toastDev("Gate armed: waiting for first user edit\u2026");
-          } else {
-            toastDev("Gate not armed (missing KO or input).", "warn");
-          }
         }
         let lastCustomerNo = null;
         disposeWatcher = TMUtils.watchBySelector({
@@ -198,8 +154,6 @@
         const catalogCode = rows2.map((r) => r.Catalog_Code).find(Boolean) || "";
         TMUtils.setObsValue(vm, "CatalogKey", catalogKey);
         TMUtils.setObsValue(vm, "CatalogCode", catalogCode);
-        setObs(vm, "CatalogKey", catalogKey);
-        setObs(vm, "CatalogCode", catalogCode);
         if (CFG.TOAST_SUCCESS) {
           TMUtils.toast?.(
             `\u2705 Customer: ${customerNo}
