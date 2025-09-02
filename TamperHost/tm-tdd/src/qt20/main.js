@@ -1,4 +1,4 @@
-﻿// tm-tdd/src/qt20/main.js
+// tm-tdd/src/qt20/main.js
 /* Build-time dev flag (esbuild sets __BUILD_DEV__), with a runtime fallback for tests */
 const DEV = (typeof __BUILD_DEV__ !== 'undefined')
     ? __BUILD_DEV__
@@ -83,7 +83,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
     }
     async function ensureAuthOrToast() {
         try {
-            const key = await TMUtils.getApiKey();
+            const key = await TMUtils.getApiKey({ wait: true, timeoutMs: 3000, pollMs: 150 });
             if (key) return true;
         } catch { }
         devToast('Sign-in required. Please log in, then click again.', 'warn', 5000);
@@ -250,11 +250,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             const basePart = toBasePart(partNo);
 
             // Writable NoteNew setter
-            const noteSetter =
-                (unsafeWindow.plex?.data?.getObservableOrValue?.(vm, 'NoteNew')) ||
-                (typeof vm.NoteNew === 'function' ? ((...a) => vm.NoteNew.call(vm, ...a)) : null);
-
-            if (typeof noteSetter !== 'function') throw new Error('NoteNew not writable');
+            const canWrite = true; // TMUtils.setObsValue will no-op if it can't find a setter
 
             // DS calls (retry once on 419)
             const rows = await withFreshAuth(() => TMUtils.dsRows(CONFIG.DS_STOCK, {
@@ -286,7 +282,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
                 rawNote = vm.NoteNew;
             }
 
-            const current = (rawNote == null) ? '' : String(rawNote).trim();
+            const current = TMUtils.getObsValue(vm, 'NoteNew', { trim: true }) || '';
             const baseNote = (/^(null|undefined)$/i.test(current) ? '' : current);
 
             // Remove prior STK:… fragment anywhere in the note
@@ -296,7 +292,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             ).trim();
 
             const newNote = cleaned ? `${cleaned} ${stamp}` : stamp;
-            noteSetter(newNote);
+            TMUtils.setObsValue(vm, 'NoteNew', newNote);
 
             devToast(`✅ ${stamp}`, 'success', CONFIG.toastMs);
             dlog('QT20 success', { partNo, basePart, sum, breakdown, newNote });
@@ -311,15 +307,10 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
 
     // ========= Helpers =========
     function readPartFromVM(vm, KOref) {
-        const candidates = ['PartNo', 'ItemNo', 'Part_Number', 'Item_Number', 'Part', 'Item'];
-        for (const k of candidates) {
-            try {
-                const raw = KOref?.unwrap ? KOref.unwrap(vm[k])
-                    : (typeof vm[k] === 'function' ? vm[k]() : vm[k]);
-                const v = Array.isArray(raw) ? raw[0] : raw;
-                const out = (v ?? '').toString().trim();
-                if (out) return out;
-            } catch { }
+        const keys = ['PartNo', 'ItemNo', 'Part_Number', 'Item_Number', 'Part', 'Item'];
+        for (const k of keys) {
+            const v = TMUtils.getObsValue(vm, k, { first: true, trim: true });
+            if (v) return v;
         }
         return '';
     }

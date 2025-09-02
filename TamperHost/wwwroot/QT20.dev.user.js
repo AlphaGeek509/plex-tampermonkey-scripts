@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         QT20_DEV
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.219
+// @version      3.5.233
 // @description  DEV-only build; includes user-start gate
 // @match        https://*.plex.com/*
 // @match        https://*.on.plex.com/*
@@ -104,7 +104,7 @@
     }
     async function ensureAuthOrToast() {
       try {
-        const key = await TMUtils.getApiKey();
+        const key = await TMUtils.getApiKey({ wait: true, timeoutMs: 3e3, pollMs: 150 });
         if (key) return true;
       } catch {
       }
@@ -281,8 +281,7 @@
         const partNo = readPartFromVM(vm, KO);
         if (!partNo) throw new Error("PartNo not available");
         const basePart = toBasePart(partNo);
-        const noteSetter = unsafeWindow.plex?.data?.getObservableOrValue?.(vm, "NoteNew") || (typeof vm.NoteNew === "function" ? ((...a) => vm.NoteNew.call(vm, ...a)) : null);
-        if (typeof noteSetter !== "function") throw new Error("NoteNew not writable");
+        const canWrite = true;
         const rows = await withFreshAuth(() => TMUtils.dsRows(CONFIG.DS_STOCK, {
           Part_No: basePart,
           Shippable: "TRUE",
@@ -305,14 +304,14 @@
         } else {
           rawNote = vm.NoteNew;
         }
-        const current = rawNote == null ? "" : String(rawNote).trim();
+        const current = TMUtils.getObsValue(vm, "NoteNew", { trim: true }) || "";
         const baseNote = /^(null|undefined)$/i.test(current) ? "" : current;
         const cleaned = baseNote.replace(
           /(?:^|\s)STK:\s*[\d,]+(?:\s*pcs)?(?:\s*\([^)]*\))?(?:\s*@[0-9:\-\/\s]+)?/gi,
           ""
         ).trim();
         const newNote = cleaned ? `${cleaned} ${stamp}` : stamp;
-        noteSetter(newNote);
+        TMUtils.setObsValue(vm, "NoteNew", newNote);
         devToast(`\u2705 ${stamp}`, "success", CONFIG.toastMs);
         dlog("QT20 success", { partNo, basePart, sum, breakdown, newNote });
       } catch (err) {
@@ -323,15 +322,10 @@
       }
     }
     function readPartFromVM(vm, KOref) {
-      const candidates = ["PartNo", "ItemNo", "Part_Number", "Item_Number", "Part", "Item"];
-      for (const k of candidates) {
-        try {
-          const raw = KOref?.unwrap ? KOref.unwrap(vm[k]) : typeof vm[k] === "function" ? vm[k]() : vm[k];
-          const v = Array.isArray(raw) ? raw[0] : raw;
-          const out = (v ?? "").toString().trim();
-          if (out) return out;
-        } catch {
-        }
+      const keys = ["PartNo", "ItemNo", "Part_Number", "Item_Number", "Part", "Item"];
+      for (const k of keys) {
+        const v = TMUtils.getObsValue(vm, k, { first: true, trim: true });
+        if (v) return v;
       }
       return "";
     }
