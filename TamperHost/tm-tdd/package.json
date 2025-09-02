@@ -7,8 +7,16 @@
   "scripts": {
     "dev:build": "esbuild src/qt10/main.js --bundle --format=iife --define:DEV=true --outfile=../wwwroot/QT10.dev.body.js && node -e \"const fs=require('fs'),p=require('path');const hdr=fs.readFileSync(p.join(__dirname,'banners','QT10.dev.header.js'),'utf8');const body=fs.readFileSync(p.join(__dirname,'..','wwwroot','QT10.dev.body.js'),'utf8');const out=p.join(__dirname,'..','wwwroot','QT10.dev.user.js');fs.writeFileSync(out,hdr+'\\n'+body,'utf8');fs.unlinkSync(p.join(__dirname,'..','wwwroot','QT10.dev.body.js'));\"",
     "dev:bump": "node ..\\build-plus.js --patch --files .\\tm-tdd\\banners\\QT10.dev.header.js && npm run dev:build",
-    "dev:bump:all": "npm run dev:bump:qt10 && npm run dev:bump:qt20 && npm run dev:bump:qt30",
-    "dev:build:all": "npm run build:qt10:dev && npm run build:qt20:dev && npm run build:qt30:dev",
+    "dev:bump:all": "npm run dev:bump:shared && npm run dev:bump:qt10 && npm run dev:bump:qt20 && npm run dev:bump:qt30",
+    "dev:bump:utils": "node ..\\build-plus.js --patch --files .\\tm-tdd\\src\\lt-plex-tm-utils.user.js && node -e \"const fs=require('fs'),p=require('path');const src=p.join(__dirname,'src','lt-plex-tm-utils.user.js');const dstDir=p.join(__dirname,'..','wwwroot');fs.mkdirSync(dstDir,{recursive:true});fs.copyFileSync(src,p.join(dstDir,'lt-plex-tm-utils.user.js'));console.log('Copied utils  →',dstDir);\"",
+
+    "dev:bump:auth": "node ..\\build-plus.js --patch --files .\\tm-tdd\\src\\lt-plex-auth.user.js && node -e \"const fs=require('fs'),p=require('path');const src=p.join(__dirname,'src','lt-plex-auth.user.js');const dstDir=p.join(__dirname,'..','wwwroot');fs.mkdirSync(dstDir,{recursive:true});fs.copyFileSync(src,p.join(dstDir,'lt-plex-auth.user.js'));console.log('Copied auth   →',dstDir);\"",
+
+    "dev:bump:shared": "node ..\\build-plus.js --patch --files .\\tm-tdd\\src\\lt-plex-tm-utils.user.js .\\tm-tdd\\src\\lt-plex-auth.user.js && node -e \"const fs=require('fs'),p=require('path');const srcDir=p.join(__dirname,'src');const dstDir=p.join(__dirname,'..','wwwroot');fs.mkdirSync(dstDir,{recursive:true});for(const f of ['lt-plex-tm-utils.user.js','lt-plex-auth.user.js']){fs.copyFileSync(p.join(srcDir,f),p.join(dstDir,f));}console.log('Copied shared →',dstDir);\"",
+
+    "dev:copy:shared": "node -e \"const fs=require('fs'),p=require('path');const srcDir=p.join(__dirname,'src');const dstDir=p.join(__dirname,'..','wwwroot');fs.mkdirSync(dstDir,{recursive:true});for(const f of ['lt-plex-tm-utils.user.js','lt-plex-auth.user.js']){fs.copyFileSync(p.join(srcDir,f),p.join(dstDir,f));}console.log('Copied shared →',dstDir);\"",
+    "dev:bump:shared:minor": "node ..\\build-plus.js --minor --files .\\tm-tdd\\src\\lt-plex-tm-utils.user.js .\\tm-tdd\\src\\lt-plex-auth.user.js",
+    "dev:bump:shared:major": "node ..\\build-plus.js --major --files .\\tm-tdd\\src\\lt-plex-tm-utils.user.js .\\tm-tdd\\src\\lt-plex-auth.user.js",
 
     "build:common": "esbuild src/common/index.js --bundle --format=iife --global-name=QTCommon --outfile=../wwwroot/dist/qt-common.core.js",
     "build:common:watch": "npm run build:common -- --watch",

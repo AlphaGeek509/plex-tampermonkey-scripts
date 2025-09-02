@@ -671,6 +671,12 @@
     <None Include="tm-tdd\node_modules\tldts\dist\cjs\src\data\trie.js.map" />
     <None Include="tm-tdd\node_modules\tldts\dist\es6\src\data\trie.js" />
     <None Include="tm-tdd\node_modules\tldts\dist\es6\src\data\trie.js.map" />
+    <Content Include="tm-tdd\src\lt-plex-auth.user.js">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="tm-tdd\src\lt-plex-tm-utils.user.js">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <None Include="tm-tdd\src\qt10\main.js" />
     <None Include="tm-tdd\src\qt10\customerFlow.js" />
     <None Include="tm-tdd\src\qt20\main.js" />
@@ -689,12 +695,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Update="wwwroot\lt-plex-auth.user.js">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Update="wwwroot\lt-plex-tm-utils.user.js">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
     <Content Update="wwwroot\QT10-GetCatalogByCustomer.user.js">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>

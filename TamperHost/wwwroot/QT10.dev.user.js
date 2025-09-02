@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name        QT10_DEV
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     3.5.193
+// @version     3.5.216
 // @description DEV-only build; includes user-start gate
 // @match       https://*.plex.com/*
 // @match       https://*.on.plex.com/*
@@ -171,9 +171,7 @@
               dlog(`${CFG.NAME}] change ignored until first user edit`);
               return;
             }
-            const raw = getObs(viewModel, "CustomerNo");
-            const val = Array.isArray(raw) ? raw[0] : raw;
-            const customerNo = (val ?? "").toString().trim();
+            const customerNo = TMUtils.getObsValue(viewModel, "CustomerNo", { first: true, trim: true });
             if (!customerNo || customerNo === lastCustomerNo) return;
             lastCustomerNo = customerNo;
             dlog(`${CFG.NAME}: CustomerNo \u2192`, customerNo);
@@ -198,6 +196,8 @@
         }
         const rows2 = await withFreshAuth(() => TMUtils.dsRows(22696, { Catalog_Key: catalogKey }));
         const catalogCode = rows2.map((r) => r.Catalog_Code).find(Boolean) || "";
+        TMUtils.setObsValue(vm, "CatalogKey", catalogKey);
+        TMUtils.setObsValue(vm, "CatalogCode", catalogCode);
         setObs(vm, "CatalogKey", catalogKey);
         setObs(vm, "CatalogCode", catalogCode);
         if (CFG.TOAST_SUCCESS) {

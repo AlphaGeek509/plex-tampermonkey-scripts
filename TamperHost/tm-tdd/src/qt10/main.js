@@ -1,4 +1,4 @@
-﻿// tm-tdd/src/qt10/main.js
+// tm-tdd/src/qt10/main.js
 /* Build-time dev flag (esbuild sets __BUILD_DEV__), with a runtime fallback for tests */
 const DEV = (typeof __BUILD_DEV__ !== 'undefined')
     ? __BUILD_DEV__
@@ -157,9 +157,8 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
                         return;
                     }
 
-                    const raw = getObs(viewModel, 'CustomerNo');
-                    const val = Array.isArray(raw) ? raw[0] : raw;
-                    const customerNo = (val ?? '').toString().trim();
+                    const customerNo = TMUtils.getObsValue(viewModel, "CustomerNo", { first: true, trim: true });
+
                     if (!customerNo || customerNo === lastCustomerNo) return;
 
                     lastCustomerNo = customerNo;
@@ -193,6 +192,9 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             const catalogCode = rows2.map(r => r.Catalog_Code).find(Boolean) || '';
 
             // 3) Write back (KO or arrays)
+            TMUtils.setObsValue(vm, 'CatalogKey', catalogKey);
+            TMUtils.setObsValue(vm, 'CatalogCode', catalogCode);
+
             setObs(vm, 'CatalogKey', catalogKey);
             setObs(vm, 'CatalogCode', catalogCode);
 
