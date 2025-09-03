@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LT › Plex TM Utils
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.6.2
+// @version      3.6.3
 // @description  Shared utilities
 // @match        https://*.on.plex.com/*
 // @match        https://*.plex.com/*
@@ -966,6 +966,148 @@
 
     TMUtils.sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+
+    // ---------------------------------------------------------------------
+    // Network watcher (AddUpdateForm 10032) — fetch + XHR
+    // ---------------------------------------------------------------------
+    (function addNetWatcher() {
+        const root = (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window);
+        const TMU = window.TMUtils;            // same object you export at the end
+        TMU.net = TMU.net || {};
+
+        TMU.net.ensureWatcher = function ensureWatcher() {
+            if (root.__ltNetPatched) return;
+            root.__ltNetPatched = true;
+
+            // ---- fetch() ----
+            const origFetch = root.fetch && root.fetch.bind(root);
+            if (origFetch) {
+                root.fetch = function (input, init) {
+                    try {
+                        const req = (input instanceof Request) ? input : new Request(input, init || {});
+                        const url = String(req.url || '');
+                        const method = (req.method || (init && init.method) || 'GET').toUpperCase();
+                        if (isTarget(url, method)) {
+                            req.clone().arrayBuffer().then(buf => {
+                                const ct = req.headers.get('content-type') || '';
+                                const body = parseBodyFromBuffer(buf, ct);
+                                TMU.net._handleAddUpdate(url, body);
+                            }).catch(() => { });
+                        }
+                    } catch { }
+                    return origFetch(input, init);
+                };
+            }
+
+            // ---- XHR ----
+            const XHR = root.XMLHttpRequest;
+            if (XHR && XHR.prototype) {
+                const open = XHR.prototype.open;
+                const send = XHR.prototype.send;
+                const setRequestHeader = XHR.prototype.setRequestHeader;
+
+                XHR.prototype.open = function (method, url) {
+                    this.__ltMethod = String(method || 'GET').toUpperCase();
+                    this.__ltUrl = String(url || '');
+                    this.__ltHeaders = {};
+                    return open.apply(this, arguments);
+                };
+                XHR.prototype.setRequestHeader = function (k, v) {
+                    try { this.__ltHeaders[k.toLowerCase()] = v; } catch { }
+                    return setRequestHeader.apply(this, arguments);
+                };
+                XHR.prototype.send = function (body) {
+                    try {
+                        const url = this.__ltUrl || '';
+                        const method = this.__ltMethod || 'GET';
+                        if (isTarget(url, method)) {
+                            const ct = (this.__ltHeaders['content-type'] || '');
+                            let obj = {};
+                            if (typeof body === 'string') obj = parseBodyFromString(body, ct);
+                            else if (body instanceof URLSearchParams) obj = Object.fromEntries(body.entries());
+                            else if (root.FormData && body instanceof FormData) obj = Object.fromEntries(body.entries());
+                            TMU.net._handleAddUpdate(url, obj);
+                        }
+                    } catch { }
+                    return send.apply(this, arguments);
+                };
+            }
+        };
+
+        TMU.net.onAddUpdate = function onAddUpdate(fn) {
+            if (typeof fn !== 'function') return () => { };
+            const h = (e) => fn(e.detail || {});
+            root.addEventListener('LT:QuotePartAddUpdateForm', h);
+            return () => root.removeEventListener('LT:QuotePartAddUpdateForm', h);
+        };
+
+        TMU.net.getLastAddUpdate = function () {
+            if (TMU.state?.lastAddUpdateForm) return TMU.state.lastAddUpdateForm;
+            try {
+                const s = sessionStorage.getItem('LT_LAST_ADDUPDATEFORM');
+                return s ? JSON.parse(s) : null;
+            } catch { return null; }
+        };
+
+        // ---- internals ----
+        function isTarget(url, method) {
+            return method === 'POST'
+                && /\/SalesAndCRM\/QuotePart\/AddUpdateForm/i.test(url)
+                && /(?:\?|&)sourceActionKey=10032(?:&|$)/i.test(url);
+        }
+
+        function parseBodyFromBuffer(buf, contentType) {
+            try {
+                const text = new TextDecoder().decode(buf || new Uint8Array());
+                return parseBodyFromString(text, contentType);
+            } catch { return {}; }
+        }
+
+        function parseBodyFromString(text, contentType) {
+            if (!text) return {};
+            const ct = (contentType || '').toLowerCase();
+            if (ct.includes('application/json') || /^[\s{\[]/.test(text)) {
+                try { return JSON.parse(text); } catch { }
+            }
+            if (ct.includes('application/x-www-form-urlencoded') || text.includes('=')) {
+                try { return Object.fromEntries(new URLSearchParams(text).entries()); } catch { }
+            }
+            return {};
+        }
+
+        TMU.net._handleAddUpdate = function (url, payload) {
+            const quoteKey =
+                Number(payload?.QuoteKey) ||
+                Number((/[?&]QuoteKey=(\d+)/i.exec(url) || [])[1]) ||
+                undefined;
+
+            const hasPartNo =
+                !!(payload?.PartNo || payload?.PartKey || payload?.PartName) ||
+                (Array.isArray(payload?.__revisionTrackingData) &&
+                    payload.__revisionTrackingData.some(x =>
+                        Array.isArray(x.revisionTrackingEntries) &&
+                        x.revisionTrackingEntries.some(e => /Part No/i.test(e?.Field || ''))
+                    ));
+
+            const detail = {
+                url,
+                quoteKey,
+                hasPartNo,
+                partNo: payload?.PartNo ?? null,
+                customerPartNo: payload?.CustomerPartNo ?? null,
+                partKey: payload?.PartKey ?? null,
+                at: Date.now()
+            };
+
+            TMU.state = TMU.state || {};
+            TMU.state.lastAddUpdateForm = detail;
+            try { sessionStorage.setItem('LT_LAST_ADDUPDATEFORM', JSON.stringify(detail)); } catch { }
+
+            try { root.dispatchEvent(new CustomEvent('LT:QuotePartAddUpdateForm', { detail })); } catch { }
+        };
+    })();
+
+
     // ---------------------------------------------------------------------
     // 🔁 Global exposure for TamperMonkey sandbox
     // ---------------------------------------------------------------------
@@ -983,7 +1125,8 @@
         log, warn, error, ok,
         ensureRoute, onRouteChange, matchRoute,
         setDebug, makeLogger, getLogger, attachLoggerGlobal,
-        ds: TMUtils.ds, dsRows: TMUtils.dsRows
+        ds: TMUtils.ds, dsRows: TMUtils.dsRows,
+        net: TMUtils.net,
 
     });
 })(window);
