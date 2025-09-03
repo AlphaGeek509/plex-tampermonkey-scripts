@@ -104,14 +104,6 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
         }
     });
 
-    // Handy dev menus
-    GM_registerMenuCommand?.('QT20 DEV — Diagnostics', () =>
-        devToast(`Route: ${location.pathname}`, 'info')
-    );
-    GM_registerMenuCommand?.('QT20 DEV — Refresh API Key', async () => {
-        const k = await TMUtils.getApiKey({ force: true });
-        console.debug('[QT20 DEV] API key length:', k?.length || 0);
-    });
 
     // ========= UI INJECTION =========
     function injectStockControls(ul) {

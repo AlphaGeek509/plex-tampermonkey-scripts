@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name        QT10_DEV
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     3.6.6
+// @version     3.6.9
 // @description DEV-only build; includes user-start gate
 // @match       https://*.plex.com/*
 // @match       https://*.on.plex.com/*
@@ -16,183 +16,186 @@
 // @run-at      document-idle
 // @noframes
 // ==/UserScript==
-// tm-tdd/src/qt10/main.js
-/* Build-time dev flag (esbuild sets __BUILD_DEV__), with a runtime fallback for tests */
-const DEV = (typeof __BUILD_DEV__ !== 'undefined')
-    ? __BUILD_DEV__
-    : !!(typeof globalThis !== 'undefined' && globalThis.__TM_DEV__);
 
-(function () {
-    'use strict';
-
-    // ===== Config (QT20-style) =====
+(() => {
+  // src/quote-tracking/CustomerCatalogGet/index.js
+  var DEV = true ? true : !!(typeof globalThis !== "undefined" && globalThis.__TM_DEV__);
+  (function() {
+    "use strict";
     const CFG = {
-        NAME: 'QT10',
-        ROUTES: [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i],
-        ANCHOR: '[data-val-property-name="CustomerNo"]',
-        GATE_USER_EDIT: true,      // wait for first *real* user edit before reacting
-        TOAST_SUCCESS: true,       // show green toast when writes succeed
+      NAME: "QT10",
+      ROUTES: [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i],
+      ANCHOR: '[data-val-property-name="CustomerNo"]',
+      GATE_USER_EDIT: true,
+      // wait for first *real* user edit before reacting
+      TOAST_SUCCESS: true
+      // show green toast when writes succeed
     };
-
-    // ===== Debug / Logger / DEV toast =====
     const IS_TEST_ENV = /test\.on\.plex\.com$/i.test(location.hostname);
     TMUtils.setDebug?.(IS_TEST_ENV);
-
     const L = TMUtils.getLogger?.(CFG.NAME);
-    const dlog = (...a) => { if (IS_TEST_ENV) L?.log?.(...a); };
-    const dwarn = (...a) => { if (IS_TEST_ENV) L?.warn?.(...a); };
-    const derror = (...a) => { if (IS_TEST_ENV) L?.error?.(...a); };
-
-    const toastDev = (msg, level = 'info') => {
-        const prefix = `[${CFG.NAME} DEV]`;
-        if (TMUtils.toast) TMUtils.toast(`${prefix} ${msg}`, level);
-        else (level === 'error' ? console.error : level === 'warn' ? console.warn : console.debug)(prefix, msg);
+    const dlog = (...a) => {
+      if (IS_TEST_ENV) L?.log?.(...a);
     };
-
-    // ===== Route allowlist =====
+    const dwarn = (...a) => {
+      if (IS_TEST_ENV) L?.warn?.(...a);
+    };
+    const derror = (...a) => {
+      if (IS_TEST_ENV) L?.error?.(...a);
+    };
+    const toastDev = (msg, level = "info") => {
+      const prefix = `[${CFG.NAME} DEV]`;
+      if (TMUtils.toast) TMUtils.toast(`${prefix} ${msg}`, level);
+      else (level === "error" ? console.error : level === "warn" ? console.warn : console.debug)(prefix, msg);
+    };
     if (!TMUtils.matchRoute?.(CFG.ROUTES)) {
-        dlog('Skipping route:', location.pathname);
-        return;
+      dlog("Skipping route:", location.pathname);
+      return;
     }
-
-    // Auth helpers (QT20-style)
     async function withFreshAuth(run) {
-        try {
-            return await run();
-        } catch (err) {
-            const status = err?.status || (/\b(\d{3})\b/.exec(err?.message || '') || [])[1];
-            if (+status === 419) {
-                await TMUtils.getApiKey({ force: true });
-                return await run(); // retry once
-            }
-            throw err;
+      try {
+        return await run();
+      } catch (err) {
+        const status = err?.status || (/\b(\d{3})\b/.exec(err?.message || "") || [])[1];
+        if (+status === 419) {
+          await TMUtils.getApiKey({ force: true });
+          return await run();
         }
+        throw err;
+      }
     }
     async function ensureAuthOrToast() {
-        try {
-            const key = await TMUtils.getApiKey({ wait: true, timeoutMs: 3000 });
-            if (key) return true;
-        } catch { /*noop*/ }
-        TMUtils.toast?.('Sign-in required. Please log in, then retry.', 'warn');
-        return false;
+      try {
+        const key = await TMUtils.getApiKey({ wait: true, timeoutMs: 3e3 });
+        if (key) return true;
+      } catch {
+      }
+      TMUtils.toast?.("Sign-in required. Please log in, then retry.", "warn");
+      return false;
     }
-
-    async function anchorAppears(sel, { timeoutMs = 5000, pollMs = 150 } = {}) {
-        const t0 = Date.now();
-        while (Date.now() - t0 < timeoutMs) {
-            if (document.querySelector(sel)) return true;
-            await TMUtils.sleep(pollMs)   // ← was: await delay(pollMs)
-        }
-        return !!document.querySelector(sel);
+    async function anchorAppears(sel, { timeoutMs = 5e3, pollMs = 150 } = {}) {
+      const t0 = Date.now();
+      while (Date.now() - t0 < timeoutMs) {
+        if (document.querySelector(sel)) return true;
+        await TMUtils.sleep(pollMs);
+      }
+      return !!document.querySelector(sel);
     }
-
-
-    // ===== Bootstrap (re-entrancy safe) =====
     let booted = false;
     let booting = false;
     let disposeWatcher = null;
     let unsubscribeUrl = null;
     let gate = null;
-
     async function maybeBoot() {
-        if (booted || booting) return;
-        booting = true;
-
-        try {
-            if (!TMUtils.matchRoute?.(CFG.ROUTES)) { booting = false; return; }
-            if (!(await anchorAppears(CFG.ANCHOR, { timeoutMs: 2000 }))) { booting = false; return; }
-
-            // mark booted early to discourage overlaps
-            booted = true;
-
-            if (!(await ensureAuthOrToast())) { booting = false; return; }
-
-            const { controller, viewModel } = await TMUtils.waitForModelAsync(CFG.ANCHOR, {
-                pollMs: 200, timeoutMs: 8000, logger: IS_TEST_ENV ? L : null
-            });
-            if (!controller || !viewModel) { booted = false; booting = false; return; }
-
-            // watch CustomerNo changes
-            let lastCustomerNo = null;
-            disposeWatcher = TMUtils.watchBySelector({
-                selector: CFG.ANCHOR,
-                initial: true,            // fire once on init
-                fireOn: 'blur',           // then on blur (tweak to taste)
-                settleMs: 350,
-                logger: IS_TEST_ENV ? L : null,
-                onChange: () => {
-                    if (DEV && gate && !gate.isStarted()) {
-                        dlog(`${CFG.NAME}] change ignored until first user edit`);
-                        return;
-                    }
-
-                    const customerNo = TMUtils.getObsValue(viewModel, "CustomerNo", { first: true, trim: true });
-
-                    if (!customerNo || customerNo === lastCustomerNo) return;
-
-                    lastCustomerNo = customerNo;
-                    dlog(`${CFG.NAME}: CustomerNo →`, customerNo);
-                    applyCatalogFor(customerNo, viewModel);
-                }
-            });
-
-        } catch (e) {
-            booted = false;
-            derror(`${CFG.NAME} init failed:`, e);
-        } finally {
-            booting = false;
-        }
-    }
-
-    async function applyCatalogFor(customerNo, vm) {
-        if (!customerNo) return;
-
-        try {
-            // 1) Customer → CatalogKey
-            const [row1] = await withFreshAuth(() => TMUtils.dsRows(319, { Customer_No: customerNo }));
-            const catalogKey = row1?.Catalog_Key || 0;
-            if (!catalogKey) {
-                TMUtils.toast?.(`⚠️ No catalog for ${customerNo}`, 'warn');
-                return;
-            }
-
-            // 2) CatalogKey → CatalogCode
-            const rows2 = await withFreshAuth(() => TMUtils.dsRows(22696, { Catalog_Key: catalogKey }));
-            const catalogCode = rows2.map(r => r.Catalog_Code).find(Boolean) || '';
-
-            // 3) Write back (KO or arrays)
-            TMUtils.setObsValue(vm, 'CatalogKey', catalogKey);
-            TMUtils.setObsValue(vm, 'CatalogCode', catalogCode);
-
-            if (CFG.TOAST_SUCCESS) {
-                TMUtils.toast?.(
-                    `✅ Customer: ${customerNo}\nCatalogKey: ${catalogKey}\nCatalogCode: ${catalogCode}`,
-                    'success'
-                );
-            }
-            dlog(`${CFG.NAME} done`, { customerNo, catalogKey, catalogCode });
-        } catch (err) {
-            TMUtils.toast?.(`❌ Lookup failed: ${err?.message || err}`, 'error');
-            derror(err);
-        }
-    }
-
-    // React to SPA navigation
-    unsubscribeUrl = TMUtils.onUrlChange?.(() => {
+      if (booted || booting) return;
+      booting = true;
+      try {
         if (!TMUtils.matchRoute?.(CFG.ROUTES)) {
-            // leaving wizard → clean up
-            try { disposeWatcher?.(); } catch { /*noop*/ }
-            disposeWatcher = null;
-            gate = null;
-            booted = false;
-            booting = false;
-            return;
+          booting = false;
+          return;
         }
-        // still in wizard — attempt a boot (guarded)
-        setTimeout(maybeBoot, 0);
+        if (!await anchorAppears(CFG.ANCHOR, { timeoutMs: 2e3 })) {
+          booting = false;
+          return;
+        }
+        booted = true;
+        if (!await ensureAuthOrToast()) {
+          booting = false;
+          return;
+        }
+        const { controller, viewModel } = await TMUtils.waitForModelAsync(CFG.ANCHOR, {
+          pollMs: 200,
+          timeoutMs: 8e3,
+          logger: IS_TEST_ENV ? L : null
+        });
+        if (!controller || !viewModel) {
+          booted = false;
+          booting = false;
+          return;
+        }
+        const QuoteNoStash = window.lt?.QT?.QuoteNoStash;
+        const initialQuoteNo = TMUtils.getObsValue?.(viewModel, "QuoteNo", { first: true, trim: true });
+        if (initialQuoteNo && QuoteNoStash) {
+          QuoteNoStash.set(initialQuoteNo);
+          dlog("QT10: stashed QuoteNo \u2192", initialQuoteNo);
+        }
+        TMUtils.watchKO?.(viewModel, "QuoteNo", (newVal) => {
+          const v = TMUtils.unwrap?.(newVal) ?? newVal;
+          if (v && QuoteNoStash) {
+            QuoteNoStash.set(String(v).trim());
+            dlog("QT10: updated QuoteNo \u2192", v);
+          }
+        });
+        let lastCustomerNo = null;
+        disposeWatcher = TMUtils.watchBySelector({
+          selector: CFG.ANCHOR,
+          initial: true,
+          // fire once on init
+          fireOn: "blur",
+          // then on blur (tweak to taste)
+          settleMs: 350,
+          logger: IS_TEST_ENV ? L : null,
+          onChange: () => {
+            if (DEV && gate && !gate.isStarted()) {
+              dlog(`${CFG.NAME}] change ignored until first user edit`);
+              return;
+            }
+            const customerNo = TMUtils.getObsValue(viewModel, "CustomerNo", { first: true, trim: true });
+            if (!customerNo || customerNo === lastCustomerNo) return;
+            lastCustomerNo = customerNo;
+            dlog(`${CFG.NAME}: CustomerNo \u2192`, customerNo);
+            applyCatalogFor(customerNo, viewModel);
+          }
+        });
+      } catch (e) {
+        booted = false;
+        derror(`${CFG.NAME} init failed:`, e);
+      } finally {
+        booting = false;
+      }
+    }
+    async function applyCatalogFor(customerNo, vm) {
+      if (!customerNo) return;
+      try {
+        const [row1] = await withFreshAuth(() => TMUtils.dsRows(319, { Customer_No: customerNo }));
+        const catalogKey = row1?.Catalog_Key || 0;
+        if (!catalogKey) {
+          TMUtils.toast?.(`\u26A0\uFE0F No catalog for ${customerNo}`, "warn");
+          return;
+        }
+        const rows2 = await withFreshAuth(() => TMUtils.dsRows(22696, { Catalog_Key: catalogKey }));
+        const catalogCode = rows2.map((r) => r.Catalog_Code).find(Boolean) || "";
+        TMUtils.setObsValue(vm, "CatalogKey", catalogKey);
+        TMUtils.setObsValue(vm, "CatalogCode", catalogCode);
+        if (CFG.TOAST_SUCCESS) {
+          TMUtils.toast?.(
+            `\u2705 Customer: ${customerNo}
+CatalogKey: ${catalogKey}
+CatalogCode: ${catalogCode}`,
+            "success"
+          );
+        }
+        dlog(`${CFG.NAME} done`, { customerNo, catalogKey, catalogCode });
+      } catch (err) {
+        TMUtils.toast?.(`\u274C Lookup failed: ${err?.message || err}`, "error");
+        derror(err);
+      }
+    }
+    unsubscribeUrl = TMUtils.onUrlChange?.(() => {
+      if (!TMUtils.matchRoute?.(CFG.ROUTES)) {
+        try {
+          disposeWatcher?.();
+        } catch {
+        }
+        disposeWatcher = null;
+        gate = null;
+        booted = false;
+        booting = false;
+        return;
+      }
+      setTimeout(maybeBoot, 0);
     });
-
-    // kick once
     setTimeout(maybeBoot, 0);
-
+  })();
 })();
+//# sourceMappingURL=data:application/json;base64,ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsiLi4vdG0tc2NyaXB0cy9zcmMvcXVvdGUtdHJhY2tpbmcvQ3VzdG9tZXJDYXRhbG9nR2V0L2luZGV4LmpzIl0sCiAgInNvdXJjZXNDb250ZW50IjogWyIvLyB0bS1zY3JpcHRzL3NyYy9xdDEwL2luZGV4LmpzXG4vKiBCdWlsZC10aW1lIGRldiBmbGFnIChlc2J1aWxkIHNldHMgX19CVUlMRF9ERVZfXyksIHdpdGggYSBydW50aW1lIGZhbGxiYWNrIGZvciB0ZXN0cyAqL1xuY29uc3QgREVWID0gKHR5cGVvZiBfX0JVSUxEX0RFVl9fICE9PSAndW5kZWZpbmVkJylcbiAgICA/IF9fQlVJTERfREVWX19cbiAgICA6ICEhKHR5cGVvZiBnbG9iYWxUaGlzICE9PSAndW5kZWZpbmVkJyAmJiBnbG9iYWxUaGlzLl9fVE1fREVWX18pO1xuXG4oZnVuY3Rpb24gKCkge1xuICAgICd1c2Ugc3RyaWN0JztcblxuICAgIC8vID09PT09IENvbmZpZyAoUVQyMC1zdHlsZSkgPT09PT1cbiAgICBjb25zdCBDRkcgPSB7XG4gICAgICAgIE5BTUU6ICdRVDEwJyxcbiAgICAgICAgUk9VVEVTOiBbL15cXC9TYWxlc0FuZENSTVxcL1F1b3RlV2l6YXJkKD86XFwvfCQpL2ldLFxuICAgICAgICBBTkNIT1I6ICdbZGF0YS12YWwtcHJvcGVydHktbmFtZT1cIkN1c3RvbWVyTm9cIl0nLFxuICAgICAgICBHQVRFX1VTRVJfRURJVDogdHJ1ZSwgICAgICAvLyB3YWl0IGZvciBmaXJzdCAqcmVhbCogdXNlciBlZGl0IGJlZm9yZSByZWFjdGluZ1xuICAgICAgICBUT0FTVF9TVUNDRVNTOiB0cnVlLCAgICAgICAvLyBzaG93IGdyZWVuIHRvYXN0IHdoZW4gd3JpdGVzIHN1Y2NlZWRcbiAgICB9O1xuXG4gICAgLy8gPT09PT0gRGVidWcgLyBMb2dnZXIgLyBERVYgdG9hc3QgPT09PT1cbiAgICBjb25zdCBJU19URVNUX0VOViA9IC90ZXN0XFwub25cXC5wbGV4XFwuY29tJC9pLnRlc3QobG9jYXRpb24uaG9zdG5hbWUpO1xuICAgIFRNVXRpbHMuc2V0RGVidWc/LihJU19URVNUX0VOVik7XG5cbiAgICBjb25zdCBMID0gVE1VdGlscy5nZXRMb2dnZXI/LihDRkcuTkFNRSk7XG4gICAgY29uc3QgZGxvZyA9ICguLi5hKSA9PiB7IGlmIChJU19URVNUX0VOVikgTD8ubG9nPy4oLi4uYSk7IH07XG4gICAgY29uc3QgZHdhcm4gPSAoLi4uYSkgPT4geyBpZiAoSVNfVEVTVF9FTlYpIEw/Lndhcm4/LiguLi5hKTsgfTtcbiAgICBjb25zdCBkZXJyb3IgPSAoLi4uYSkgPT4geyBpZiAoSVNfVEVTVF9FTlYpIEw/LmVycm9yPy4oLi4uYSk7IH07XG5cbiAgICBjb25zdCB0b2FzdERldiA9IChtc2csIGxldmVsID0gJ2luZm8nKSA9PiB7XG4gICAgICAgIGNvbnN0IHByZWZpeCA9IGBbJHtDRkcuTkFNRX0gREVWXWA7XG4gICAgICAgIGlmIChUTVV0aWxzLnRvYXN0KSBUTVV0aWxzLnRvYXN0KGAke3ByZWZpeH0gJHttc2d9YCwgbGV2ZWwpO1xuICAgICAgICBlbHNlIChsZXZlbCA9PT0gJ2Vycm9yJyA/IGNvbnNvbGUuZXJyb3IgOiBsZXZlbCA9PT0gJ3dhcm4nID8gY29uc29sZS53YXJuIDogY29uc29sZS5kZWJ1ZykocHJlZml4LCBtc2cpO1xuICAgIH07XG5cbiAgICAvLyA9PT09PSBSb3V0ZSBhbGxvd2xpc3QgPT09PT1cbiAgICBpZiAoIVRNVXRpbHMubWF0Y2hSb3V0ZT8uKENGRy5ST1VURVMpKSB7XG4gICAgICAgIGRsb2coJ1NraXBwaW5nIHJvdXRlOicsIGxvY2F0aW9uLnBhdGhuYW1lKTtcbiAgICAgICAgcmV0dXJuO1xuICAgIH1cblxuICAgIC8vIEF1dGggaGVscGVycyAoUVQyMC1zdHlsZSlcbiAgICBhc3luYyBmdW5jdGlvbiB3aXRoRnJlc2hBdXRoKHJ1bikge1xuICAgICAgICB0cnkge1xuICAgICAgICAgICAgcmV0dXJuIGF3YWl0IHJ1bigpO1xuICAgICAgICB9IGNhdGNoIChlcnIpIHtcbiAgICAgICAgICAgIGNvbnN0IHN0YXR1cyA9IGVycj8uc3RhdHVzIHx8ICgvXFxiKFxcZHszfSlcXGIvLmV4ZWMoZXJyPy5tZXNzYWdlIHx8ICcnKSB8fCBbXSlbMV07XG4gICAgICAgICAgICBpZiAoK3N0YXR1cyA9PT0gNDE5KSB7XG4gICAgICAgICAgICAgICAgYXdhaXQgVE1VdGlscy5nZXRBcGlLZXkoeyBmb3JjZTogdHJ1ZSB9KTtcbiAgICAgICAgICAgICAgICByZXR1cm4gYXdhaXQgcnVuKCk7IC8vIHJldHJ5IG9uY2VcbiAgICAgICAgICAgIH1cbiAgICAgICAgICAgIHRocm93IGVycjtcbiAgICAgICAgfVxuICAgIH1cbiAgICBhc3luYyBmdW5jdGlvbiBlbnN1cmVBdXRoT3JUb2FzdCgpIHtcbiAgICAgICAgdHJ5IHtcbiAgICAgICAgICAgIGNvbnN0IGtleSA9IGF3YWl0IFRNVXRpbHMuZ2V0QXBpS2V5KHsgd2FpdDogdHJ1ZSwgdGltZW91dE1zOiAzMDAwIH0pO1xuICAgICAgICAgICAgaWYgKGtleSkgcmV0dXJuIHRydWU7XG4gICAgICAgIH0gY2F0Y2ggeyAvKm5vb3AqLyB9XG4gICAgICAgIFRNVXRpbHMudG9hc3Q/LignU2lnbi1pbiByZXF1aXJlZC4gUGxlYXNlIGxvZyBpbiwgdGhlbiByZXRyeS4nLCAnd2FybicpO1xuICAgICAgICByZXR1cm4gZmFsc2U7XG4gICAgfVxuXG4gICAgYXN5bmMgZnVuY3Rpb24gYW5jaG9yQXBwZWFycyhzZWwsIHsgdGltZW91dE1zID0gNTAwMCwgcG9sbE1zID0gMTUwIH0gPSB7fSkge1xuICAgICAgICBjb25zdCB0MCA9IERhdGUubm93KCk7XG4gICAgICAgIHdoaWxlIChEYXRlLm5vdygpIC0gdDAgPCB0aW1lb3V0TXMpIHtcbiAgICAgICAgICAgIGlmIChkb2N1bWVudC5xdWVyeVNlbGVjdG9yKHNlbCkpIHJldHVybiB0cnVlO1xuICAgICAgICAgICAgYXdhaXQgVE1VdGlscy5zbGVlcChwb2xsTXMpICAgLy8gXHUyMTkwIHdhczogYXdhaXQgZGVsYXkocG9sbE1zKVxuICAgICAgICB9XG4gICAgICAgIHJldHVybiAhIWRvY3VtZW50LnF1ZXJ5U2VsZWN0b3Ioc2VsKTtcbiAgICB9XG5cblxuICAgIC8vID09PT09IEJvb3RzdHJhcCAocmUtZW50cmFuY3kgc2FmZSkgPT09PT1cbiAgICBsZXQgYm9vdGVkID0gZmFsc2U7XG4gICAgbGV0IGJvb3RpbmcgPSBmYWxzZTtcbiAgICBsZXQgZGlzcG9zZVdhdGNoZXIgPSBudWxsO1xuICAgIGxldCB1bnN1YnNjcmliZVVybCA9IG51bGw7XG4gICAgbGV0IGdhdGUgPSBudWxsO1xuXG4gICAgYXN5bmMgZnVuY3Rpb24gbWF5YmVCb290KCkge1xuICAgICAgICBpZiAoYm9vdGVkIHx8IGJvb3RpbmcpIHJldHVybjtcbiAgICAgICAgYm9vdGluZyA9IHRydWU7XG5cbiAgICAgICAgdHJ5IHtcbiAgICAgICAgICAgIGlmICghVE1VdGlscy5tYXRjaFJvdXRlPy4oQ0ZHLlJPVVRFUykpIHsgYm9vdGluZyA9IGZhbHNlOyByZXR1cm47IH1cbiAgICAgICAgICAgIGlmICghKGF3YWl0IGFuY2hvckFwcGVhcnMoQ0ZHLkFOQ0hPUiwgeyB0aW1lb3V0TXM6IDIwMDAgfSkpKSB7IGJvb3RpbmcgPSBmYWxzZTsgcmV0dXJuOyB9XG5cbiAgICAgICAgICAgIC8vIG1hcmsgYm9vdGVkIGVhcmx5IHRvIGRpc2NvdXJhZ2Ugb3ZlcmxhcHNcbiAgICAgICAgICAgIGJvb3RlZCA9IHRydWU7XG5cbiAgICAgICAgICAgIGlmICghKGF3YWl0IGVuc3VyZUF1dGhPclRvYXN0KCkpKSB7IGJvb3RpbmcgPSBmYWxzZTsgcmV0dXJuOyB9XG5cbiAgICAgICAgICAgIGNvbnN0IHsgY29udHJvbGxlciwgdmlld01vZGVsIH0gPSBhd2FpdCBUTVV0aWxzLndhaXRGb3JNb2RlbEFzeW5jKENGRy5BTkNIT1IsIHtcbiAgICAgICAgICAgICAgICBwb2xsTXM6IDIwMCwgdGltZW91dE1zOiA4MDAwLCBsb2dnZXI6IElTX1RFU1RfRU5WID8gTCA6IG51bGxcbiAgICAgICAgICAgIH0pO1xuICAgICAgICAgICAgaWYgKCFjb250cm9sbGVyIHx8ICF2aWV3TW9kZWwpIHsgYm9vdGVkID0gZmFsc2U7IGJvb3RpbmcgPSBmYWxzZTsgcmV0dXJuOyB9XG5cbiAgICAgICAgICAgIC8vIG5vIGltcG9ydCBuZWVkZWQ7IGhlbHBlciBpcyBvbiB3aW5kb3dcbiAgICAgICAgICAgIGNvbnN0IFF1b3RlTm9TdGFzaCA9IHdpbmRvdy5sdD8uUVQ/LlF1b3RlTm9TdGFzaDtcblxuICAgICAgICAgICAgLy8gQWZ0ZXIgd2FpdEZvck1vZGVsQXN5bmMgcmVzb2x2ZXMgYW5kIHlvdSBoYXZlIGB2aWV3TW9kZWxgXG4gICAgICAgICAgICBjb25zdCBpbml0aWFsUXVvdGVObyA9IFRNVXRpbHMuZ2V0T2JzVmFsdWU/Lih2aWV3TW9kZWwsICdRdW90ZU5vJywgeyBmaXJzdDogdHJ1ZSwgdHJpbTogdHJ1ZSB9KTtcbiAgICAgICAgICAgIGlmIChpbml0aWFsUXVvdGVObyAmJiBRdW90ZU5vU3Rhc2gpIHtcbiAgICAgICAgICAgICAgICBRdW90ZU5vU3Rhc2guc2V0KGluaXRpYWxRdW90ZU5vKTtcbiAgICAgICAgICAgICAgICBkbG9nKCdRVDEwOiBzdGFzaGVkIFF1b3RlTm8gXHUyMTkyJywgaW5pdGlhbFF1b3RlTm8pO1xuICAgICAgICAgICAgfVxuXG4gICAgICAgICAgICAvLyBPcHRpb25hbDoga2VlcCBpdCBmcmVzaCBpZiBRdW90ZU5vIGNhbiBjaGFuZ2UgbWlkLXdpemFyZFxuICAgICAgICAgICAgVE1VdGlscy53YXRjaEtPPy4odmlld01vZGVsLCAnUXVvdGVObycsIChuZXdWYWwpID0+IHtcbiAgICAgICAgICAgICAgICBjb25zdCB2ID0gVE1VdGlscy51bndyYXA/LihuZXdWYWwpID8/IG5ld1ZhbDtcbiAgICAgICAgICAgICAgICBpZiAodiAmJiBRdW90ZU5vU3Rhc2gpIHtcbiAgICAgICAgICAgICAgICAgICAgUXVvdGVOb1N0YXNoLnNldChTdHJpbmcodikudHJpbSgpKTtcbiAgICAgICAgICAgICAgICAgICAgZGxvZygnUVQxMDogdXBkYXRlZCBRdW90ZU5vIFx1MjE5MicsIHYpO1xuICAgICAgICAgICAgICAgIH1cbiAgICAgICAgICAgIH0pO1xuXG5cbiAgICAgICAgICAgIC8vIHdhdGNoIEN1c3RvbWVyTm8gY2hhbmdlc1xuICAgICAgICAgICAgbGV0IGxhc3RDdXN0b21lck5vID0gbnVsbDtcbiAgICAgICAgICAgIGRpc3Bvc2VXYXRjaGVyID0gVE1VdGlscy53YXRjaEJ5U2VsZWN0b3Ioe1xuICAgICAgICAgICAgICAgIHNlbGVjdG9yOiBDRkcuQU5DSE9SLFxuICAgICAgICAgICAgICAgIGluaXRpYWw6IHRydWUsICAgICAgICAgICAgLy8gZmlyZSBvbmNlIG9uIGluaXRcbiAgICAgICAgICAgICAgICBmaXJlT246ICdibHVyJywgICAgICAgICAgIC8vIHRoZW4gb24gYmx1ciAodHdlYWsgdG8gdGFzdGUpXG4gICAgICAgICAgICAgICAgc2V0dGxlTXM6IDM1MCxcbiAgICAgICAgICAgICAgICBsb2dnZXI6IElTX1RFU1RfRU5WID8gTCA6IG51bGwsXG4gICAgICAgICAgICAgICAgb25DaGFuZ2U6ICgpID0+IHtcbiAgICAgICAgICAgICAgICAgICAgaWYgKERFViAmJiBnYXRlICYmICFnYXRlLmlzU3RhcnRlZCgpKSB7XG4gICAgICAgICAgICAgICAgICAgICAgICBkbG9nKGAke0NGRy5OQU1FfV0gY2hhbmdlIGlnbm9yZWQgdW50aWwgZmlyc3QgdXNlciBlZGl0YCk7XG4gICAgICAgICAgICAgICAgICAgICAgICByZXR1cm47XG4gICAgICAgICAgICAgICAgICAgIH1cblxuICAgICAgICAgICAgICAgICAgICBjb25zdCBjdXN0b21lck5vID0gVE1VdGlscy5nZXRPYnNWYWx1ZSh2aWV3TW9kZWwsIFwiQ3VzdG9tZXJOb1wiLCB7IGZpcnN0OiB0cnVlLCB0cmltOiB0cnVlIH0pO1xuXG4gICAgICAgICAgICAgICAgICAgIGlmICghY3VzdG9tZXJObyB8fCBjdXN0b21lck5vID09PSBsYXN0Q3VzdG9tZXJObykgcmV0dXJuO1xuXG4gICAgICAgICAgICAgICAgICAgIGxhc3RDdXN0b21lck5vID0gY3VzdG9tZXJObztcbiAgICAgICAgICAgICAgICAgICAgZGxvZyhgJHtDRkcuTkFNRX06IEN1c3RvbWVyTm8gXHUyMTkyYCwgY3VzdG9tZXJObyk7XG4gICAgICAgICAgICAgICAgICAgIGFwcGx5Q2F0YWxvZ0ZvcihjdXN0b21lck5vLCB2aWV3TW9kZWwpO1xuICAgICAgICAgICAgICAgIH1cbiAgICAgICAgICAgIH0pO1xuXG4gICAgICAgIH0gY2F0Y2ggKGUpIHtcbiAgICAgICAgICAgIGJvb3RlZCA9IGZhbHNlO1xuICAgICAgICAgICAgZGVycm9yKGAke0NGRy5OQU1FfSBpbml0IGZhaWxlZDpgLCBlKTtcbiAgICAgICAgfSBmaW5hbGx5IHtcbiAgICAgICAgICAgIGJvb3RpbmcgPSBmYWxzZTtcbiAgICAgICAgfVxuICAgIH1cblxuICAgIGFzeW5jIGZ1bmN0aW9uIGFwcGx5Q2F0YWxvZ0ZvcihjdXN0b21lck5vLCB2bSkge1xuICAgICAgICBpZiAoIWN1c3RvbWVyTm8pIHJldHVybjtcblxuICAgICAgICB0cnkge1xuICAgICAgICAgICAgLy8gMSkgQ3VzdG9tZXIgXHUyMTkyIENhdGFsb2dLZXlcbiAgICAgICAgICAgIGNvbnN0IFtyb3cxXSA9IGF3YWl0IHdpdGhGcmVzaEF1dGgoKCkgPT4gVE1VdGlscy5kc1Jvd3MoMzE5LCB7IEN1c3RvbWVyX05vOiBjdXN0b21lck5vIH0pKTtcbiAgICAgICAgICAgIGNvbnN0IGNhdGFsb2dLZXkgPSByb3cxPy5DYXRhbG9nX0tleSB8fCAwO1xuICAgICAgICAgICAgaWYgKCFjYXRhbG9nS2V5KSB7XG4gICAgICAgICAgICAgICAgVE1VdGlscy50b2FzdD8uKGBcdTI2QTBcdUZFMEYgTm8gY2F0YWxvZyBmb3IgJHtjdXN0b21lck5vfWAsICd3YXJuJyk7XG4gICAgICAgICAgICAgICAgcmV0dXJuO1xuICAgICAgICAgICAgfVxuXG4gICAgICAgICAgICAvLyAyKSBDYXRhbG9nS2V5IFx1MjE5MiBDYXRhbG9nQ29kZVxuICAgICAgICAgICAgY29uc3Qgcm93czIgPSBhd2FpdCB3aXRoRnJlc2hBdXRoKCgpID0+IFRNVXRpbHMuZHNSb3dzKDIyNjk2LCB7IENhdGFsb2dfS2V5OiBjYXRhbG9nS2V5IH0pKTtcbiAgICAgICAgICAgIGNvbnN0IGNhdGFsb2dDb2RlID0gcm93czIubWFwKHIgPT4gci5DYXRhbG9nX0NvZGUpLmZpbmQoQm9vbGVhbikgfHwgJyc7XG5cbiAgICAgICAgICAgIC8vIDMpIFdyaXRlIGJhY2sgKEtPIG9yIGFycmF5cylcbiAgICAgICAgICAgIFRNVXRpbHMuc2V0T2JzVmFsdWUodm0sICdDYXRhbG9nS2V5JywgY2F0YWxvZ0tleSk7XG4gICAgICAgICAgICBUTVV0aWxzLnNldE9ic1ZhbHVlKHZtLCAnQ2F0YWxvZ0NvZGUnLCBjYXRhbG9nQ29kZSk7XG5cbiAgICAgICAgICAgIGlmIChDRkcuVE9BU1RfU1VDQ0VTUykge1xuICAgICAgICAgICAgICAgIFRNVXRpbHMudG9hc3Q/LihcbiAgICAgICAgICAgICAgICAgICAgYFx1MjcwNSBDdXN0b21lcjogJHtjdXN0b21lck5vfVxcbkNhdGFsb2dLZXk6ICR7Y2F0YWxvZ0tleX1cXG5DYXRhbG9nQ29kZTogJHtjYXRhbG9nQ29kZX1gLFxuICAgICAgICAgICAgICAgICAgICAnc3VjY2VzcydcbiAgICAgICAgICAgICAgICApO1xuICAgICAgICAgICAgfVxuICAgICAgICAgICAgZGxvZyhgJHtDRkcuTkFNRX0gZG9uZWAsIHsgY3VzdG9tZXJObywgY2F0YWxvZ0tleSwgY2F0YWxvZ0NvZGUgfSk7XG4gICAgICAgIH0gY2F0Y2ggKGVycikge1xuICAgICAgICAgICAgVE1VdGlscy50b2FzdD8uKGBcdTI3NEMgTG9va3VwIGZhaWxlZDogJHtlcnI/Lm1lc3NhZ2UgfHwgZXJyfWAsICdlcnJvcicpO1xuICAgICAgICAgICAgZGVycm9yKGVycik7XG4gICAgICAgIH1cbiAgICB9XG5cbiAgICAvLyBSZWFjdCB0byBTUEEgbmF2aWdhdGlvblxuICAgIHVuc3Vic2NyaWJlVXJsID0gVE1VdGlscy5vblVybENoYW5nZT8uKCgpID0+IHtcbiAgICAgICAgaWYgKCFUTVV0aWxzLm1hdGNoUm91dGU/LihDRkcuUk9VVEVTKSkge1xuICAgICAgICAgICAgLy8gbGVhdmluZyB3aXphcmQgXHUyMTkyIGNsZWFuIHVwXG4gICAgICAgICAgICB0cnkgeyBkaXNwb3NlV2F0Y2hlcj8uKCk7IH0gY2F0Y2ggeyAvKm5vb3AqLyB9XG4gICAgICAgICAgICBkaXNwb3NlV2F0Y2hlciA9IG51bGw7XG4gICAgICAgICAgICBnYXRlID0gbnVsbDtcbiAgICAgICAgICAgIGJvb3RlZCA9IGZhbHNlO1xuICAgICAgICAgICAgYm9vdGluZyA9IGZhbHNlO1xuICAgICAgICAgICAgcmV0dXJuO1xuICAgICAgICB9XG4gICAgICAgIC8vIHN0aWxsIGluIHdpemFyZCBcdTIwMTQgYXR0ZW1wdCBhIGJvb3QgKGd1YXJkZWQpXG4gICAgICAgIHNldFRpbWVvdXQobWF5YmVCb290LCAwKTtcbiAgICB9KTtcblxuICAgIC8vIGtpY2sgb25jZVxuICAgIHNldFRpbWVvdXQobWF5YmVCb290LCAwKTtcblxufSkoKTtcbiJdLAogICJtYXBwaW5ncyI6ICI7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7OztBQUVBLE1BQU0sTUFBTyxPQUNQLE9BQ0EsQ0FBQyxFQUFFLE9BQU8sZUFBZSxlQUFlLFdBQVc7QUFFekQsR0FBQyxXQUFZO0FBQ1Q7QUFHQSxVQUFNLE1BQU07QUFBQSxNQUNSLE1BQU07QUFBQSxNQUNOLFFBQVEsQ0FBQyxzQ0FBc0M7QUFBQSxNQUMvQyxRQUFRO0FBQUEsTUFDUixnQkFBZ0I7QUFBQTtBQUFBLE1BQ2hCLGVBQWU7QUFBQTtBQUFBLElBQ25CO0FBR0EsVUFBTSxjQUFjLHdCQUF3QixLQUFLLFNBQVMsUUFBUTtBQUNsRSxZQUFRLFdBQVcs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

@@ -5,14 +5,19 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
 
 if (__BUILD_DEV__) {
     unsafeWindow.QTV_DEBUG = {
-        getValue: key => GM_getValue(key),
-        setValue: (key, val) => GM_setValue(key, val),
         settings: () => ({
             enabled: GM_getValue('qtv.enabled'),
+            autoManageLtPartNoOnQuote: GM_getValue('qtv.autoManageLtPartNoOnQuote'),
+            minUnitPrice: GM_getValue('qtv.minUnitPrice'),
             maxUnitPrice: GM_getValue('qtv.maxUnitPrice'),
-        })
+            blockNextUntilValid: GM_getValue('qtv.blockNextUntilValid'),
+            highlightFailures: GM_getValue('qtv.highlightFailures')
+        }),
+        getValue: key => GM_getValue(key),
+        setValue: (key, val) => GM_setValue(key, val)
     };
 }
+
 
 
 // Ensure the settings UI loads (gear button, storage API)

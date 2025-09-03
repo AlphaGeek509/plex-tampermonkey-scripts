@@ -32,8 +32,7 @@
 		<None Include=".gitattributes" />
 		<None Include=".gitignore" />
 		<None Include="README.md" Condition="Exists('README.md')" />
-		<None Include="tm-scripts\banners\QTV.prod.header.js" />
-		<None Include="tm-scripts\banners\QTV.dev.header.js" />
+		<None Include="tm-scripts\banners\QT05.dev.header.js" />
 		<None Include="tm-scripts\banners\QT10.dev.header.js" />
 		<None Include="tm-scripts\banners\QT20.dev.header.js" />
 		<None Include="tm-scripts\banners\QT20.prod.header.js" />
@@ -44,10 +43,12 @@
 
 		<!-- Package config and banners -->
 		<None Include="tm-scripts\package.json" />
+		<None Include="tm-scripts\src\quote-tracking\quoteNo-stash.js" />
 		<None Include="tm-scripts\src\quote-tracking\CustomerCatalogGet\index.js" />
 		<None Include="tm-scripts\src\quote-tracking\PartCatalogPricingGet\index.js" />
 		<None Include="tm-scripts\src\quote-tracking\PartStockLevelGet\index.js" />
 		<None Include="tm-scripts\src\quote-tracking\attachmentsGet\index.js" />
+		<None Include="tm-scripts\src\quote-tracking\validation\rules\autoManageLtPartNoOnQuote.js" />
 		<None Include="tm-scripts\src\quote-tracking\validation\rules\index.js" />
 		<None Include="tm-scripts\src\quote-tracking\validation\rules\maxUnitPrice.js" />
 		<None Include="tm-scripts\src\quote-tracking\validation\qtv.entry.js" />
@@ -55,9 +56,10 @@
 		<None Include="tm-scripts\src\quote-tracking\validation\highlighter.js" />
 		<None Include="tm-scripts\src\quote-tracking\validation\engine.js" />
 		<None Include="tm-scripts\src\quote-tracking\validation\index.js" />
+		<None Include="tm-scripts\src\shared\lt-plex-auth.user.js" />
+		<None Include="tm-scripts\src\shared\lt-plex-tm-utils.user.js" />
 
 		<!-- Source (show for editing); mark as None so .NET doesn’t try to compile them -->
-		<None Include="tm-scripts\src\shared\**\*.js" />
 	</ItemGroup>
 	<ItemGroup>
 	  <Compile Include="Program.fs" />

@@ -88,9 +88,16 @@ const PKG_PATH = path.join(SRC_ROOT, 'package.json');
 // Known module → src/out mapping for emit step
 const MODULES = [
     {
+        id: 'QT05',
+        featureName: 'Quote No Stasher',
+        bannerBase: 'QuoteNoStasher', // optional feature-based banner name support
+        src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'quoteNo-stash.js'),
+        out: path.join(ROOT, 'wwwroot', 'qt05.user.js')
+    },
+    {
         id: 'QT10',
         featureName: 'Customer Catalog Get',
-        bannerBase: 'CustomerCatalogGet', // optional feature-based banner name support
+        bannerBase: 'CustomerCatalogGet', 
         src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'CustomerCatalogGet', 'index.js'),
         out: path.join(ROOT, 'wwwroot', 'qt10.user.js')
     },
@@ -262,48 +269,91 @@ async function emitModule(m, versionStr) {
 }
 
 // Interactive selection (no deps):
-function promptSelectModules(modules) {
-    return new Promise((resolve) => {
-        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-
-        console.log('\nSelect module(s) to process:');
-        modules.forEach((m, i) => {
-            console.log(`  ${i + 1}. ${m.id} — ${m.featureName}`);
-        });
-        console.log('  a. ALL\n');
-        console.log('Tip: enter a single number (e.g., 1) or a comma list (e.g., 1,3).');
-
-        rl.question('Your choice: ', (answer) => {
-            rl.close();
-            const trimmed = (answer || '').trim().toLowerCase();
-            if (!trimmed || trimmed === 'a' || trimmed === 'all') {
-                resolve(modules.map(m => m.id));
-                return;
-            }
-            const picks = trimmed.split(',').map(s => s.trim()).filter(Boolean);
-            const chosen = [];
-            for (const p of picks) {
-                const idx = Number(p);
-                if (!Number.isNaN(idx) && idx >= 1 && idx <= modules.length) {
-                    chosen.push(modules[idx - 1].id);
-                }
-            }
-            resolve(chosen.length ? chosen : []);
-        });
-    });
+// ─────────────────────────────────────────────────────────────────────────────
+// Interactive module picker (validated; supports a/all, comma lists, q/quit)
+// Also supports non-interactive BUILD_MODS env (e.g., "1,3" or "a" or "q")
+// ─────────────────────────────────────────────────────────────────────────────
+function showMenu(modules) {
+    console.log('\nSelect module(s) to process:');
+    modules.forEach((m, i) => console.log(`  ${i + 1}. ${m.id} — ${m.featureName}`));
+    console.log('  a. ALL');
+    console.log('  q. Quit');
+    console.log('\nTip: enter a single number (e.g., 1) or a comma list (e.g., 1,3).');
 }
+
+function parseSelection(input, modules) {
+    const max = modules.length;
+    if (input == null) return { quit: true, ids: [] };
+    const s = String(input).trim().toLowerCase();
+
+    if (s === '' || s === 'q' || s === 'quit' || s === 'exit') return { quit: true, ids: [] };
+    if (s === 'a' || s === 'all') return { quit: false, ids: modules.map(m => m.id) };
+
+    const parts = s.split(',').map(x => x.trim()).filter(Boolean);
+    if (!parts.length) return { quit: false, ids: null };
+
+    const idxs = [];
+    for (const p of parts) {
+        if (!/^\d+$/.test(p)) return { quit: false, ids: null };
+        const n = Number(p);
+        if (n < 1 || n > max) return { quit: false, ids: null };
+        idxs.push(n - 1);
+    }
+    const dedup = [...new Set(idxs)];
+    return { quit: false, ids: dedup.map(i => modules[i].id) };
+}
+
+function askQuestion(rl, prompt) {
+    return new Promise(resolve => rl.question(prompt, resolve));
+}
+
+async function promptSelectModules(modules) {
+    // Non-interactive override
+    if (process.env.BUILD_MODS) {
+        const { quit, ids } = parseSelection(process.env.BUILD_MODS, modules);
+        if (quit) {
+            console.log('👋 Exiting without building.');
+            return null; // caller should stop
+        }
+        if (Array.isArray(ids)) return ids;
+        console.log('⚠️  Invalid BUILD_MODS value. Falling back to interactive prompt.\n');
+    }
+
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    try {
+        for (; ;) {
+            showMenu(modules);
+            const answer = await askQuestion(rl, 'Your choice: ');
+            const { quit, ids } = parseSelection(answer, modules);
+            if (quit) {
+                console.log('👋 Exiting without building.');
+                return null; // caller should stop
+            }
+            if (Array.isArray(ids)) return ids;
+
+            console.log('\n⚠️  Invalid input. Enter like "1" or "1,3" or "a" for all, or "q" to quit.\n');
+        }
+    } finally {
+        rl.close();
+    }
+}
+
 
 // --------------------------- main (modules-only) ---------------------------
 (async () => {
     if (!opts.ids || !opts.ids.length) {
-        // Ask interactively which modules to operate on
         const chosen = await promptSelectModules(MODULES);
+        if (chosen === null) {
+            // User chose to quit (or BUILD_MODS requested quit)
+            process.exit(0);
+        }
         if (!chosen.length) {
             console.error('No modules selected. Exiting.');
             process.exit(1);
         }
         opts.ids = chosen;
     }
+
 
     if (!PKG_PATH || !fs.existsSync(PKG_PATH)) {
         console.error(`❌ package.json not found under ${SRC_ROOT}`);

@@ -12,13 +12,18 @@
     "bump:major": "node ../build-plus.js --major"
   },
   "tmVersions": {
-    "QT10": "3.6.6",
-    "QT20": "3.6.4",
-    "QT30": "3.6.4",
-    "QT35": "3.6.4",
-    "QT50": "2.0.19"
+    "QT05": "1.0.1",
+    "QT10": "3.6.9",
+    "QT20": "3.6.6",
+    "QT30": "3.6.5",
+    "QT35": "3.6.5",
+    "QT50": "2.0.31"
   },
   "tmFiles": {
+    "QT05": [
+      "src/quote-tracking/quoteNo-stash.user.js",
+      "../wwwroot/qt05.user.js"
+    ],
     "QT10": [
       "src/quote-tracking/CustomerCatalogGet/index.js",
       "../wwwroot/qt10.user.js"

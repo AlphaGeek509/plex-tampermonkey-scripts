@@ -67,10 +67,6 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
         return false;
     }
 
-    // ---------- Menus ----------
-    GM_registerMenuCommand?.('QT30 DEV — Diagnostics', () => devToast(`Route: ${location.pathname}`, 'info'));
-    GM_registerMenuCommand?.('QT30 DEV — Reset Settings', () => { saveSettings({ ...CONFIG.defaults }); devToast('QT30 settings reset', 'success'); });
-
     // ---------- Inject UI ----------
     const stopObserve = TMUtils.observeInsertMany?.('#QuoteWizardSharedActionBar', injectPricingControls)
         || TMUtils.observeInsert?.('#QuoteWizardSharedActionBar', injectPricingControls);

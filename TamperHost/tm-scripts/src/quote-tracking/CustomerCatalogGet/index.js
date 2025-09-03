@@ -94,6 +94,26 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             });
             if (!controller || !viewModel) { booted = false; booting = false; return; }
 
+            // no import needed; helper is on window
+            const QuoteNoStash = window.lt?.QT?.QuoteNoStash;
+
+            // After waitForModelAsync resolves and you have `viewModel`
+            const initialQuoteNo = TMUtils.getObsValue?.(viewModel, 'QuoteNo', { first: true, trim: true });
+            if (initialQuoteNo && QuoteNoStash) {
+                QuoteNoStash.set(initialQuoteNo);
+                dlog('QT10: stashed QuoteNo →', initialQuoteNo);
+            }
+
+            // Optional: keep it fresh if QuoteNo can change mid-wizard
+            TMUtils.watchKO?.(viewModel, 'QuoteNo', (newVal) => {
+                const v = TMUtils.unwrap?.(newVal) ?? newVal;
+                if (v && QuoteNoStash) {
+                    QuoteNoStash.set(String(v).trim());
+                    dlog('QT10: updated QuoteNo →', v);
+                }
+            });
+
+
             // watch CustomerNo changes
             let lastCustomerNo = null;
             disposeWatcher = TMUtils.watchBySelector({

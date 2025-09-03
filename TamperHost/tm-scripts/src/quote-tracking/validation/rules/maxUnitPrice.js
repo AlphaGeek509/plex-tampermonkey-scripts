@@ -16,29 +16,6 @@ export default function maxUnitPrice(ctx, settings, utils) {
 
 
     for (const [qp, group] of ctx.groupsByQuotePart.entries()) {
-        if (__BUILD_DEV__) {
-            const preview = [];
-            for (const [qp2, grp] of ctx.groupsByQuotePart.entries()) {
-                for (const row of grp) {
-                    const raw =
-                        utils.get(row, 'RvCustomizedUnitPrice') ??
-                        utils.get(row, 'RvUnitPriceCopy') ??
-                        utils.get(row, 'UnitPrice');
-
-                    preview.push({
-                        qp: qp2,
-                        qty: utils.get(row, 'Quantity'),
-                        unitPrice_raw: raw,
-                        unitPrice_num: Number(String(raw ?? '').replace(/[^\d.-]/g, '')),
-                        partNo: utils.get(row, 'CustomerPartNo'),
-                        desc: utils.get(row, 'Description')
-                    });
-                }
-            }
-            console.table(preview);
-        }
-
-
         for (const r of group) {
             const qty = utils.get(r, 'Quantity') ?? '?';
 

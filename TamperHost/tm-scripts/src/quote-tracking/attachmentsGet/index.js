@@ -33,14 +33,6 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
     const QT30_BTN_ID = 'lt-apply-catalog-pricing';
     const QT30_BTN_ID_LEGACY = 'lt-catalog-pricing-button';
 
-    // ---------- Dev menu ----------
-    if (typeof GM_registerMenuCommand === 'function') {
-        GM_registerMenuCommand('🔄 QT35: Refresh now', () => {
-            const li = document.getElementById(LABEL_LI_ID);
-            if (li) refreshBadge(li, { forceToast: true, ignoreVisibility: true });
-        });
-    }
-
     // ---------- Persistent injection ----------
     const injectOnce = (ul) => injectBadge(ul);
     const stopObserve =
