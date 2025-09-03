@@ -114,6 +114,13 @@ const MODULES = [
         bannerBase: 'QuoteAttachmentsGet',
         src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'QuoteAttachmentsGet', 'index.js'),
         out: path.join(ROOT, 'wwwroot', 'qt35.user.js')
+    },
+    {
+        id: 'QT50',
+        featureName: 'Quote Validation',
+        bannerBase: 'QuoteValidation',
+        src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'QuoteValidation', 'index.js'),
+        out: path.join(ROOT, 'wwwroot', 'qt50.user.js')
     }
 ];
 

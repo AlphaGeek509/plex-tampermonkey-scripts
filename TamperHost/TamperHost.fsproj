@@ -26,13 +26,23 @@
 		<None Include=".gitattributes" />
 		<None Include=".gitignore" />
 		<None Include="README.md" Condition="Exists('README.md')" />
+		<None Include="tm-scripts\banners\QT50.dev.header.js" />
+		<None Include="tm-scripts\banners\QT10.dev.header.js" />
+		<None Include="tm-scripts\banners\QT20.dev.header.js" />
+		<None Include="tm-scripts\banners\QT20.prod.header.js" />
+		<None Include="tm-scripts\banners\QT30.dev.header.js" />
+		<None Include="tm-scripts\banners\QT30.prod.header.js" />
+		<None Include="tm-scripts\banners\QT35.dev.header.js" />
 
 		<!-- Package config and banners -->
 		<None Include="tm-scripts\package.json" />
-		<None Include="tm-scripts\banners\*.header.js" />
+		<None Include="tm-scripts\src\quote-tracking\CustomerCatalogGet\index.js" />
+		<None Include="tm-scripts\src\quote-tracking\PartCatalogPricingGet\index.js" />
+		<None Include="tm-scripts\src\quote-tracking\PartStockLevelGet\index.js" />
+		<None Include="tm-scripts\src\quote-tracking\QuoteAttachmentsGet\index.js" />
+		<None Include="tm-scripts\src\quote-tracking\QuoteValidation\index.js" />
 
 		<!-- Source (show for editing); mark as None so .NET doesn’t try to compile them -->
-		<None Include="tm-scripts\src\quote-tracking\**\*.js" />
 		<None Include="tm-scripts\src\shared\**\*.js" />
 	</ItemGroup>
 	<ItemGroup>

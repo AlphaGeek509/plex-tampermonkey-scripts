@@ -1,4 +1,4 @@
-// tm-tdd/src/qt10/main.js
+// tm-scripts/src/qt10/index.js
 /* Build-time dev flag (esbuild sets __BUILD_DEV__), with a runtime fallback for tests */
 const DEV = (typeof __BUILD_DEV__ !== 'undefined')
     ? __BUILD_DEV__

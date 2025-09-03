@@ -1,4 +1,7 @@
-// tm-tdd/src/qt35/main.js
+// tm-scripts/src/qt35/index.js
+const DEV = (typeof __BUILD_DEV__ !== 'undefined')
+    ? __BUILD_DEV__
+    : !!(typeof globalThis !== 'undefined' && globalThis.__TM_DEV__);
 
 (async function () {
     'use strict';

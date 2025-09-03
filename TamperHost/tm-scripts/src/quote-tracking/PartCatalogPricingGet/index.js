@@ -1,5 +1,7 @@
-// tm-tdd/src/qt30/main.js
-const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : !!(globalThis && globalThis.__TM_DEV__);
+// tm-scripts/src/qt30/index.js
+const DEV = (typeof __BUILD_DEV__ !== 'undefined')
+    ? __BUILD_DEV__
+    : !!(typeof globalThis !== 'undefined' && globalThis.__TM_DEV__);
 
 (() => {
     // ---------- Config ----------

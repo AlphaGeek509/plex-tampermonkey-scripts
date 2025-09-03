@@ -9,8 +9,7 @@
     "build": "node ../build-plus.js --patch --emit --release",
     "bump:patch": "node ../build-plus.js --patch",
     "bump:minor": "node ../build-plus.js --minor",
-    "bump:major": "node ../build-plus.js --major",
-    "test": "vitest"
+    "bump:major": "node ../build-plus.js --major"
   },
   "devDependencies": {
     "esbuild": "^0.25.9"
@@ -19,7 +18,8 @@
     "QT10": "3.6.5",
     "QT20": "3.6.3",
     "QT30": "3.6.3",
-    "QT35": "3.6.3"
+    "QT35": "3.6.3",
+    "QT50": "2.0.2"
   },
   "tmFiles": {
     "QT10": [
@@ -37,6 +37,10 @@
     "QT35": [
       "src/quote-tracking/QuoteAttachmentsGet/index.js",
       "../wwwroot/qt35.user.js"
+    ],
+    "QT50": [
+      "src/quote-tracking/QuoteValidation/index.js",
+      "../wwwroot/qt50.user.js"
     ]
   }
 }
