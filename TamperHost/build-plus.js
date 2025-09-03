@@ -111,15 +111,15 @@ const MODULES = [
     {
         id: 'QT35',
         featureName: 'Quote Attachments Get',
-        bannerBase: 'QuoteAttachmentsGet',
-        src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'QuoteAttachmentsGet', 'index.js'),
+        bannerBase: 'attachmentsGet',
+        src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'attachmentsGet', 'index.js'),
         out: path.join(ROOT, 'wwwroot', 'qt35.user.js')
     },
     {
         id: 'QT50',
         featureName: 'Quote Validation',
-        bannerBase: 'QuoteValidation',
-        src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'QuoteValidation', 'index.js'),
+        bannerBase: 'validation',
+        src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'validation', 'qtv.entry.js'),
         out: path.join(ROOT, 'wwwroot', 'qt50.user.js')
     }
 ];
@@ -226,7 +226,12 @@ async function emitModule(m, versionStr) {
             sourcemap: opts.release ? false : 'inline',
             minify: !!opts.release,
             target: ['chrome110', 'edge110', 'firefox110'],
-            legalComments: 'none'
+            legalComments: 'none', 
+            // Ensure single-file, TM-safe output:
+            format: 'iife',
+            platform: 'browser',
+            splitting: false,
+            define: { __BUILD_DEV__: String(!opts.release) }
         };
 
         if (opts.watch) {

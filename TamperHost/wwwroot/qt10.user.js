@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name        QT10_DEV
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     3.6.5
+// @version     3.6.6
 // @description DEV-only build; includes user-start gate
 // @match       https://*.plex.com/*
 // @match       https://*.on.plex.com/*

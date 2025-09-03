@@ -7,11 +7,17 @@
 	<!-- Clean out any stale includes first -->
 	<ItemGroup>
 		<!-- Remove any old 'common' or legacy patterns that leaked in -->
+		<Content Remove="tm-scripts\src\qtv\**" />
 		<Content Remove="tm-tdd\**" />
+		<Content Remove="wwwroot\dist\**" />
+		<Content Remove="wwwroot\zOldFiles\**" />
 		<None Remove="tm-tdd\**" />
 		<TypeScriptCompile Remove="tm-tdd\**" />
 		<Content Remove="tm-scripts\src\common\**" />
 		<EmbeddedResource Remove="tm-scripts\src\common\**" />
+		<EmbeddedResource Remove="tm-scripts\src\qtv\**" />
+		<EmbeddedResource Remove="wwwroot\dist\**" />
+		<EmbeddedResource Remove="wwwroot\zOldFiles\**" />
 		<!-- Never include node_modules in the project -->
 		<None Remove="**\node_modules\**" />
 		<Content Remove="**\node_modules\**" />
@@ -26,21 +32,29 @@
 		<None Include=".gitattributes" />
 		<None Include=".gitignore" />
 		<None Include="README.md" Condition="Exists('README.md')" />
-		<None Include="tm-scripts\banners\QT50.dev.header.js" />
+		<None Include="tm-scripts\banners\QTV.prod.header.js" />
+		<None Include="tm-scripts\banners\QTV.dev.header.js" />
 		<None Include="tm-scripts\banners\QT10.dev.header.js" />
 		<None Include="tm-scripts\banners\QT20.dev.header.js" />
 		<None Include="tm-scripts\banners\QT20.prod.header.js" />
 		<None Include="tm-scripts\banners\QT30.dev.header.js" />
 		<None Include="tm-scripts\banners\QT30.prod.header.js" />
 		<None Include="tm-scripts\banners\QT35.dev.header.js" />
+		<None Include="tm-scripts\banners\QT50.dev.header.js" />
 
 		<!-- Package config and banners -->
 		<None Include="tm-scripts\package.json" />
 		<None Include="tm-scripts\src\quote-tracking\CustomerCatalogGet\index.js" />
 		<None Include="tm-scripts\src\quote-tracking\PartCatalogPricingGet\index.js" />
 		<None Include="tm-scripts\src\quote-tracking\PartStockLevelGet\index.js" />
-		<None Include="tm-scripts\src\quote-tracking\QuoteAttachmentsGet\index.js" />
-		<None Include="tm-scripts\src\quote-tracking\QuoteValidation\index.js" />
+		<None Include="tm-scripts\src\quote-tracking\attachmentsGet\index.js" />
+		<None Include="tm-scripts\src\quote-tracking\validation\rules\index.js" />
+		<None Include="tm-scripts\src\quote-tracking\validation\rules\maxUnitPrice.js" />
+		<None Include="tm-scripts\src\quote-tracking\validation\qtv.entry.js" />
+		<None Include="tm-scripts\src\quote-tracking\validation\injectButton.js" />
+		<None Include="tm-scripts\src\quote-tracking\validation\highlighter.js" />
+		<None Include="tm-scripts\src\quote-tracking\validation\engine.js" />
+		<None Include="tm-scripts\src\quote-tracking\validation\index.js" />
 
 		<!-- Source (show for editing); mark as None so .NET doesn’t try to compile them -->
 		<None Include="tm-scripts\src\shared\**\*.js" />
