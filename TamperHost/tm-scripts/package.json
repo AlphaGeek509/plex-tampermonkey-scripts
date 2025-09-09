@@ -12,32 +12,27 @@
     "bump:major": "node ../build-plus.js --major"
   },
   "tmVersions": {
-    "QT05": "1.0.1",
-    "QT10": "3.6.9",
+    "QT10": "3.6.28",
     "QT20": "3.6.6",
-    "QT30": "3.6.5",
-    "QT35": "3.6.5",
-    "QT50": "2.0.31"
+    "QT30": "3.6.7",
+    "QT35": "3.6.43",
+    "QT50": "2.0.37"
   },
   "tmFiles": {
-    "QT05": [
-      "src/quote-tracking/quoteNo-stash.user.js",
-      "../wwwroot/qt05.user.js"
-    ],
     "QT10": [
-      "src/quote-tracking/CustomerCatalogGet/index.js",
+      "src/quote-tracking/qt10-customerCatalogGet/qt10.index.js",
       "../wwwroot/qt10.user.js"
     ],
     "QT20": [
-      "src/quote-tracking/PartStockLevelGet/index.js",
+      "src/quote-tracking/qt20-partStockLevelGet/qt20.index.js",
       "../wwwroot/qt20.user.js"
     ],
     "QT30": [
-      "src/quote-tracking/PartCatalogPricingGet/index.js",
+      "src/quote-tracking/qt30-catalogPricingApply/qt30.index.js",
       "../wwwroot/qt30.user.js"
     ],
     "QT35": [
-      "src/quote-tracking/attachmentsGet/index.js",
+      "src/quote-tracking/qt35-attachmentsGet/qt35.index.js",
       "../wwwroot/qt35.user.js"
     ],
     "QT50": [

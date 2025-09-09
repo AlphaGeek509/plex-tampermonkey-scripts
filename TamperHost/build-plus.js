@@ -88,38 +88,31 @@ const PKG_PATH = path.join(SRC_ROOT, 'package.json');
 // Known module → src/out mapping for emit step
 const MODULES = [
     {
-        id: 'QT05',
-        featureName: 'Quote No Stasher',
-        bannerBase: 'QuoteNoStasher', // optional feature-based banner name support
-        src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'quoteNo-stash.js'),
-        out: path.join(ROOT, 'wwwroot', 'qt05.user.js')
-    },
-    {
         id: 'QT10',
         featureName: 'Customer Catalog Get',
-        bannerBase: 'CustomerCatalogGet', 
-        src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'CustomerCatalogGet', 'index.js'),
+        bannerBase: 'qt10-customerCatalogGet', 
+        src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'qt10-customerCatalogGet', 'qt10.index.js'),
         out: path.join(ROOT, 'wwwroot', 'qt10.user.js')
     },
     {
         id: 'QT20',
         featureName: 'Part Stock Level Get',
         bannerBase: 'PartStockLevelGet',
-        src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'PartStockLevelGet', 'index.js'),
+        src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'qt20-partStockLevelGet', 'qt20.index.js'),
         out: path.join(ROOT, 'wwwroot', 'qt20.user.js')
     },
     {
         id: 'QT30',
         featureName: 'Part Catalog Pricing Get',
-        bannerBase: 'PartCatalogPricingGet',
-        src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'PartCatalogPricingGet', 'index.js'),
+        bannerBase: 'qt30-catalogPricing',
+        src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'qt30-catalogPricingApply', 'qt30.index.js'),
         out: path.join(ROOT, 'wwwroot', 'qt30.user.js')
     },
     {
         id: 'QT35',
         featureName: 'Quote Attachments Get',
-        bannerBase: 'attachmentsGet',
-        src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'attachmentsGet', 'index.js'),
+        bannerBase: 'qt35-attachments',
+        src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'qt35-attachmentsGet', 'qt35.index.js'),
         out: path.join(ROOT, 'wwwroot', 'qt35.user.js')
     },
     {

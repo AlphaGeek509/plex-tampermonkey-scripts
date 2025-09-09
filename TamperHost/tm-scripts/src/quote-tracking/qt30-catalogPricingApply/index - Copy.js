@@ -25,6 +25,34 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
     const ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
     if (!TMUtils.matchRoute?.(ROUTES)) { log('QT30: wrong route, skipping'); return; }
 
+
+    // ===== QuoteRepo via lt-data-core (scoped per tab + quote) =====
+    const hasDataCore = !!(lt?.core?.data?.createDataContext && lt?.core?.data?.RepoBase?.value);
+
+    class QuoteRepo extends (hasDataCore ? lt.core.data.RepoBase.value : class { }) {
+        constructor(base) { super({ ...base, entity: 'quote' }); }
+        async get() { return hasDataCore ? this.read('current') : null; }
+        async set(m) { return hasDataCore ? this.write('current', m) : m; }
+        async update(patch) {
+            if (!hasDataCore) return patch;
+            const prev = (await this.get()) ?? {};
+            const next = { ...prev, ...patch, Updated_At: Date.now() };
+            return this.write('current', next);
+        }
+    }
+
+    let ctx = null, quoteRepo = null, lastScope = null;
+    async function ensureRepoForQuote(qk) {
+        if (!hasDataCore) return null;
+        if (!ctx || lastScope !== qk) {
+            ctx = lt.core.data.createDataContext({ ns: 'QT', scopeKey: String(qk), persist: 'session', ttlMs: 3000 });
+            quoteRepo = ctx.makeRepo(QuoteRepo);
+            lastScope = qk;
+        }
+        return quoteRepo;
+    }
+
+
     // ---------- Settings (GM tolerant) ----------
     const loadSettings = () => {
         try {
@@ -53,19 +81,21 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
     }
 
     // ---------- Auth helpers ----------
-    async function withFreshAuth(run) {
-        try { return await run(); }
-        catch (e) {
-            const status = e?.status || (/\b(\d{3})\b/.exec(e?.message || '') || [])[1];
-            if (+status === 419) { await TMUtils.getApiKey({ force: true }); return await run(); }
-            throw e;
-        }
-    }
     async function ensureAuthOrToast() {
-        try { const key = await TMUtils.getApiKey({ wait: true, timeoutMs: 3000, pollMs: 150 }); if (key) return true; } catch { }
+        try { const key = await lt.core.auth.getKey(); if (key) return true; } catch { }
         devToast('Sign-in required. Please log in, then click again.', 'warn', 5000);
         return false;
     }
+
+    async function withFreshAuth(run) {
+        try { return await run(); }
+        catch (e) {
+            const status = +(e?.status || (/\b(\d{3})\b/.exec(e?.message || '') || [])[1] || 0);
+            if (status === 419) { try { await TMUtils.getApiKey?.({ force: true }); } catch { } return await run(); }
+            throw e;
+        }
+    }
+
 
     // ---------- Inject UI ----------
     const stopObserve = TMUtils.observeInsertMany?.('#QuoteWizardSharedActionBar', injectPricingControls)
@@ -140,10 +170,19 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             const quoteKey = TMUtils.getObsValue(raw[0], 'QuoteKey', { first: true, trim: true });
             if (!quoteKey) throw new Error('Quote_Key missing');
 
-            // 1) Catalog key
-            devToast('⏳ Fetching Catalog Key…', 'info');
-            const rows1 = await withFreshAuth(() => TMUtils.dsRows(CONFIG.DS_CatalogKeyByQuoteKey, { Quote_Key: quoteKey }));
-            const catalogKey = rows1?.[0]?.Catalog_Key;
+            // 1) Catalog key (repo-cached)
+            await ensureRepoForQuote(quoteKey);
+            let catalogKey = (await quoteRepo?.get())?.Catalog_Key;
+
+            if (!catalogKey) {
+                devToast('⏳ Fetching Catalog Key…', 'info');
+                const rows1 = await withFreshAuth(() =>
+                    lt.core.plex.dsRows(CONFIG.DS_CatalogKeyByQuoteKey, { Quote_Key: quoteKey })
+                );
+                catalogKey = rows1?.[0]?.Catalog_Key || null;
+                if (catalogKey) await quoteRepo?.update({ Quote_Key: quoteKey, Catalog_Key: catalogKey });
+            }
+
             if (!catalogKey) { devToast(oneOf(NO_CATALOG_MESSAGES), 'warn', 5000); return; }
             devToast(`✅ Catalog Key: ${catalogKey}`, 'success', 1800);
 
@@ -155,7 +194,9 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             devToast(`⏳ Loading ${partNos.length} part(s)…`, 'info');
             const priceMap = {};
             await Promise.all(partNos.map(async (p) => {
-                const rows = await withFreshAuth(() => TMUtils.dsRows(CONFIG.DS_BreakpointsByPart, { Catalog_Key: catalogKey, Catalog_Part_No: p })) || [];
+                const rows = await withFreshAuth(() =>
+                    lt.core.plex.dsRows(CONFIG.DS_BreakpointsByPart, { Catalog_Key: catalogKey, Catalog_Part_No: p })
+                ) || [];
                 priceMap[p] = rows
                     .filter(r => r.Catalog_Part_No === p && new Date(r.Effective_Date) <= now && now <= new Date(r.Expiration_Date))
                     .sort((a, b) => a.Breakpoint_Quantity - b.Breakpoint_Quantity);
@@ -180,12 +221,11 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
 
                     if (qk && qpk && qpr) {
                         try {
-                            const res = await fetch(`${base}/SalesAndCRM/QuotePart/DeleteQuotePrice`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ quoteKey: qk, quotePartKey: qpk, quotePriceKey: qpr })
+                            const res = await lt.core.http.post('/SalesAndCRM/QuotePart/DeleteQuotePrice', {
+                                quoteKey: qk, quotePartKey: qpk, quotePriceKey: qpr
                             });
-                            devToast(res.ok ? `🗑 Deleted row[${i}]` : `❌ Delete failed row[${i}]`, res.ok ? 'success' : 'error');
+                            const ok = (res?.ok === true) || (res?.status >= 200 && res?.status < 300); // TMUtils.fetchData returns body; fallback if needed
+                            devToast(ok ? `🗑 Deleted row[${i}]` : `❌ Delete failed row[${i}]`, ok ? 'success' : 'error');
                         } catch (e) {
                             devToast(`❌ Delete error row[${i}]`, 'error', 6000); err('QT30 delete error', e);
                         }

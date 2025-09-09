@@ -7,6 +7,8 @@
 // @match        https://*.on.plex.com/*
 // @require      http://localhost:5000/lt-plex-tm-utils.user.js
 // @require      http://localhost:5000/lt-plex-auth.user.js
+// @require      http://localhost:5000/lt-data-core.user.js 
+// @require      http://localhost:5000/lt-core.user.js
 // @grant        GM_registerMenuCommand
 // @grant        GM_getValue
 // @grant        GM_setValue

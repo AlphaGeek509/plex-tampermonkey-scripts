@@ -32,30 +32,43 @@
 		<None Include=".gitattributes" />
 		<None Include=".gitignore" />
 		<None Include="README.md" Condition="Exists('README.md')" />
-		<None Include="tm-scripts\banners\QT05.dev.header.js" />
 		<None Include="tm-scripts\banners\QT10.dev.header.js" />
 		<None Include="tm-scripts\banners\QT20.dev.header.js" />
-		<None Include="tm-scripts\banners\QT20.prod.header.js" />
 		<None Include="tm-scripts\banners\QT30.dev.header.js" />
-		<None Include="tm-scripts\banners\QT30.prod.header.js" />
 		<None Include="tm-scripts\banners\QT35.dev.header.js" />
 		<None Include="tm-scripts\banners\QT50.dev.header.js" />
 
 		<!-- Package config and banners -->
 		<None Include="tm-scripts\package.json" />
-		<None Include="tm-scripts\src\quote-tracking\quoteNo-stash.js" />
-		<None Include="tm-scripts\src\quote-tracking\CustomerCatalogGet\index.js" />
-		<None Include="tm-scripts\src\quote-tracking\PartCatalogPricingGet\index.js" />
-		<None Include="tm-scripts\src\quote-tracking\PartStockLevelGet\index.js" />
-		<None Include="tm-scripts\src\quote-tracking\attachmentsGet\index.js" />
-		<None Include="tm-scripts\src\quote-tracking\validation\rules\autoManageLtPartNoOnQuote.js" />
-		<None Include="tm-scripts\src\quote-tracking\validation\rules\index.js" />
-		<None Include="tm-scripts\src\quote-tracking\validation\rules\maxUnitPrice.js" />
-		<None Include="tm-scripts\src\quote-tracking\validation\qtv.entry.js" />
-		<None Include="tm-scripts\src\quote-tracking\validation\injectButton.js" />
-		<None Include="tm-scripts\src\quote-tracking\validation\highlighter.js" />
-		<None Include="tm-scripts\src\quote-tracking\validation\engine.js" />
-		<None Include="tm-scripts\src\quote-tracking\validation\index.js" />
+		<None Include="tm-scripts\src\domains\quote\quote.entity.js" />
+		<None Include="tm-scripts\src\domains\quote\quote.repo.js" />
+		<None Include="tm-scripts\src\data\core\data-context.js" />
+		<None Include="tm-scripts\src\data\core\repo-base.js" />
+		<None Include="tm-scripts\src\data\core\cache.js" />
+		<None Include="tm-scripts\src\data\core\pubsub.js" />
+		<None Include="tm-scripts\src\data\core\storage\memory.js" />
+		<None Include="tm-scripts\src\data\core\storage\session.js" />
+		<None Include="tm-scripts\src\data\core\storage\local.js" />
+		<None Include="tm-scripts\src\data\core\storage\gm.js" />
+		<None Include="tm-scripts\src\data\core\storage\composite.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt10-customerCatalogGet\qt10.backup.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt10-customerCatalogGet\index - Copy.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt10-customerCatalogGet\qt10.index.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt20-partStockLevelGet\qt20.index.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt30-catalogPricingApply\index - Copy.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt30-catalogPricingApply\qt30.index.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt35-attachmentsGet\qt35.backup.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt35-attachmentsGet\qt35.index.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt50\rules\autoManageLtPartNoOnQuote.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt50\rules\index.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt50\rules\maxUnitPrice.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt50\qtv.entry.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt50\injectButton.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt50\highlighter.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt50\engine.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt50\index.js" />
+		<None Include="tm-scripts\src\shared\keys.js" />
+		<None Include="tm-scripts\src\shared\ids.js" />
 		<None Include="tm-scripts\src\shared\lt-plex-auth.user.js" />
 		<None Include="tm-scripts\src\shared\lt-plex-tm-utils.user.js" />
 
@@ -63,6 +76,9 @@
 	</ItemGroup>
 	<ItemGroup>
 	  <Compile Include="Program.fs" />
+	</ItemGroup>
+	<ItemGroup>
+	  <Folder Include="tm-scripts\src\quote-tracking\attachmentsGet\" />
 	</ItemGroup>
 
 </Project>
