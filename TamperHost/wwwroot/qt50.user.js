@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         QT50_DEV
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      2.0.37
+// @version      2.0.39
 // @description  Gear + settings and a Validate Lines button on Quote Wizard Part Summary.
 // @match        https://*.plex.com/*
 // @match        https://*.on.plex.com/*

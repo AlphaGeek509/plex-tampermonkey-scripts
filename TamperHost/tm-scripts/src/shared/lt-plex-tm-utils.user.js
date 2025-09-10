@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LT › Plex TM Utils
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.6.3
+// @version      3.6.4
 // @description  Shared utilities
 // @match        https://*.on.plex.com/*
 // @match        https://*.plex.com/*
@@ -260,35 +260,87 @@
          * - If the final value is an array and options.first === true, returns first item
          * - options.trim: if true, returns a trimmed string for string/number
          */
-        TMUtils.getObsValue = function getObsValue(vm, path, { first = true, trim = false } = {}) {
-            if (!vm || !path) return undefined;
+        TMUtils.getObsValue = function getObsValue(vmOrEl, pathOrPaths, {
+            first = true,      // if value is an array, return first item
+            trim = false,      // trim string/number to string
+            deep = true,       // deep unwrap (KO + nested)
+            allowPlex = true,  // use plex.data.getObservableOrValue when available
+            coalesceFalsy = false // if false, empty string is treated as "not found" and tries next candidate
+        } = {}) {
+            if (!vmOrEl || !pathOrPaths) return undefined;
 
-            // Walk dotted path without invoking anything yet
-            const valueAtPath = path.split('.').reduce((acc, k) => (acc == null ? acc : acc[k]), vm);
+            const root = (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window);
+            const KO = root.ko;
+            const unwrapOnce = (v) => {
+                try {
+                    if (TMUtils.unwrap) return TMUtils.unwrap(v);
+                    if (KO?.unwrap) return KO.unwrap(v);
+                    return (typeof v === 'function') ? v() : v;
+                } catch { return v; }
+            };
+            const unwrapDeep = (v) => {
+                try {
+                    if (TMUtils.unwrapDeep) return TMUtils.unwrapDeep(v);
+                    if (KO?.unwrap) return KO.unwrap(v);
+                    return (typeof v === 'function') ? v() : v;
+                } catch { return v; }
+            };
+            const isKOFunc = (f) => !!f && typeof f === 'function' &&
+                (KO?.isObservable?.(f) || 'peek' in f || 'subscribe' in f || 'notifySubscribers' in f);
 
-            // Prefer Plex getter if present at the *final* step
-            let v;
-            const plexGet = _plexGetter(vm, path);
-            if (typeof plexGet === 'function') {
-                // KO getter
-                v = plexGet.call(vm);
-            } else if (typeof valueAtPath === 'function') {
-                // KO observable/computed without Plex helper
-                v = valueAtPath.call(vm);
-            } else {
-                v = valueAtPath;
+            // If given a DOM node, resolve KO root VM
+            let vm = vmOrEl;
+            if (vmOrEl && vmOrEl.nodeType === 1) {
+                try {
+                    const ctx = KO?.contextFor?.(vmOrEl);
+                    vm = ctx?.$root?.data ?? ctx?.$root ?? ctx?.$data ?? vmOrEl;
+                } catch { /* ignore */ }
             }
 
-            // Deep unwrap (handles observableArrays, nested obs, etc.)
-            v = TMUtils.unwrapDeep ? TMUtils.unwrapDeep(v) : (KO && KO.unwrap ? KO.unwrap(v) : (typeof v === 'function' ? v() : v));
+            const candidates = Array.isArray(pathOrPaths) ? pathOrPaths : [pathOrPaths];
 
-            // If array-like and caller wants first item, unwrap once more
-            if (first && Array.isArray(v)) v = (v.length ? v[0] : undefined);
-            if (KO && KO.unwrap) v = KO.unwrap(v);
+            const readViaPlex = (p) => {
+                try {
+                    const g = root?.plex?.data?.getObservableOrValue;
+                    if (allowPlex && typeof g === 'function') {
+                        const acc = g(vm, p);               // KO observable/computed OR plain value
+                        return (typeof acc === 'function') ? acc() : acc;
+                    }
+                } catch { /* ignore */ }
+                return undefined;
+            };
 
-            if (trim && (typeof v === 'string' || typeof v === 'number')) return String(v).trim();
-            return v;
+            const readViaPath = (p) => {
+                try {
+                    const segments = String(p).split('.');
+                    let cur = vm;
+                    for (const k of segments) {
+                        cur = (cur == null) ? undefined : cur[k];
+                        if (cur === undefined) break;
+                    }
+                    if (typeof cur === 'function') return isKOFunc(cur) ? cur() : cur; // don't accidentally execute non-KO methods
+                    return cur;
+                } catch {
+                    return undefined;
+                }
+            };
+
+            for (const p of candidates) {
+                let v = readViaPlex(p);
+                if (v === undefined) v = readViaPath(p);
+
+                v = deep ? unwrapDeep(v) : unwrapOnce(v);
+                if (first && Array.isArray(v)) v = v.length ? v[0] : undefined;
+
+                if (trim && (typeof v === 'string' || typeof v === 'number')) v = String(v).trim();
+
+                const hasValue = (v !== undefined && v !== null && (coalesceFalsy || v !== ''));
+                if (hasValue) return v;
+            }
+
+            return undefined;
         };
+
 
         /**
          * Write a value to a Plex KO view-model property.

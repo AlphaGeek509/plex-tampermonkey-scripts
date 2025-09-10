@@ -8,7 +8,7 @@
     const derr = (...a) => console.error('QT35 ✖️', ...a);
 
     const ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
-    if (!(window.TMUtils && window.TMUtils.matchRoute && window.TMUtils.matchRoute(ROUTES))) return;
+    if (!ROUTES.some(rx => rx.test(location.pathname))) return;
 
     const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
     const raf = () => new Promise(r => requestAnimationFrame(r));
@@ -66,119 +66,81 @@
         return m ? Number(m[1]) : null;
     }
 
-    // ===== DataCore (prefer lt.core.data or lt.data; fallback shim) =====
-    const DataCore = (() => {
-        const DC = window.lt?.core?.data ?? window.lt?.data ?? null;
-        if (DC?.createDataContext && (DC?.RepoBase || DC?.RepoBase?.value)) {
-            return {
-                create(ns, scopeKey) {
-                    const ctx = DC.createDataContext({ ns, scopeKey, persist: 'session', ttlMs: 3000 });
-                    try { sessionStorage.setItem('lt.tabId', ctx.tabId); } catch { }
-                    return { makeRepo: ctx.makeRepo, scopeKey, tabId: ctx.tabId };
-                },
-                RepoBase: DC.RepoBase?.value ?? DC.RepoBase
-            };
+    // ===== Repo via lt-data-core flat {header, lines} =====
+    let QT = null;
+    async function waitForDC(timeoutMs = 20000) {
+        const start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+            const LT = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.lt : window.lt);
+            if (LT?.core?.data?.createDataContext) {
+                // if our factory is already installed, we’re done
+                if (LT.core.data.makeFlatScopedRepo) return LT.core.data;
+            }
+            // small sleep
+            await (TMUtils.sleep?.(50) || new Promise(r => setTimeout(r, 50)));
         }
-        // Session-backed shim (structure mirrors lt.core.data)
-        const getTabId = () => {
-            let id = sessionStorage.getItem('lt.tabId');
-            if (!id) { id = (crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`); sessionStorage.setItem('lt.tabId', id); }
-            return id;
-        };
-        class SessionStore { get(k) { const v = sessionStorage.getItem(k); return v ? JSON.parse(v) : null; } set(k, v) { sessionStorage.setItem(k, JSON.stringify(v)); } del(k) { sessionStorage.removeItem(k); } }
-        class Cache { constructor(ttl = 3000) { this.ttl = ttl; this.m = new Map(); } get(k) { const e = this.m.get(k); if (!e) return null; if (Date.now() > e.expires) { this.m.delete(k); return null; } return e.value; } set(k, v) { this.m.set(k, { value: v, expires: Date.now() + this.ttl }); } del(k) { this.m.delete(k); } }
-        class RepoBase {
-            constructor({ ns, entity, scopeKey }) { if (!scopeKey) throw new Error(`${entity} repo requires scopeKey`); Object.assign(this, { ns, entity, scopeKey, tabId: getTabId(), store: new SessionStore(), cache: new Cache(3000) }); }
-            k(id = 'current') { return `lt:${this.ns}:tab:${this.tabId}:scope:${this.scopeKey}:${this.entity}:${id}`; }
-            getCached(id) { return this.cache.get(this.k(id)); }
-            setCached(id, v) { this.cache.set(this.k(id), v); }
-            async read(id) { const k = this.k(id); const c = this.getCached(id); if (c) return c; const v = this.store.get(k); if (v) this.setCached(id, v); return v ?? null; }
-            async write(id, v) { const k = this.k(id); this.store.set(k, v); this.setCached(id, v); return v; }
-            async remove(id) { const k = this.k(id); this.store.del(k); this.cache.del(k); }
+        throw new Error('DataCore not ready');
+    }
+    async function getQT() {
+        if (QT) return QT;
+        const DC = await waitForDC();
+        // lt-data-core will install the factory soon after DC is ready; if still missing, retry once
+        if (!DC.makeFlatScopedRepo) {
+            await (TMUtils.sleep?.(50) || new Promise(r => setTimeout(r, 50)));
         }
-        function create(ns, scopeKey) { const base = { ns, scopeKey }; const makeRepo = (Ctor) => new Ctor(base); return { makeRepo, scopeKey, tabId: getTabId() }; }
-        return { create, RepoBase };
-    })();
-
-    class QuoteRepo extends DataCore.RepoBase {
-        constructor(base) { super({ ...base, entity: 'QuoteHeader' }); }
-        async get() { return await this.read('current'); }
-        async set(v) { return await this.write('current', v); }
-        async clear() { return await this.remove('current'); }
-        async update(patch) { const cur = (await this.get()) || {}; return await this.set({ ...cur, ...patch, Updated_At: Date.now() }); }
+        QT = DC.makeFlatScopedRepo({ ns: 'QT', entity: 'quote', legacyEntity: 'QuoteHeader' });
+        return QT;
     }
 
-    let ctx = null, quoteRepo = null, lastScope = null, refreshInFlight = false;
 
+    let quoteRepo = null, lastScope = null;
     async function ensureRepoForQuote(qk) {
         if (!qk || !Number.isFinite(qk) || qk <= 0) return null;
-        if (!ctx || lastScope !== qk) {
-            ctx = DataCore.create('QT', qk);
-            quoteRepo = ctx.makeRepo(QuoteRepo);
+        if (!quoteRepo || lastScope !== qk) {
+            const { repo } = (await getQT()).use(Number(qk));
+            await repo.ensureFromLegacyIfMissing();
+            quoteRepo = repo;
             lastScope = qk;
         }
         return quoteRepo;
-    }
-
-    // ===== 419 re-auth wrapper =====
-    async function withFreshAuth(run) {
-        try { return await run(); }
-        catch (err) {
-            const s = err?.status || ((/(\b\d{3}\b)/.exec(err?.message || '') || [])[1]);
-            if (+s === 419) { try { await window.lt?.core?.auth?.getKey?.(); } catch { } return await run(); }
-            throw err;
-        }
     }
 
     // ===== Merge QT10 draft → per-quote (once) =====
     async function mergeDraftIntoQuoteOnce(qk) {
         if (!qk || !Number.isFinite(qk) || qk <= 0) return;
 
-        const draftCtx = DataCore.create('QT', 'draft');
-        const draftRepo = draftCtx.makeRepo(QuoteRepo);
-        const draft = await draftRepo.get();
+        const { repo: draftRepo } = (await getQT()).use('draft');
+        const draft = await draftRepo.getHeader?.() || await draftRepo.get(); // tolerate legacy
         if (!draft) return;
 
         await ensureRepoForQuote(qk);
-        const current = (await quoteRepo.get()) || {};
-        const promotedAt = Number(current.Promoted_At || 0);
-        const draftUpdated = Number(draft.Updated_At || 0);
+        const currentHeader = (await quoteRepo.getHeader()) || {};
 
-        // Normalize for compare (avoid number vs string mismatches)
-        const curCust = String(current.Customer_No ?? '');
+        const curCust = String(currentHeader.Customer_No ?? '');
         const newCust = String(draft.Customer_No ?? '');
 
         const needsMerge =
-            (draftUpdated > promotedAt) ||
+            (Number((await draftRepo.get())?.Updated_At || 0) > Number(currentHeader.Promoted_At || 0)) ||
             (curCust !== newCust) ||
-            (current.Catalog_Key !== draft.Catalog_Key) ||
-            (current.Catalog_Code !== draft.Catalog_Code);
+            (currentHeader.Catalog_Key !== draft.Catalog_Key) ||
+            (currentHeader.Catalog_Code !== draft.Catalog_Code);
 
         if (!needsMerge) return;
 
-        const merged = {
-            ...current,
-            Quote_Key: qk,
+        await quoteRepo.patchHeader({
+            Quote_Key: Number(qk),
             Customer_No: draft.Customer_No ?? null,
             Catalog_Key: draft.Catalog_Key ?? null,
             Catalog_Code: draft.Catalog_Code ?? null,
             Promoted_From: 'draft',
             Promoted_At: Date.now(),
-        };
+            // force re-hydration next time
+            Quote_Header_Fetched_At: null
+        });
 
-        await quoteRepo.set(merged);
-
-        // Clear the persistent “fetched once” guard so we re-hydrate header for the new customer
-        const merged2 = { ...merged };
-        delete merged2.Quote_Header_Fetched_At;
-        await quoteRepo.set(merged2);
-        await draftRepo.clear();
-        dlog('Draft merged and cleared (re-promote if newer/different)', { qk, merged });
-
-        // If you adopted the in-memory header fetch guard, clear it so we re-hydrate.
-        if (typeof fetchedHeaderOnce !== 'undefined') {
-            fetchedHeaderOnce.delete(`${ctx?.tabId || 'shim'}:${qk}`);
-        }
+        // clear the draft bucket
+        await draftRepo.clear?.();
+        dlog('Draft merged (flat repo header updated)', { qk });
     }
 
 
@@ -201,15 +163,15 @@
     async function hydratePartSummaryOnce(qk) {
         await ensureRepoForQuote(qk);
         if (!quoteRepo) return;
-        const snap = (await quoteRepo.get()) || {};
-        if (snap.Quote_Header_Fetched_At) return;
+        const headerSnap = (await quoteRepo.getHeader()) || {};
+        if (headerSnap.Quote_Header_Fetched_At) return;
 
         const plex = (typeof getPlexFacade === 'function') ? await getPlexFacade() : window.lt.core.plex;
         const rows = await withFreshAuth(() => plex.dsRows(CFG.DS_QUOTE_HEADER_GET, { Quote_Key: String(qk) }));
         const first = (Array.isArray(rows) && rows.length) ? quoteHeaderGet(rows[0]) : null;
         if (!first) return;
 
-        await quoteRepo.update({ Quote_Key: qk, ...first, Quote_Header_Fetched_At: Date.now() });
+        await quoteRepo.patchHeader({ Quote_Key: qk, ...first, Quote_Header_Fetched_At: Date.now() });
     }
 
     // ===== UI badge =====
@@ -261,8 +223,8 @@
             if (!ctx || lastScope !== qk) {
                 await ensureRepoForQuote(qk);
                 try {
-                    const snap = await quoteRepo.get();
-                    if (snap?.Attachment_Count != null) setBadgeCount(Number(snap.Attachment_Count));
+                    const head = await quoteRepo.getHeader();
+                    if (head?.Attachment_Count != null) setBadgeCount(Number(head.Attachment_Count));
                 } catch { }
             }
 
@@ -271,7 +233,7 @@
 
             const count = await fetchAttachmentCount(qk);
             setBadgeCount(count);
-            await quoteRepo.update({ Quote_Key: qk, Attachment_Count: Number(count) });
+            await quoteRepo.patchHeader({ Quote_Key: qk, Attachment_Count: Number(count) });
 
             if (manual) {
                 const ok = count > 0;
@@ -356,5 +318,6 @@
         pageObserver = null;
     }
 
-    wireNav(() => { if (window.TMUtils?.matchRoute?.(ROUTES)) init(); else teardown(); });
+    wireNav(() => { if (ROUTES.some(rx => rx.test(location.pathname))) init(); else teardown(); });
+
 })();

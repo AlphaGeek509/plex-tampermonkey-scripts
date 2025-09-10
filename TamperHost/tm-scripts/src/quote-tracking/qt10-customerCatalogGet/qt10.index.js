@@ -33,33 +33,72 @@
     const derror = (...a) => { if (IS_TEST_ENV) L?.error?.(...a); };
 
     // ===== Route allowlist =====
-    if (!TMUtils.matchRoute?.(CFG.ROUTES)) return;
+    // avoid depending on TMUtils timing; use regex on pathname
+    if (!CFG.ROUTES.some(rx => rx.test(location.pathname))) return;
 
-    // ===== Data via lt.core.data =====
-    const hasDataCore = !!(lt?.core?.data?.createDataContext && lt?.core?.data?.RepoBase?.value);
-    const SCOPE_DRAFT = 'draft';
-
-    let ctx = null, quoteRepo = null, lastScope = null;
-    async function ensureRepoScope(scopeKey) {
-        if (!scopeKey || !hasDataCore) return null;
-        if (!ctx || lastScope !== scopeKey) {
-            ctx = lt.core.data.createDataContext({ ns: 'QT', scopeKey, persist: 'session', ttlMs: 3000 });
-            try { sessionStorage.setItem('lt.tabId', ctx.tabId); } catch { }
-            class QuoteRepo extends lt.core.data.RepoBase.value {
-                constructor(base) { super({ ...base, entity: 'QuoteHeader' }); }
-                async get() { return this.read('current'); }
-                async set(m) { return this.write('current', m); }
-                async update(patch) {
-                    const prev = (await this.get()) ?? {};
-                    return this.write('current', { ...prev, ...patch, Updated_At: Date.now() });
-                }
-                async clear() { return this.remove('current'); }
+    // === Add this helper near the top (once) ===
+    function getTabScopeId(ns = 'QT') {
+        try {
+            const k = `lt:${ns}:scopeId`;
+            let v = sessionStorage.getItem(k);
+            if (!v) {
+                v = String(Math.floor(Math.random() * 2_147_483_647));
+                sessionStorage.setItem(k, v);
             }
-            quoteRepo = ctx.makeRepo(QuoteRepo);
-            lastScope = scopeKey;
+            return Number(v);
+        } catch {
+            // Fallback if sessionStorage is blocked
+            return Math.floor(Math.random() * 2_147_483_647);
         }
-        return quoteRepo;
     }
+
+    // ===== Data via lt.core.data (flat {header, lines}) =====
+    const SCOPE_DRAFT = 'draft';
+    let QT = null;
+    async function waitForDC(timeoutMs = 20000) {
+        const start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+            const LT = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.lt : window.lt);
+            if (LT?.core?.data?.createDataContext) {
+                // if our factory is already installed, we’re done
+                if (LT.core.data.makeFlatScopedRepo) return LT.core.data;
+            }
+            // small sleep
+            await (TMUtils.sleep?.(50) || new Promise(r => setTimeout(r, 50)));
+        }
+        throw new Error('DataCore not ready');
+    }
+    async function getQT() {
+        if (QT) return QT;
+        const DC = await waitForDC();
+        // lt-data-core will install the factory soon after DC is ready; if still missing, retry once
+        if (!DC.makeFlatScopedRepo) {
+            await (TMUtils.sleep?.(50) || new Promise(r => setTimeout(r, 50)));
+        }
+        QT = DC.makeFlatScopedRepo({ ns: 'QT', entity: 'quote', legacyEntity: 'QuoteHeader' });
+        return QT;
+    }
+
+    let repoDraft = null;
+    async function ensureDraftRepo() {
+        try {
+            if (repoDraft) return repoDraft;
+
+            // Non-blocking peek — do NOT wait 20s here
+            const DC = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.lt?.core?.data : window.lt?.core?.data);
+            if (!DC?.makeFlatScopedRepo) return null; // let the retry loop handle later
+
+            const { use } = DC.makeFlatScopedRepo({ ns: 'QT', entity: 'quote', legacyEntity: 'QuoteHeader' });
+            const { repo } = use(getTabScopeId('QT')); // <-- numeric, per-tab scope
+            repoDraft = repo;
+            await repoDraft.ensureFromLegacyIfMissing?.();
+            return repoDraft;
+        } catch (e) {
+            console.debug('QT10: repo not available yet; skipping persistence this cycle', e);
+            return null;
+        }
+    }
+
 
     // ===== Auth helpers =====
     async function withFreshAuth(run) {
@@ -81,7 +120,7 @@
         const t0 = Date.now();
         while (Date.now() - t0 < timeoutMs) {
             if (document.querySelector(sel)) return true;
-            await TMUtils.sleep(pollMs);
+            await (TMUtils.sleep?.(pollMs) || new Promise(r => setTimeout(r, pollMs)));
         }
         return !!document.querySelector(sel);
     }
@@ -93,14 +132,15 @@
         if (booted || booting) return;
         booting = true;
         try {
-            if (!TMUtils.matchRoute?.(CFG.ROUTES)) return;
+            if (!CFG.ROUTES.some(rx => rx.test(location.pathname))) return;
             if (!(await anchorAppears(CFG.ANCHOR))) return;
             if (!(await ensureAuthOrToast())) return;
 
-            const { controller, viewModel } = await TMUtils.waitForModelAsync(CFG.ANCHOR, {
+            const { viewModel } = await TMUtils.waitForModelAsync(CFG.ANCHOR, {
                 pollMs: 200, timeoutMs: 8000, logger: IS_TEST_ENV ? L : null
             });
-            if (!controller || !viewModel) return;
+            if (!viewModel) return;
+
 
             // IMPORTANT: QT10 is CATALOG-ONLY; do NOT store Quote_Key/Quote_No here.
 
@@ -118,7 +158,6 @@
                     if (!customerNo || customerNo === lastCustomerNo) return;
                     lastCustomerNo = customerNo;
 
-                    await ensureRepoScope(SCOPE_DRAFT);
                     await applyCatalogFor(customerNo, viewModel);
                 }
             });
@@ -155,14 +194,18 @@
             TMUtils.setObsValue(vm, 'CatalogCode', catalogCode);
 
             // 4) Stash into DRAFT scope (per-tab)
-            const repo = await ensureRepoScope(SCOPE_DRAFT);
-            await repo.update({
-                Customer_No: String(customerNo),
-                Catalog_Key: catalogKey,
-                Catalog_Code: catalogCode,
-                Catalog_Fetched_At: Date.now(),
-            });
+            // after you've computed catalogKey, catalogCode, etc.
+            const repo = await ensureDraftRepo();
+            if (repo) {
+                // new (non-blocking, auto-retries until DC is ready)
+                persistDraftHeaderWithRetry({
+                    Customer_No: String(customerNo),
+                    Catalog_Key: Number(catalogKey),
+                    Catalog_Code: String(catalogCode || ''),
+                    Catalog_Fetched_At: Date.now(),
+                });
 
+            }
 
             if (CFG.TOAST_SUCCESS) {
                 TMUtils.toast?.(
@@ -176,9 +219,53 @@
         }
     }
 
+    // ---- Best-effort persistence with retry (draft header) ----
+    const __QT10_PERSIST = { queue: null, timer: null };
+    async function persistDraftHeaderWithRetry(patch, maxTries = 120, intervalMs = 250) {
+        try {
+            const repo = await ensureDraftRepo(); // best-effort, may return null
+            if (repo) {
+                await repo.patchHeader(patch);
+                return true;
+            }
+        } catch (e) {
+            console.debug('QT10: repo not ready now, will retry', e);
+        }
+
+        // buffer patch and schedule retries
+        __QT10_PERSIST.queue = { ...(__QT10_PERSIST.queue || {}), ...patch };
+        if (__QT10_PERSIST.timer) return false;
+
+        let triesLeft = maxTries;
+        __QT10_PERSIST.timer = setInterval(async () => {
+            try {
+                const repoLater = await ensureDraftRepo();
+                if (!repoLater) {
+                    if (--triesLeft <= 0) {
+                        clearInterval(__QT10_PERSIST.timer);
+                        __QT10_PERSIST.timer = null;
+                        console.debug('QT10: gave up persisting draft after retries');
+                    }
+                    return;
+                }
+                const payload = __QT10_PERSIST.queue;
+                __QT10_PERSIST.queue = null;
+                clearInterval(__QT10_PERSIST.timer);
+                __QT10_PERSIST.timer = null;
+                await repoLater.patchHeader(payload);
+                console.debug('QT10: draft persisted after retry', payload);
+            } catch (err) {
+                console.warn('QT10: retry persist error', err);
+            }
+        }, intervalMs);
+
+        return false;
+    }
+
+
     // ===== SPA nav handling =====
     unsubscribeUrl = TMUtils.onUrlChange?.(() => {
-        if (!TMUtils.matchRoute?.(CFG.ROUTES)) {
+        if (!CFG.ROUTES.some(rx => rx.test(location.pathname))) {
             try { disposeWatcher?.(); } catch { }
             disposeWatcher = null; booted = false; booting = false;
             return;
@@ -190,7 +277,7 @@
 
     // Optional tiny debug
     window.QT10_debugDraft = async () => {
-        const repo = await ensureRepoScope(SCOPE_DRAFT);
+        const repo = await ensureDraftRepo();
         console.debug('QT10 draft →', await repo?.get());
     };
 })();
