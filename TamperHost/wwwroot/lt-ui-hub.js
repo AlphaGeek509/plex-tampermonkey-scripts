@@ -197,6 +197,12 @@ async function ensureLTHub(opts = {}) {
                 } else if (api._spin) { api._spin.remove(); api._spin = null; }
                 return this;
             },
+            flash(text, tone = 'info', ms = 3000) {
+                api.setStatus(text, tone);
+                if (api._flashTimer) clearTimeout(api._flashTimer);
+                api._flashTimer = setTimeout(() => api.setStatus('', 'info'), ms);
+                return this;
+            },
             _el: host, _shadow: root
         };
 

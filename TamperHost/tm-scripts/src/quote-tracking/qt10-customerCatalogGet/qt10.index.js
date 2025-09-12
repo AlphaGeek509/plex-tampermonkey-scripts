@@ -50,10 +50,8 @@
             gap: 8
         });
 
-        hub.setStatus('Quote Wizard', 'info');
-        hub.registerButton({ id: 'qt10-open', label: 'Open', weight: 110 });
-        hub.registerButton({ id: 'sep', type: 'separator', weight: 120 });
-        hub.registerButton({ id: 'qt10-refresh', label: 'Refresh', weight: 130 });
+        hub.setTitle('Quote Wizard');
+        hub.setStatus('Ready', 'info');
     })();
 
 
@@ -242,12 +240,12 @@
 
             }
 
+            const okMsg = `Customer ${customerNo} → Catalog ${catalogCode || catalogKey}`;
             if (CFG.TOAST_SUCCESS) {
-                TMUtils.toast?.(
-                    `✅ Customer: ${customerNo}\nCatalogKey: ${catalogKey}\nCatalogCode: ${catalogCode}`,
-                    'success'
-                );
+                // Hub-first confirmation (auto-clears). Toast only on warn/error elsewhere.
+                window.ltUIHub?.flash(okMsg, 'success', 2500);
             }
+
         } catch (err) {
             TMUtils.toast?.(`❌ Lookup failed: ${err?.message || err}`, 'error');
             derror(err);
