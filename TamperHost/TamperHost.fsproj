@@ -35,6 +35,7 @@
 		<None Include=".gitattributes" />
 		<None Include=".gitignore" />
 		<None Include="README.md" Condition="Exists('README.md')" />
+		<None Include="build-plus-original.js" />
 		<None Include="tm-scripts\banners\QT10.dev.header.js" />
 		<None Include="tm-scripts\banners\QT20.dev.header.js" />
 		<None Include="tm-scripts\banners\QT30.dev.header.js" />

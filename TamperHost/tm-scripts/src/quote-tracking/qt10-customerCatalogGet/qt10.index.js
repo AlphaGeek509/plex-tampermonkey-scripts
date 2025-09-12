@@ -3,6 +3,7 @@
 // Restores business logic from qt10.backup.js and fixes RepoBase class invocation.
 
 (function () {
+
     'use strict';
 
     // ===== Dev flag (build-time with runtime fallback) =====
@@ -36,23 +37,11 @@
     // avoid depending on TMUtils timing; use regex on pathname
     if (!CFG.ROUTES.some(rx => rx.test(location.pathname))) return;
 
-    (async () => {
-        const hub = await ensureLTHub({
-            theme: {
-                name: "OneMonroe",
-                primary: "#8B0902",
-                primaryHi: "#890F10",
-                surface: "#ffffff"
-            },
-            mount: 'beforePage',
-            pageRootSelectors: ['#plexSidetabsMenuPage', '.plex-sidetabs-menu-page'],
-            stick: false,
-            gap: 8
-        });
-
-        hub.setTitle('Quote Wizard');
-        hub.setStatus('Ready', 'info');
+    (() => {
+        const hub = lt.core.hub;
+        hub.setStatus("Ready", "info");
     })();
+
 
 
 
@@ -143,7 +132,7 @@
     }
     async function ensureAuthOrToast() {
         try { if (await lt.core.auth.getKey()) return true; } catch { }
-        window.ltUIHub?.notify('warn', 'Auth looks stale. Retrying…', { toast: true });
+        lt.core.hub.notify('warn', 'Auth looks stale. Retrying…', { toast: true });
         return false;
     }
 
@@ -206,16 +195,21 @@
     // ===== Core business logic: Customer → CatalogKey → CatalogCode =====
     async function applyCatalogFor(customerNo, vm) {
         if (!customerNo) return;
-        try {
-            const task = window.ltUIHub?.beginTask('Linking catalog…');
 
+        lt.core.hub.setStatus("Linking catalog…", "info", { sticky: true });
+        const task = {
+            success: (msg, t = 3000) => { lt.core.hub.setStatus('', 'info', { force: true }); lt.core.hub.notify(msg, 'success', { timeout: t }); },
+            error: (msg) => { lt.core.hub.setStatus('', 'info', { force: true }); lt.core.hub.notify(msg, 'error', { timeout: 3500 }); }
+        };
+
+        try {
             // 1) Customer → CatalogKey
             const rows1 = await withFreshAuth(() =>
                 lt.core.plex.dsRows(CFG.DS_CATALOG_BY_CUSTOMER, { Customer_No: customerNo })
             );
             const row1 = Array.isArray(rows1) ? rows1[0] : null;
             const catalogKey = row1?.Catalog_Key || 0;
-            if (!catalogKey) { task?.error('No catalog found for this customer.'); return; }
+            if (!catalogKey) { task.error('No catalog found for this customer.'); return; }
 
             // 2) CatalogKey → CatalogCode
             const rows2 = await withFreshAuth(() =>
@@ -239,7 +233,6 @@
                     Catalog_Fetched_At: Date.now(),
                     Updated_At: Date.now(),
                 });
-
             }
 
             // Build a clean display value that falls back correctly
@@ -252,10 +245,10 @@
                 : `Linked: key ${catalogKey}`;
 
             // Flash the success for ~3s
-            task?.success(msg, 3000);
+            task.success(msg, 3000);
 
         } catch (err) {
-            task?.error('No catalog found for this customer.');
+            task.error('No catalog found for this customer.');
             derror(err);
         }
     }
@@ -275,6 +268,7 @@
 
         // buffer patch and schedule retries
         __QT10_PERSIST.queue = { ...(__QT10_PERSIST.queue || {}), ...patch };
+
         if (__QT10_PERSIST.timer) return false;
 
         let triesLeft = maxTries;

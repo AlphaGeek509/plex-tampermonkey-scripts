@@ -1,3 +1,5 @@
+const ROOT = (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window);
+
 /* lt-ui-hub : full-width sticky action bar above Plex actions
    - Mounts before `.plex-actions-wrapper` when present, else at top of
      `.plex-sidetabs-menu-page-content-container`
@@ -27,7 +29,7 @@ async function ensureLTHub(opts = {}) {
 
     const theme = rawTheme ? normalizeTheme(rawTheme) : null;
 
-    if (window.ltUIHub) return window.ltUIHub;
+    if (ROOT.ltUIHub) return ROOT.ltUIHub;
 
     const { container, beforeNode } = await waitForContainerAndAnchor(timeoutMs, selectors);
     const { host, left, center, right, api } = createHub();
@@ -49,7 +51,7 @@ async function ensureLTHub(opts = {}) {
     });
     mo.observe(container, { childList: true });
 
-    window.ltUIHub = api; // expose singleton for this tab
+    ROOT.ltUIHub = api; // expose singleton for this tab
     return api;
 
     // ---------- helpers ----------
@@ -185,12 +187,12 @@ async function ensureLTHub(opts = {}) {
             clear() { registry.clear(); render(); return this; },
             list() { return Array.from(registry.values()); },
             setTitle(text) { brandText.textContent = text || 'LT Hub'; return this; },
-            setStatus(text, tone = 'info') {
-                if (!api._statusEl) { api._statusEl = document.createElement('div'); api._statusEl.className = 'status info'; right.prepend(api._statusEl); }
-                api._statusEl.className = `status ${tone}`;
-                api._statusEl.textContent = text ?? '';
-                return this;
-            },
+            //setStatus(text, tone = 'info') {
+            //    if (!api._statusEl) { api._statusEl = document.createElement('div'); api._statusEl.className = 'status info'; right.prepend(api._statusEl); }
+            //    api._statusEl.className = `status ${tone}`;
+            //    api._statusEl.textContent = text ?? '';
+            //    return this;
+            //},
             setBusy(isBusy) {
                 if (isBusy) {
                     if (!api._spin) { api._spin = document.createElement('div'); api._spin.className = 'spinner'; right.append(api._spin); }
@@ -208,24 +210,20 @@ async function ensureLTHub(opts = {}) {
 
         // REPLACE your current setStatus(...) with this:
         api.setStatus = function setStatus(text, tone = 'info', opts = {}) {
-            // opts: { sticky?: boolean, force?: boolean }
             const stickyReq = !!opts.sticky;
             const force = !!opts.force;
-
             if (!api._statusEl) {
                 api._statusEl = document.createElement('div');
                 api._statusEl.className = 'status info';
                 right.prepend(api._statusEl);
             }
-
-            // If a sticky status is active, ignore non-sticky updates unless forced
             if (api._sticky && !stickyReq && !force) return api;
-
             api._sticky = stickyReq && !!text;
             api._statusEl.className = `status ${tone}`;
             api._statusEl.textContent = text ?? '';
             return api;
         };
+
 
         // Auto-clearing status pill (keep if you already added it)
         api.flash = function flash(text, tone = 'info', ms = 2500) {
@@ -259,7 +257,7 @@ async function ensureLTHub(opts = {}) {
 
             // Show toast for warn/error or if explicitly requested; fall back if hub isn’t ready
             if (toast === true || level === 'warn' || level === 'error') {
-                try { window.TMUtils?.toast?.(text, level); } catch { }
+                try { ROOT.TMUtils?.toast?.(text, level); } catch { }
             }
             return api;
         };
@@ -394,14 +392,19 @@ function normalizeTheme(t) {
 }
 
 // Convenience: expose a global for console testing in DEV
-if (!window.ensureLTHub) window.ensureLTHub = (...a) => ensureLTHub(...a);
+if (!ROOT.ensureLTHub) ROOT.ensureLTHub = (...a) => ensureLTHub(...a);
 
 /** Back-compat shim for older bundles that call `injectThemeCSS(theme)` */
-if (!window.injectThemeCSS) window.injectThemeCSS = (theme) => {
+if (!ROOT.injectThemeCSS) ROOT.injectThemeCSS = (theme) => {
     try {
         const t = theme || window.LT_DEFAULT_THEME || OM_DEFAULT_THEME;
-        const root = window.ltUIHub?._shadow || null;
+        const root = ROOT.ltUIHub?._shadow || null;
         if (root) injectTheme(root, t);
     } catch (_) { /* non-fatal */ }
 };
+
+// Expose ensureLTHub to page/window so other scripts can request a mount.
+if (typeof window !== 'undefined' && !ROOT.ensureLTHub) {
+    ROOT.ensureLTHub = ensureLTHub;
+}
 

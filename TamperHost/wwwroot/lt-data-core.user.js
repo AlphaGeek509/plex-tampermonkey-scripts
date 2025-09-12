@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         lt-data-core
 // @namespace    lt
-// @version      1.2.6
+// @version      1.2.7
 // @description  Core data: add makeFlatScopedRepo (flat {header,lines}) onto lt.core.data, waiting for DC to load
 // @match        https://*/SalesAndCRM/*
 // @grant        none
 // @run-at       document-start
-// ==/UserScript>
+// ==/UserScript
 (function () {
     'use strict';
     const root = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;

@@ -6,13 +6,13 @@
   "license": "UNLICENSED",
   "scripts": {
     "dev": "node ../build-plus.js --patch --emit",
-    "build": "node ../build-plus.js --patch --emit --release",
+    "build": "node ../build-plus.js --release --patch --emit",
     "bump:patch": "node ../build-plus.js --patch",
     "bump:minor": "node ../build-plus.js --minor",
     "bump:major": "node ../build-plus.js --major"
   },
   "tmVersions": {
-    "QT10": "3.6.86",
+    "QT10": "3.6.104",
     "QT20": "3.6.24",
     "QT30": "3.6.33",
     "QT35": "3.6.70",
