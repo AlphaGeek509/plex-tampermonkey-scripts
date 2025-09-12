@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         QT20_DEV
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.6.9
+// @version      3.6.17
 // @description  DEV-only build; includes user-start gate
 // @match        https://*.plex.com/*
 // @match        https://*.on.plex.com/*
-// @require      http://localhost:5000/lt-plex-tm-utils.user.js
-// @require      http://localhost:5000/lt-plex-auth.user.js
-// @require      http://localhost:5000/lt-data-core.user.js
+// @require      http://localhost:5000/lt-plex-tm-utils.user.js?v=3.6.17-1757634412340
+// @require      http://localhost:5000/lt-plex-auth.user.js?v=3.6.17-1757634412340
+// @require      http://localhost:5000/lt-data-core.user.js?v=3.6.17-1757634412340
 // @grant        GM_registerMenuCommand
 // @grant        GM_getValue
 // @grant        GM_setValue

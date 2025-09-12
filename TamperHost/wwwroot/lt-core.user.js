@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         lt-core
 // @namespace    lt
-// @version      1.0.0
+// @version      1.1.2
 // @description  Single façade for auth, http, plex ds, and (optionally) data access
 // @match        https://*/SalesAndCRM/*
 // @run-at       document-start
@@ -9,8 +9,10 @@
 // ==/UserScript==
 
 (() => {
-    const LT = (window.lt = window.lt || {});
+    const ROOT = (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window);
+    const LT = (ROOT.lt = ROOT.lt || {});
     const core = (LT.core = LT.core || {});
+
 
     // ---------- Auth (from plex-auth) ----------
     core.auth = {
@@ -74,21 +76,14 @@
         },
     };
 
-    // ---------- Data (optional; proxies lt-data-core if present) ----------
-    core.data = {
-        hasCore() { return !!(window.lt?.data?.createDataContext && window.lt?.data?.RepoBase); },
-        createDataContext(args) {
-            if (!this.hasCore()) throw new Error('lt-data-core not loaded');
-            return window.lt.data.createDataContext(args);
-        },
-        RepoBase: {
-            get value() {
-                if (!window.lt?.data?.RepoBase) throw new Error('lt-data-core not loaded');
-                return window.lt.data.RepoBase;
-            }
-        },
-    };
+    // ---------- Data ----------
+    // Do NOT define core.data here. Plex provides lt.core.data.
+    // Our other scripts (lt-data-core, QT10/QT35) will detect/extend it when present.
+    // (Intentionally left blank to avoid recursion / premature access.)
+
+
 
     // Tiny ready signal for debugging
-    try { console.debug?.('lt-core loaded'); } catch { }
+    try { console.debug?.('[lt-core] loaded'); } catch { }
+
 })();

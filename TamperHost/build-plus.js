@@ -115,13 +115,13 @@ const MODULES = [
         src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'qt35-attachmentsGet', 'qt35.index.js'),
         out: path.join(ROOT, 'wwwroot', 'qt35.user.js')
     },
-    {
-        id: 'QT50',
-        featureName: 'Quote Validation',
-        bannerBase: 'validation',
-        src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'validation', 'qtv.entry.js'),
-        out: path.join(ROOT, 'wwwroot', 'qt50.user.js')
-    }
+    //{
+    //    id: 'QT50',
+    //    featureName: 'Quote Validation',
+    //    bannerBase: 'validation',
+    //    src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'validation', 'qtv.entry.js'),
+    //    out: path.join(ROOT, 'wwwroot', 'qt50.user.js')
+    //}
 ];
 
 // --------------------------- helpers ---------------------------
@@ -166,9 +166,52 @@ function updateFileVersion(filePath, newVersion, dry = false) {
     return { skipped: false, changed, hadMarkers };
 }
 
+
 function resolveModuleById(id) {
     return MODULES.find(m => m.id.toLowerCase() === id.toLowerCase());
 }
+
+// Rewrites @require lines: appends ?v=<stamp> and enforces core → data-core order
+function rewriteRequires(header, versionStr, opts) {
+    const stamp = opts.release
+        ? versionStr                       // stable in release
+        : `${versionStr}-${Date.now()}`;   // unique per dev build
+
+    const lines = header.split('\n');
+
+    // Collect all @require lines and add v= stamp
+    const reqIdx = [];
+    for (let i = 0; i < lines.length; i++) {
+        const m = /^\s*\/\/\s*@require\s+(\S+)/.exec(lines[i]);
+        if (!m) continue;
+
+        let url = m[1].replace(/['"]/g, '');
+        if (!/[?&]v=/.test(url)) {
+            url += (url.includes('?') ? '&' : '?') + 'v=' + encodeURIComponent(stamp);
+        }
+        lines[i] = lines[i].replace(m[1], url);
+        reqIdx.push(i);
+    }
+
+    // Nothing to reorder? done.
+    if (!reqIdx.length) return lines.join('\n');
+
+    // Ensure lt-core comes BEFORE lt-data-core
+    let iCore = -1, iDataCore = -1;
+    for (const i of reqIdx) {
+        if (/lt-core\.user\.js(\?|$)/i.test(lines[i])) iCore = i;
+        if (/lt-data-core\.user\.js(\?|$)/i.test(lines[i])) iDataCore = i;
+    }
+    if (iCore >= 0 && iDataCore >= 0 && iCore > iDataCore) {
+        // swap the two lines
+        const tmp = lines[iCore];
+        lines[iCore] = lines[iDataCore];
+        lines[iDataCore] = tmp;
+    }
+
+    return lines.join('\n');
+}
+
 
 // Banner loader: prefers ID-based names; supports feature-based names as fallback
 function loadBannerForModule(m, versionStr, opts) {
@@ -209,7 +252,11 @@ function loadBannerForModule(m, versionStr, opts) {
     // Ensure banner @version matches the new version
     header = header.replace(/(@version\s+)([^\s]+)/g, `$1${versionStr}`);
 
+    // Append ?v= to every @require and enforce lt-core → lt-data-core ordering
+    header = rewriteRequires(header, versionStr, opts);
+
     return header;
+
 }
 
 async function emitModule(m, versionStr) {

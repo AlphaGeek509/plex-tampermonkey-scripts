@@ -9,7 +9,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
     const CONFIG = {
         DS_CatalogKeyByQuoteKey: 3156,
         DS_BreakpointsByPart: 4809,
-        GRID_SEL: '.plex-grid-content',
+        GRID_SEL: '.plex-grid',
         toastMs: 3500,
         wizardTargetPage: 'Part Summary',
         settingsKey: 'qt30_settings_v1',
@@ -195,7 +195,24 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
 
             // 2) Breakpoints by part
             const now = new Date();
-            const partNos = [...new Set(raw.map(r => TMUtils.getObsValue(r, 'PartNo', { first: true, trim: true })).filter(Boolean))];
+
+            // Acquire KO grid rows at click time
+            const raw = (() => {
+                try {
+                    const grid = document.querySelector(CONFIG.GRID_SEL);
+                    if (grid && KO?.dataFor) {
+                        const gridVM = KO.dataFor(grid);
+                        return Array.isArray(gridVM?.datasource?.raw) ? gridVM.datasource.raw : [];
+                    }
+                } catch { }
+                return [];
+            })();
+
+            const partNos = [...new Set(
+                raw.map((r) => TMUtils.getObsValue(r, "PartNo", { first: true, trim: true }))
+                    .filter(Boolean)
+            )];
+
             if (!partNos.length) { devToast('⚠️ No PartNo values found', 'warn', 4000); return; }
 
             devToast(`⏳ Loading ${partNos.length} part(s)…`, 'info');

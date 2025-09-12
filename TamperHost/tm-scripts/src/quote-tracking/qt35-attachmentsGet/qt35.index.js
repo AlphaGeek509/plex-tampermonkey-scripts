@@ -5,7 +5,11 @@
 
     const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : true;
     const dlog = (...a) => DEV && console.debug('QT35', ...a);
-    const derr = (...a) => console.error('QT35 ✖️', ...a);
+    const derr = (...a) => console.error("QT35 ✖️", ...a);
+    const ROOT = (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window);
+    // Use global withFreshAuth if present; otherwise a no-op wrapper
+    const __withFreshAuth = (typeof withFreshAuth === 'function') ? withFreshAuth : async (fn) => await fn();
+
 
     const ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
     if (!ROUTES.some(rx => rx.test(location.pathname))) return;
@@ -23,6 +27,30 @@
         POLL_MS: 200,
         TIMEOUT_MS: 12_000
     };
+
+    // === Per-tab scope id (same as QT10) ===
+    function findDC(win = (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window)) {
+        try { if (win.lt?.core?.data) return win.lt.core.data; } catch { }
+        for (let i = 0; i < win.frames.length; i++) {
+            try { const dc = findDC(win.frames[i]); if (dc) return dc; } catch { }
+        }
+        return null;
+    }
+
+
+    function getTabScopeId(ns = 'QT') {
+        try {
+            const k = `lt:${ns}:scopeId`;
+            let v = sessionStorage.getItem(k);
+            if (!v) {
+                v = String(Math.floor(Math.random() * 2147483647));
+                sessionStorage.setItem(k, v);
+            }
+            return Number(v);
+        } catch {
+            return Math.floor(Math.random() * 2147483647);
+        }
+    }
 
     function getActiveWizardPageName() {
         const active = document.querySelector('.plex-wizard-page.active, .plex-wizard-page[aria-current="page"]');
@@ -67,55 +95,93 @@
     }
 
     // ===== Repo via lt-data-core flat {header, lines} =====
-    let QT = null;
-    async function waitForDC(timeoutMs = 20000) {
-        const start = Date.now();
-        while (Date.now() - start < timeoutMs) {
-            const LT = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.lt : window.lt);
-            if (LT?.core?.data?.createDataContext) {
-                // if our factory is already installed, we’re done
-                if (LT.core.data.makeFlatScopedRepo) return LT.core.data;
-            }
-            // small sleep
-            await (TMUtils.sleep?.(50) || new Promise(r => setTimeout(r, 50)));
-        }
-        throw new Error('DataCore not ready');
+    function peekDC() {
+        const DC = findDC();
+        return DC && DC.createDataContext && DC.makeFlatScopedRepo ? DC : null;
     }
-    async function getQT() {
-        if (QT) return QT;
-        const DC = await waitForDC();
-        // lt-data-core will install the factory soon after DC is ready; if still missing, retry once
-        if (!DC.makeFlatScopedRepo) {
-            await (TMUtils.sleep?.(50) || new Promise(r => setTimeout(r, 50)));
-        }
-        QT = DC.makeFlatScopedRepo({ ns: 'QT', entity: 'quote', legacyEntity: 'QuoteHeader' });
-        return QT;
-    }
-
 
     let quoteRepo = null, lastScope = null;
-    async function ensureRepoForQuote(qk) {
-        if (!qk || !Number.isFinite(qk) || qk <= 0) return null;
-        if (!quoteRepo || lastScope !== qk) {
-            const { repo } = (await getQT()).use(Number(qk));
-            await repo.ensureFromLegacyIfMissing();
-            quoteRepo = repo;
-            lastScope = qk;
-        }
-        return quoteRepo;
+    let __QT__ = null;
+
+    function tryGetQT() {
+        const DC = peekDC();
+        if (!DC) return null;
+        if (!__QT__) __QT__ = DC.makeFlatScopedRepo({ ns: 'QT', entity: 'quote', legacyEntity: 'QuoteHeader' });
+        return __QT__;
     }
 
+    async function ensureRepoForQuote(quoteKey) {
+        const QTF = tryGetQT();
+        if (!QTF) return null;
+        const { ctx, repo } = QTF.use(Number(quoteKey));
+        quoteRepo = repo;                 // <-- persist for later callers
+        lastScope = Number(quoteKey);     // <-- track scope we’re bound to
+        await repo.ensureFromLegacyIfMissing?.();
+        return repo;
+    }
+
+
+
+    // Background promotion (per-tab draft -> per-quote) with gentle retries
+    const __PROMOTE = { timer: null, tries: 0, max: 120, intervalMs: 250 };
+
+    function schedulePromoteDraftToQuote(quoteKey) {
+        if (__PROMOTE.timer) return;
+        __PROMOTE.timer = setInterval(async () => {
+            try {
+                const QTF = tryGetQT();
+                const repoQ = await ensureRepoForQuote(quoteKey);
+                if (!QTF || !repoQ) { if (++__PROMOTE.tries >= __PROMOTE.max) stopPromote(); return; }
+
+                // Read the SAME per-tab draft scope QT10 writes to
+                const { repo: draftRepo } = QTF.use(getTabScopeId('QT'));
+                const draft = await (draftRepo.getHeader?.() || draftRepo.get());
+                if (draft && Object.keys(draft).length) {
+                    await repoQ.patchHeader({
+                        Quote_Key: Number(quoteKey),
+                        Customer_No: draft.Customer_No ?? null,
+                        Catalog_Key: draft.Catalog_Key ?? null,
+                        Catalog_Code: draft.Catalog_Code ?? null,
+                        Promoted_From: 'draft',
+                        Promoted_At: Date.now(),
+                        Quote_Header_Fetched_At: null,
+                        Updated_At: draft.Updated_At || Date.now(),
+                    });
+                    await draftRepo.clear?.();
+                    try { const { repo: legacy } = QTF.use('draft'); await legacy.clear?.(); } catch { }
+
+                }
+                stopPromote();
+            } catch {
+                // keep retrying
+            }
+        }, __PROMOTE.intervalMs);
+    }
+
+    function stopPromote() {
+        clearInterval(__PROMOTE.timer);
+        __PROMOTE.timer = null;
+        __PROMOTE.tries = 0;
+    }
+
+
+    // ===== Merge QT10 draft → per-quote (once) =====
     // ===== Merge QT10 draft → per-quote (once) =====
     async function mergeDraftIntoQuoteOnce(qk) {
         if (!qk || !Number.isFinite(qk) || qk <= 0) return;
 
-        const { repo: draftRepo } = (await getQT()).use('draft');
+        const QTF = tryGetQT();
+        if (!QTF) { schedulePromoteDraftToQuote(qk); return; }
+
+        // Read per-tab draft (same scope QT10 writes to)
+        const { repo: draftRepo } = QTF.use(getTabScopeId('QT'));
         const draft = await draftRepo.getHeader?.() || await draftRepo.get(); // tolerate legacy
         if (!draft) return;
 
         await ensureRepoForQuote(qk);
-        const currentHeader = (await quoteRepo.getHeader()) || {};
+        if (!quoteRepo) return; // DC not ready yet
 
+        const currentHeader = (await quoteRepo.getHeader()) || {};
         const curCust = String(currentHeader.Customer_No ?? '');
         const newCust = String(draft.Customer_No ?? '');
 
@@ -138,20 +204,27 @@
             Quote_Header_Fetched_At: null
         });
 
-        // clear the draft bucket
+        // clear per-tab draft and legacy if present
         await draftRepo.clear?.();
+        try { const { repo: legacy } = QTF.use('draft'); await legacy.clear?.(); } catch { }
+
+
         dlog('Draft merged (flat repo header updated)', { qk });
     }
 
 
+
     // ===== Data sources =====
     async function fetchAttachmentCount(quoteKey) {
-        const rows = await withFreshAuth(() => window.lt.core.plex.dsRows(CFG.DS_ATTACHMENTS_BY_QUOTE, {
+        const plex = (typeof getPlexFacade === "function") ? await getPlexFacade() : (ROOT.lt?.core?.plex);
+        if (!plex?.dsRows) return 0;
+        const rows = await __withFreshAuth(() => plex.dsRows(CFG.DS_ATTACHMENTS_BY_QUOTE, {
             Attachment_Group_Key: CFG.ATTACHMENT_GROUP_KEY,
             Record_Key_Value: String(quoteKey)
         }));
         return Array.isArray(rows) ? rows.length : 0;
     }
+
     function quoteHeaderGet(row) {
         return {
             Customer_Code: row?.Customer_Code ?? null,
@@ -166,8 +239,10 @@
         const headerSnap = (await quoteRepo.getHeader()) || {};
         if (headerSnap.Quote_Header_Fetched_At) return;
 
-        const plex = (typeof getPlexFacade === 'function') ? await getPlexFacade() : window.lt.core.plex;
-        const rows = await withFreshAuth(() => plex.dsRows(CFG.DS_QUOTE_HEADER_GET, { Quote_Key: String(qk) }));
+        const plex = (typeof getPlexFacade === "function" ? await getPlexFacade() : ROOT.lt?.core?.plex);
+        if (!plex?.dsRows) return;
+        const rows = await __withFreshAuth(() => plex.dsRows(CFG.DS_QUOTE_HEADER_GET, { Quote_Key: String(qk) }));
+
         const first = (Array.isArray(rows) && rows.length) ? quoteHeaderGet(rows[0]) : null;
         if (!first) return;
 
@@ -207,6 +282,7 @@
         pill.style.color = isZero ? '#111827' : '#fff';
     }
 
+    let refreshInFlight = false;
     async function runOneRefresh(manual = false) {
         if (refreshInFlight) return;
         refreshInFlight = true;
@@ -220,16 +296,19 @@
             }
 
             // If scope changed, paint any existing snapshot before fetching
-            if (!ctx || lastScope !== qk) {
+            if (!quoteRepo || lastScope !== qk) {
                 await ensureRepoForQuote(qk);
                 try {
-                    const head = await quoteRepo.getHeader();
+                    const head = await quoteRepo?.getHeader?.();
                     if (head?.Attachment_Count != null) setBadgeCount(Number(head.Attachment_Count));
                 } catch { }
             }
 
             // Promote & clear draft BEFORE per-quote updates
             await mergeDraftIntoQuoteOnce(qk);
+
+            // If DC isn't ready yet, skip quietly; the observer/next click will retry
+            if (!quoteRepo) return;
 
             const count = await fetchAttachmentCount(qk);
             setBadgeCount(count);
@@ -247,6 +326,7 @@
             refreshInFlight = false;
         }
     }
+
 
     // ===== SPA wiring =====
     let booted = false; let offUrl = null;
@@ -266,7 +346,10 @@
 
         if (show) {
             await ensureWizardVM();
+
             const qk = getQuoteKeyDeterministic();
+            schedulePromoteDraftToQuote(qk);
+
             if (qk && Number.isFinite(qk) && qk > 0) {
                 await ensureRepoForQuote(qk);
                 await mergeDraftIntoQuoteOnce(qk);

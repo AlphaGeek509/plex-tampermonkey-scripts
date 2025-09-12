@@ -36,7 +36,18 @@
     // avoid depending on TMUtils timing; use regex on pathname
     if (!CFG.ROUTES.some(rx => rx.test(location.pathname))) return;
 
+
     // === Add this helper near the top (once) ===
+    // Find lt.core.data in any same-origin frame
+    function findDC(win = (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window)) {
+        try { if (win.lt?.core?.data) return win.lt.core.data; } catch { }
+        for (let i = 0; i < win.frames.length; i++) {
+            try { const dc = findDC(win.frames[i]); if (dc) return dc; } catch { }
+        }
+        return null;
+    }
+
+
     function getTabScopeId(ns = 'QT') {
         try {
             const k = `lt:${ns}:scopeId`;
@@ -85,10 +96,10 @@
             if (repoDraft) return repoDraft;
 
             // Non-blocking peek — do NOT wait 20s here
-            const DC = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.lt?.core?.data : window.lt?.core?.data);
-            if (!DC?.makeFlatScopedRepo) return null; // let the retry loop handle later
-
+            const DC = findDC();
+            if (!DC?.makeFlatScopedRepo) return null;
             const { use } = DC.makeFlatScopedRepo({ ns: 'QT', entity: 'quote', legacyEntity: 'QuoteHeader' });
+
             const { repo } = use(getTabScopeId('QT')); // <-- numeric, per-tab scope
             repoDraft = repo;
             await repoDraft.ensureFromLegacyIfMissing?.();
@@ -203,6 +214,7 @@
                     Catalog_Key: Number(catalogKey),
                     Catalog_Code: String(catalogCode || ''),
                     Catalog_Fetched_At: Date.now(),
+                    Updated_At: Date.now(),
                 });
 
             }
@@ -275,9 +287,36 @@
 
     setTimeout(maybeBoot, 0);
 
-    // Optional tiny debug
-    window.QT10_debugDraft = async () => {
+    // Expose helpers to the page context (so DevTools console can call them)
+    const W = (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window);
+
+    W.QT10_debugDraft = async () => {
         const repo = await ensureDraftRepo();
-        console.debug('QT10 draft →', await repo?.get());
+        const snap = await repo?.get();
+        console.debug('QT10 draft →', snap);
+        return snap;
     };
+
+    W.QT10_forceDraft = async (patch = {}) => {
+        const repo = await ensureDraftRepo();
+        if (!repo) { console.warn('QT10: repo not ready'); return null; }
+        await repo.patchHeader({
+            Customer_No: 'TEST',
+            Catalog_Key: 99999,
+            Catalog_Code: 'TestCatalog',
+            Updated_At: Date.now(),
+            ...patch
+        });
+        return await repo.get();
+    };
+
+    W.QT10_checkDC = () => !!(findDC()?.makeFlatScopedRepo);
+    W.QT10_dcStatus = () => {
+        const dc = findDC();
+        return { hasCore: !!dc, hasFactory: !!dc?.makeFlatScopedRepo };
+    };
+
+
+
+
 })();
