@@ -27,6 +27,19 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
     const ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
     if (!ROUTES.some(rx => rx.test(location.pathname))) { log('QT30: wrong route, skipping'); return; }
 
+    (async () => {
+        // ensureLTDock is provided by @require’d lt-ui-dock.js
+        const dock = await window.ensureLTDock?.();
+        dock?.register({
+            id: 'qt35-attachments',
+            label: 'Attachments',
+            title: 'Open QT35 Attachments',
+            weight: 120,
+            onClick: () => openAttachmentsModal()
+        });
+    })();
+
+
 
     // ===== QuoteRepo via lt-data-core flat {header, lines} =====
     let QT = null;

@@ -10,6 +10,18 @@
     // Use global withFreshAuth if present; otherwise a no-op wrapper
     const __withFreshAuth = (typeof withFreshAuth === 'function') ? withFreshAuth : async (fn) => await fn();
 
+    (async () => {
+        // ensureLTDock is provided by @require’d lt-ui-dock.js
+        const dock = await window.ensureLTDock?.();
+        dock?.register({
+            id: 'qt35-attachments',
+            label: 'Attachments',
+            title: 'Open QT35 Attachments',
+            weight: 120,
+            onClick: () => openAttachmentsModal()
+        });
+    })();
+
 
     const ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
     if (!ROUTES.some(rx => rx.test(location.pathname))) return;

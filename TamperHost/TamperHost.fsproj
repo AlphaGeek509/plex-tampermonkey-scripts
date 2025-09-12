@@ -23,6 +23,9 @@
 		<Content Remove="**\node_modules\**" />
 		<TypeScriptCompile Remove="**\node_modules\**" />
 	</ItemGroup>
+	<ItemGroup>
+	  <Content Remove="wwwroot\lt-ui-hub.js" />
+	</ItemGroup>
 
 	<!-- Solution-visible files (not compiled by .NET; just show in Solution Explorer) -->
 	<ItemGroup>
@@ -68,10 +71,12 @@
 		<None Include="tm-scripts\src\quote-tracking\qt50\highlighter.js" />
 		<None Include="tm-scripts\src\quote-tracking\qt50\engine.js" />
 		<None Include="tm-scripts\src\quote-tracking\qt50\index.js" />
+		<None Include="tm-scripts\src\shared\lt-ui-hub.js" />
 		<None Include="tm-scripts\src\shared\keys.js" />
 		<None Include="tm-scripts\src\shared\ids.js" />
 		<None Include="tm-scripts\src\shared\lt-plex-auth.user.js" />
 		<None Include="tm-scripts\src\shared\lt-plex-tm-utils.user.js" />
+		<None Include="wwwroot\lt-ui-hub.js" />
 
 		<!-- Source (show for editing); mark as None so .NET doesn’t try to compile them -->
 	</ItemGroup>

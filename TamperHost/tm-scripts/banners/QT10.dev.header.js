@@ -5,6 +5,7 @@
 // @description DEV-only build; includes user-start gate
 // @match       https://*.plex.com/*
 // @match       https://*.on.plex.com/*
+// @require     http://localhost:5000/lt-ui-hub.js
 // @require     http://localhost:5000/lt-core.user.js
 // @require     http://localhost:5000/lt-data-core.user.js
 // @require     http://localhost:5000/lt-plex-auth.user.js

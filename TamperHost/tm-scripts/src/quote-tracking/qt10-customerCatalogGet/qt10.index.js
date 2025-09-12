@@ -36,6 +36,29 @@
     // avoid depending on TMUtils timing; use regex on pathname
     if (!CFG.ROUTES.some(rx => rx.test(location.pathname))) return;
 
+    (async () => {
+        const hub = await ensureLTHub({
+            theme: {
+                name: "OneMonroe",
+                primary: "#8B0902",
+                primaryHi: "#890F10",
+                surface: "#ffffff"
+            },
+            mount: 'beforePage',
+            pageRootSelectors: ['#plexSidetabsMenuPage', '.plex-sidetabs-menu-page'],
+            stick: false,
+            gap: 8
+        });
+
+        hub.setStatus('Quote Wizard', 'info');
+        hub.registerButton({ id: 'qt10-open', label: 'Open', weight: 110 });
+        hub.registerButton({ id: 'sep', type: 'separator', weight: 120 });
+        hub.registerButton({ id: 'qt10-refresh', label: 'Refresh', weight: 130 });
+    })();
+
+
+
+
 
     // === Add this helper near the top (once) ===
     // Find lt.core.data in any same-origin frame
@@ -315,8 +338,4 @@
         const dc = findDC();
         return { hasCore: !!dc, hasFactory: !!dc?.makeFlatScopedRepo };
     };
-
-
-
-
 })();

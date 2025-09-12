@@ -12,6 +12,19 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : true;
     const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
     const raf = () => new Promise(r => requestAnimationFrame(r));
 
+    (async () => {
+        // ensureLTDock is provided by @require’d lt-ui-dock.js
+        const dock = await window.ensureLTDock?.();
+        dock?.register({
+            id: 'qt35-attachments',
+            label: 'Attachments',
+            title: 'Open QT35 Attachments',
+            weight: 120,
+            onClick: () => openAttachmentsModal()
+        });
+    })();
+
+
     // ===== Routes / UI anchors =====
     const ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
     if (!(window.TMUtils && window.TMUtils.matchRoute && window.TMUtils.matchRoute(ROUTES))) return;
