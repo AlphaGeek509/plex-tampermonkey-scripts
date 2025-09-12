@@ -200,11 +200,95 @@ async function ensureLTHub(opts = {}) {
             flash(text, tone = 'info', ms = 3000) {
                 api.setStatus(text, tone);
                 if (api._flashTimer) clearTimeout(api._flashTimer);
-                api._flashTimer = setTimeout(() => api.setStatus('', 'info'), ms);
+                api._flashTimer = setTimeout(() => api.setStatus('Ready', 'info'), ms);
                 return this;
             },
             _el: host, _shadow: root
         };
+
+        // REPLACE your current setStatus(...) with this:
+        api.setStatus = function setStatus(text, tone = 'info', opts = {}) {
+            // opts: { sticky?: boolean, force?: boolean }
+            const stickyReq = !!opts.sticky;
+            const force = !!opts.force;
+
+            if (!api._statusEl) {
+                api._statusEl = document.createElement('div');
+                api._statusEl.className = 'status info';
+                right.prepend(api._statusEl);
+            }
+
+            // If a sticky status is active, ignore non-sticky updates unless forced
+            if (api._sticky && !stickyReq && !force) return api;
+
+            api._sticky = stickyReq && !!text;
+            api._statusEl.className = `status ${tone}`;
+            api._statusEl.textContent = text ?? '';
+            return api;
+        };
+
+        // Auto-clearing status pill (keep if you already added it)
+        api.flash = function flash(text, tone = 'info', ms = 2500) {
+            api.setStatus(text, tone);
+            if (api._flashTimer) clearTimeout(api._flashTimer);
+            api._flashTimer = setTimeout(() => api.setStatus('Ready', 'info'), ms);
+            return api;
+        };
+
+        // Sticky status (persists until cleared or replaced)
+        // And UPDATE clearStatus to force-clear sticky:
+        api.clearStatus = function clearStatus() {
+            api._sticky = false;
+            api.setBusy(false);
+            api.setStatus('Ready', 'info', { force: true });
+            return api;
+        };
+
+        // Preferred entry point for all messages
+        // level: 'success' | 'info' | 'warn' | 'error'
+        // opts:  { ms?:number, sticky?:boolean, toast?:boolean }
+        api.notify = function notify(level, text, opts = {}) {
+            const { ms = 2500, sticky = false, toast } = opts;
+            const tone = (level === 'warn') ? 'warn' : level; // map to hub tones
+
+            if (sticky) {
+                api.setStatus(text, tone, { sticky: true });
+            } else {
+                api.flash(text, tone, ms);
+            }
+
+            // Show toast for warn/error or if explicitly requested; fall back if hub isn’t ready
+            if (toast === true || level === 'warn' || level === 'error') {
+                try { window.TMUtils?.toast?.(text, level); } catch { }
+            }
+            return api;
+        };
+
+        // Long-running operation helper with spinner + sticky status
+        api.beginTask = function beginTask(label, tone = 'info') {
+            api.setBusy(true);
+            api.setStatus(label, tone, { sticky: true });
+
+            const update = (txt, t = tone) => { api.setStatus(txt, t, { sticky: true }); return ctl; };
+            const success = (msg = 'Done', ms = 2500) => {
+                api.setBusy(false);
+                api.clearStatus();                    // drop the sticky guard/text first
+                api.notify('success', msg, { ms });   // then show timed flash
+                return ctl;
+            };
+            const error = (msg = 'Failed') => {
+                api.setBusy(false);
+                api.clearStatus();
+                api.notify('error', msg, { toast: true });
+                return ctl;
+            };
+            const fail = error;
+            const clear = () => { api.setBusy(false); api.clearStatus(); return ctl; };
+
+            const ctl = { update, success, done: success, error, fail, clear };
+            return ctl;
+        };
+
 
         return { host, left, center, right, api };
     }

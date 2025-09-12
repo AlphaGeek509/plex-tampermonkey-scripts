@@ -143,7 +143,7 @@
     }
     async function ensureAuthOrToast() {
         try { if (await lt.core.auth.getKey()) return true; } catch { }
-        TMUtils.toast?.('Sign-in required. Please log in, then retry.', 'warn');
+        window.ltUIHub?.notify('warn', 'Auth looks stale. Retrying…', { toast: true });
         return false;
     }
 
@@ -207,13 +207,15 @@
     async function applyCatalogFor(customerNo, vm) {
         if (!customerNo) return;
         try {
+            const task = window.ltUIHub?.beginTask('Linking catalog…');
+
             // 1) Customer → CatalogKey
             const rows1 = await withFreshAuth(() =>
                 lt.core.plex.dsRows(CFG.DS_CATALOG_BY_CUSTOMER, { Customer_No: customerNo })
             );
             const row1 = Array.isArray(rows1) ? rows1[0] : null;
             const catalogKey = row1?.Catalog_Key || 0;
-            if (!catalogKey) { TMUtils.toast?.(`⚠️ No catalog for ${customerNo}`, 'warn'); return; }
+            if (!catalogKey) { task?.error('No catalog found for this customer.'); return; }
 
             // 2) CatalogKey → CatalogCode
             const rows2 = await withFreshAuth(() =>
@@ -240,14 +242,20 @@
 
             }
 
-            const okMsg = `Customer ${customerNo} → Catalog ${catalogCode || catalogKey}`;
-            if (CFG.TOAST_SUCCESS) {
-                // Hub-first confirmation (auto-clears). Toast only on warn/error elsewhere.
-                window.ltUIHub?.flash(okMsg, 'success', 2500);
-            }
+            // Build a clean display value that falls back correctly
+            const codeTrimmed = (typeof catalogCode === 'string') ? catalogCode.trim() : '';
+            const display = codeTrimmed || String(catalogKey ?? '');  // fall back to key if code is blank
+
+            // If you’d like to show both when available:
+            const msg = codeTrimmed
+                ? `Linked: ${codeTrimmed} (key ${catalogKey})`
+                : `Linked: key ${catalogKey}`;
+
+            // Flash the success for ~3s
+            task?.success(msg, 3000);
 
         } catch (err) {
-            TMUtils.toast?.(`❌ Lookup failed: ${err?.message || err}`, 'error');
+            task?.error('No catalog found for this customer.');
             derror(err);
         }
     }
