@@ -1,8 +1,71 @@
 const ROOT = (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window);
 
-/* lt-ui-hub : full-width sticky action bar above Plex actions
-   - Mounts before `.plex-actions-wrapper` when present, else at top of
-     `.plex-sidetabs-menu-page-content-container`
+// === Modal elevation support (reparent hub above Plex modals) ===
+let _hubOriginalParent = null;
+let _hubPlaceholder = null;
+let _hubElevated = false;
+
+function elevateForModal(host) {
+    if (!host || _hubElevated) return;
+    try {
+        _hubOriginalParent = host.parentNode || _hubOriginalParent;
+        if (!_hubPlaceholder) _hubPlaceholder = document.createComment('lt-hub-placeholder');
+        if (_hubOriginalParent && host.previousSibling !== _hubPlaceholder) {
+            _hubOriginalParent.insertBefore(_hubPlaceholder, host);
+        }
+        document.body.prepend(host);
+        const nav = getNavInfo();
+        Object.assign(host.style, {
+            position: 'fixed',
+            top: `${nav.height}px`,          // sit *under* the navbar
+            left: '0',
+            right: '0',
+            width: '100%',
+            zIndex: String(Math.max(1, nav.z - 1))  // keep hub below navbar/dropdowns
+        });
+
+        host.setAttribute('data-elevated', '1'); // optional, for styling
+        _hubElevated = true;
+    } catch { }
+}
+
+function restoreAfterModal(host) {
+    if (!host || !_hubElevated) return;
+    try {
+        if (_hubOriginalParent && _hubPlaceholder) {
+            _hubOriginalParent.insertBefore(host, _hubPlaceholder);
+        }
+        host.removeAttribute('data-elevated');
+        const nav = getNavInfo();
+        Object.assign(host.style, {
+            position: 'sticky',
+            top: '0',
+            left: '',
+            right: '',
+            width: '',
+            zIndex: String(Math.max(1, nav.z - 1))
+        });
+
+        _hubElevated = false;
+    } catch { }
+}
+
+function getNavInfo() {
+    const nav = document.getElementById('navBar') || document.querySelector('.plex-navbar-container.navbar');
+    if (!nav) return { height: 0, z: 1000 };
+    const cs = getComputedStyle(nav);
+    const z = parseInt(cs.zIndex, 10);
+    const h = nav.offsetHeight || parseInt(cs.height, 10) || 0;
+    return { height: h, z: Number.isFinite(z) ? z : 1000 };
+}
+
+
+
+
+
+/* lt-ui-hub : full-width sticky action bar inside the page content
+   - Mounts as the FIRST child of `.plex-sidetabs-menu-page-content`
+     (fallback: top of `.plex-sidetabs-menu-page-content-container`)
    - Shadow DOM isolation; KO re-render resilient
    - API: registerButton, remove, clear, setStatus, setBusy, setTitle
 */
@@ -34,9 +97,53 @@ async function ensureLTHub(opts = {}) {
     const { container, beforeNode } = await waitForContainerAndAnchor(timeoutMs, selectors);
     const { host, left, center, right, api } = createHub();
 
-    // Insert *before* the actions wrapper when possible; otherwise at top
-    if (beforeNode) container.insertBefore(host, beforeNode);
-    else container.prepend(host);
+    // Insert as the FIRST child of `.plex-sidetabs-menu-page-content`
+    // Fallback: prepend to the container if content node is missing.
+    const contentNode =
+        container.querySelector(':scope > .plex-sidetabs-menu-page-content') ||
+        document.querySelector('.plex-sidetabs-menu-page-content');
+
+    if (contentNode) {
+        const first = contentNode.firstElementChild;
+        first ? contentNode.insertBefore(host, first) : contentNode.appendChild(host);
+    } else {
+        container.prepend(host);
+    }
+
+    // Watch for Plex modal toggles (adds/removes 'modal-open' on <body>)
+    try {
+        const body = document.body;
+        const chk = () => {
+            const isModal = body.classList.contains('modal-open');
+            const hubHost = ROOT.ltUIHub?._el || document.querySelector('[data-lt-hub="1"]');
+            if (!hubHost) return;
+            if (isModal) elevateForModal(hubHost); else restoreAfterModal(hubHost);
+        };
+        chk(); // run once now
+        const modObs = new MutationObserver(muts => {
+            if (muts.some(m => m.type === 'attributes')) chk();
+        });
+        modObs.observe(body, { attributes: true, attributeFilter: ['class'] });
+    } catch { }
+
+    // Keep offsets/z-index in sync when navbar height changes (e.g., on resize)
+    window.addEventListener('resize', () => {
+        const hostNow = ROOT.ltUIHub?._el || document.querySelector('[data-lt-hub="1"]');
+        if (!hostNow) return;
+        const nav = getNavInfo();
+
+        if (document.body.classList.contains('modal-open')) {
+            // Hub is elevated: adjust top & z-index under navbar
+            hostNow.style.top = `${nav.height}px`;
+            hostNow.style.zIndex = String(Math.max(1, nav.z - 1));
+        } else {
+            // Hub in sticky mode: ensure it sits below the navbar layer
+            hostNow.style.top = '0';
+            hostNow.style.zIndex = String(Math.max(1, nav.z - 1));
+        }
+    });
+
+
 
     // THEME: inject tokens into Shadow DOM (OneMonroe-ready)
     const themeToUse = theme || window.LT_DEFAULT_THEME || OM_DEFAULT_THEME;
@@ -58,10 +165,15 @@ async function ensureLTHub(opts = {}) {
     function waitForContainerAndAnchor(ms, sels) {
         return new Promise((resolve, reject) => {
             const tryFind = () => {
-                const container = document.querySelector('.plex-sidetabs-menu-page-content-container')
-                    || document.querySelector('.plex-sidetabs-menu-page-content')
+                // Prefer the actual content node; fall back to the content *container*, then body
+                const content = document.querySelector('.plex-sidetabs-menu-page-content');
+                const container = content
+                    || document.querySelector('.plex-sidetabs-menu-page-content-container')
                     || document.body;
+
+                // Keep `beforeNode` for back-compat (unused in the new insertion logic)
                 const beforeNode = sels.map(s => document.querySelector(s)).find(Boolean) || null;
+
                 if (container) return resolve({ container, beforeNode });
             };
             // fast path
@@ -76,15 +188,20 @@ async function ensureLTHub(opts = {}) {
     function createHub() {
         const host = document.createElement('div');
         host.setAttribute('data-lt-hub', '1');
-        // sticky + full width
+        // Base (sticky) position — keep hub *below* the navbar’s z-index
+        const navBase = getNavInfo();
         Object.assign(host.style, {
-            position: 'sticky', top: '0', zIndex: '999',
+            position: 'sticky',
+            top: '0',
+            zIndex: String(Math.max(1, navBase.z - 1)),
         });
+
 
         const root = host.attachShadow({ mode: 'open' });
         const style = document.createElement('style');
         style.textContent = `
       :host { all: initial; }
+      :host([data-elevated="1"]) .hub { box-shadow: 0 6px 18px rgba(0,0,0,.18); }
       .hub {
         box-sizing: border-box;
         width: 100%;
@@ -130,6 +247,7 @@ async function ensureLTHub(opts = {}) {
       .status.info    { background:#eff6ff; border-color:#dbeafe; }
       .status.warn    { background:#fffbeb; border-color:#fef3c7; }
       .status.danger  { background:#fef2f2; border-color:#fee2e2; }
+      .status-wrap { display: inline-flex; align-items: center; }
       .spinner {
         width: 16px; height: 16px; border-radius: 50%;
         border: 2px solid rgba(0,0,0,.15); border-top-color: #0ea5e9;
@@ -143,26 +261,43 @@ async function ensureLTHub(opts = {}) {
         const center = document.createElement('div'); center.className = 'center';
         const right = document.createElement('div'); right.className = 'right';
 
-        // brand chip
-        const brand = document.createElement('div'); brand.className = 'brand';
-        const dot = document.createElement('div'); dot.className = 'dot';
-        const brandText = document.createElement('span'); brandText.textContent = 'LT Hub';
-        brand.append(dot, brandText);
-        left.appendChild(brand);
-
+        // ⬇️ Attach the sections to the hub container, then attach to ShadowRoot
         wrap.append(left, center, right);
         root.append(style, wrap);
+
+        // Persistent chrome (created once, re-attached on each render)
+        const brand = document.createElement('div'); brand.className = 'brand';
+        const brandDot = document.createElement('div'); brandDot.className = 'dot';
+        const brandText = document.createElement('span'); brandText.textContent = 'LT Hub';
+        brand.append(brandDot, brandText);
+
+        // Status pill (created once, re-attached on each render)
+        const statusWrap = document.createElement('div'); statusWrap.className = 'status-wrap';
+        const statusPill = document.createElement('div'); statusPill.className = 'status info';
+        statusPill.textContent = 'Ready';
+        statusWrap.appendChild(statusPill);
 
         // Registry + API
         const registry = new Map();
         function render() {
-            // Clear center (buttons live here by default)
-            Array.from(center.children).forEach(ch => { if (ch !== center._fixed) ch.remove(); });
+            // Clear ALL sections before re-render (prevents duplicates)
+            const clearChildren = (node) => { while (node.firstChild) node.removeChild(node.firstChild); };
+            clearChildren(left);
+            clearChildren(center);
+            clearChildren(right);
+
+            // Re-attach fixed chrome on the left every render
+            left.appendChild(brand);
+            right.appendChild(statusWrap);
+
             // Sorted render
             const items = Array.from(registry.values())
                 .sort((a, b) => (a.weight ?? 100) - (b.weight ?? 100) || String(a.label).localeCompare(String(b.label)));
             for (const it of items) {
-                if (it.type === 'separator') { const sep = document.createElement('div'); sep.className = 'sep'; addToSection(sep, it.section); continue; }
+                if (it.type === 'separator') {
+                    const sep = document.createElement('div'); sep.className = 'sep';
+                    addToSection(sep, it.section); continue;
+                }
                 const btn = document.createElement('button');
                 btn.className = 'hbtn';
                 btn.type = 'button';
@@ -173,10 +308,14 @@ async function ensureLTHub(opts = {}) {
                 addToSection(btn, it.section);
             }
         }
+
         function addToSection(el, section) {
-            const target = section === 'left' ? left : section === 'right' ? right : center;
+            // Reserve the RIGHT section for system status only
+            const safeSection = (section === 'right') ? 'center' : section;
+            const target = safeSection === 'left' ? left : safeSection === 'right' ? right : center;
             target.appendChild(el);
         }
+
 
         const api = {
             /** Register or update a button (or separator).
@@ -187,12 +326,6 @@ async function ensureLTHub(opts = {}) {
             clear() { registry.clear(); render(); return this; },
             list() { return Array.from(registry.values()); },
             setTitle(text) { brandText.textContent = text || 'LT Hub'; return this; },
-            //setStatus(text, tone = 'info') {
-            //    if (!api._statusEl) { api._statusEl = document.createElement('div'); api._statusEl.className = 'status info'; right.prepend(api._statusEl); }
-            //    api._statusEl.className = `status ${tone}`;
-            //    api._statusEl.textContent = text ?? '';
-            //    return this;
-            //},
             setBusy(isBusy) {
                 if (isBusy) {
                     if (!api._spin) { api._spin = document.createElement('div'); api._spin.className = 'spinner'; right.append(api._spin); }
@@ -208,19 +341,29 @@ async function ensureLTHub(opts = {}) {
             _el: host, _shadow: root
         };
 
-        // REPLACE your current setStatus(...) with this:
+        // now that api exists, wire helpers created earlier
+        api._brandText = brandText;
+        api._statusPill = statusPill;
+
         api.setStatus = function setStatus(text, tone = 'info', opts = {}) {
-            const stickyReq = !!opts.sticky;
-            const force = !!opts.force;
-            if (!api._statusEl) {
-                api._statusEl = document.createElement('div');
-                api._statusEl.className = 'status info';
-                right.prepend(api._statusEl);
-            }
-            if (api._sticky && !stickyReq && !force) return api;
-            api._sticky = stickyReq && !!text;
-            api._statusEl.className = `status ${tone}`;
-            api._statusEl.textContent = text ?? '';
+            try {
+                const pill = api._statusPill || statusPill;
+                if (!pill) return api;
+                // reset tone classes to match Shadow CSS (.status.info|success|warn|danger)
+                pill.classList.remove('info', 'success', 'warn', 'danger');
+                pill.classList.add(String(tone || 'info'));
+                pill.textContent = text || 'Ready';
+
+                if (opts.sticky) {
+                    // keep as-is
+                } else if (opts.timeout > 0) {
+                    setTimeout(() => {
+                        pill.classList.remove('success', 'warn', 'danger');
+                        pill.classList.add('info');
+                        pill.textContent = 'Ready';
+                    }, opts.timeout);
+                }
+            } catch (_) { }
             return api;
         };
 
@@ -287,7 +430,7 @@ async function ensureLTHub(opts = {}) {
             return ctl;
         };
 
-
+        render(); // initial render
         return { host, left, center, right, api };
     }
 }
@@ -407,4 +550,61 @@ if (!ROOT.injectThemeCSS) ROOT.injectThemeCSS = (theme) => {
 if (typeof window !== 'undefined' && !ROOT.ensureLTHub) {
     ROOT.ensureLTHub = ensureLTHub;
 }
+
+/* === Facade passthrough for lt.core.hub.* (registerButton, remove, clear, list, setStatus, beginTask, notify)
+      Also auto-mount hub on first facade call. === */
+try {
+    ROOT.lt = ROOT.lt || { core: {} };
+    const facade = (ROOT.lt.core.hub = ROOT.lt.core.hub || {});
+    facade._q = facade._q || [];
+
+    const delegate = (fn, args) => {
+        const hub = ROOT.ltUIHub;
+        if (hub && typeof hub[fn] === 'function') {
+            try { return hub[fn](...args); } catch { /* non-fatal */ }
+        } else {
+            // ensure hub tries to mount, then queue the call
+            try { ROOT.ensureLTHub?.(); } catch { /* non-fatal */ }
+            facade._q.push([fn, args]);
+        }
+        return facade;
+    };
+
+    if (typeof facade.registerButton !== 'function') {
+        facade.registerButton = function registerButton(def) { return delegate('registerButton', [def]); };
+    }
+    if (typeof facade.remove !== 'function') {
+        facade.remove = function remove(id) { return delegate('remove', [id]); };
+    }
+    if (typeof facade.clear !== 'function') {
+        facade.clear = function clear() { return delegate('clear', []); };
+    }
+    if (typeof facade.list !== 'function') {
+        facade.list = function list() { const hub = ROOT.ltUIHub; return hub?.list?.() ?? []; };
+    }
+    if (typeof facade.setStatus !== 'function') {
+        facade.setStatus = function setStatus(text, tone = 'info', opts = {}) { return delegate('setStatus', [text, tone, opts]); };
+    }
+    if (typeof facade.beginTask !== 'function') {
+        facade.beginTask = function beginTask(label, tone = 'info') {
+            const hub = ROOT.ltUIHub; return hub?.beginTask?.(label, tone) ?? { update() { }, success() { }, error() { }, clear() { } };
+        };
+    }
+    if (typeof facade.notify !== 'function') {
+        facade.notify = function notify(level, text, opts = {}) { return delegate('notify', [level, text, opts]); };
+    }
+
+    // Drain any queued facade calls once the hub is mounted
+    const drain = () => {
+        const hub = ROOT.ltUIHub;
+        if (!hub || !Array.isArray(facade._q) || !facade._q.length) return;
+        const q = facade._q.splice(0);
+        for (const [fn, args] of q) { try { hub[fn]?.(...args); } catch { } }
+    };
+    // Try now and on the next tick
+    drain(); Promise.resolve().then(drain);
+} catch { /* non-fatal */ }
+
+// Try to mount the hub once on load; it will also auto-mount on first facade call.
+try { Promise.resolve().then(() => ROOT.ensureLTHub?.().catch(() => { })); } catch { }
 

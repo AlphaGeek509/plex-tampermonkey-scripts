@@ -73,3 +73,52 @@
     .lt-btn--ghost:hover {
         background: rgba(11,95,255,.08);
     }
+
+/* Hub: brand + status */
+.lt-hub .brand {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 10px;
+    font-weight: 600;
+}
+
+    .lt-hub .brand .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--lt-brand, #111);
+    }
+
+.lt-hub .status-wrap {
+    display: flex;
+    align-items: center;
+}
+
+.lt-hub .status-pill {
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    line-height: 1.1;
+    border: 1px solid rgba(0,0,0,0.08);
+}
+
+    .lt-hub .status-pill.tone-info {
+        background: #eef2ff;
+        color: #1e40af;
+    }
+
+    .lt-hub .status-pill.tone-success {
+        background: #ecfdf5;
+        color: #065f46;
+    }
+
+    .lt-hub .status-pill.tone-warn {
+        background: #fffbeb;
+        color: #92400e;
+    }
+
+    .lt-hub .status-pill.tone-error {
+        background: #fef2f2;
+        color: #991b1b;
+    }

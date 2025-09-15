@@ -35,10 +35,11 @@
     // avoid depending on TMUtils timing; use regex on pathname
     if (!CFG.ROUTES.some(rx => rx.test(location.pathname))) return;
 
-    (() => {
-        const hub = lt.core.hub;
-        hub.setStatus("Ready", "info");
+    (async () => {
+        try { await (window.ensureLTHub?.()); } catch { }
+        lt.core.hub.setStatus("Ready", "info");
     })();
+
 
     function getTabScopeId(ns = 'QT') {
         try {
