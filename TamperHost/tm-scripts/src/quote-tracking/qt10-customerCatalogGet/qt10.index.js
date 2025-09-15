@@ -22,8 +22,6 @@
         DS_CATALOG_CODE_BY_KEY: 22696,
         // If true, don’t pre-fire on page load; wait for a real user edit
         GATE_USER_EDIT: true,
-        // Toast happy path
-        TOAST_SUCCESS: true,
     };
 
     // ===== Debug / Logger / DEV toast =====
@@ -41,22 +39,6 @@
         const hub = lt.core.hub;
         hub.setStatus("Ready", "info");
     })();
-
-
-
-
-
-
-    // === Add this helper near the top (once) ===
-    // Find lt.core.data in any same-origin frame
-    function findDC(win = (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window)) {
-        try { if (win.lt?.core?.data) return win.lt.core.data; } catch { }
-        for (let i = 0; i < win.frames.length; i++) {
-            try { const dc = findDC(win.frames[i]); if (dc) return dc; } catch { }
-        }
-        return null;
-    }
-
 
     function getTabScopeId(ns = 'QT') {
         try {
@@ -76,63 +58,34 @@
     // ===== Data via lt.core.data (flat {header, lines}) =====
     const SCOPE_DRAFT = 'draft';
     let QT = null;
-    async function waitForDC(timeoutMs = 20000) {
-        const start = Date.now();
-        while (Date.now() - start < timeoutMs) {
-            const LT = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.lt : window.lt);
-            if (LT?.core?.data?.createDataContext) {
-                // if our factory is already installed, we’re done
-                if (LT.core.data.makeFlatScopedRepo) return LT.core.data;
-            }
-            // small sleep
-            await (TMUtils.sleep?.(50) || new Promise(r => setTimeout(r, 50)));
-        }
-        throw new Error('DataCore not ready');
-    }
-    async function getQT() {
-        if (QT) return QT;
-        const DC = await waitForDC();
-        // lt-data-core will install the factory soon after DC is ready; if still missing, retry once
-        if (!DC.makeFlatScopedRepo) {
-            await (TMUtils.sleep?.(50) || new Promise(r => setTimeout(r, 50)));
-        }
-        QT = DC.makeFlatScopedRepo({ ns: 'QT', entity: 'quote', legacyEntity: 'QuoteHeader' });
-        return QT;
-    }
+
+    // Flat repo factory (no polling required now that lt-data-core installs at doc-start)
+    const QTF = lt.core?.data?.makeFlatScopedRepo
+        ? lt.core.data.makeFlatScopedRepo({ ns: "QT", entity: "quote", legacyEntity: "QuoteHeader" })
+        : null;
+
 
     let repoDraft = null;
     async function ensureDraftRepo() {
-        try {
-            if (repoDraft) return repoDraft;
-
-            // Non-blocking peek — do NOT wait 20s here
-            const DC = findDC();
-            if (!DC?.makeFlatScopedRepo) return null;
-            const { use } = DC.makeFlatScopedRepo({ ns: 'QT', entity: 'quote', legacyEntity: 'QuoteHeader' });
-
-            const { repo } = use(getTabScopeId('QT')); // <-- numeric, per-tab scope
-            repoDraft = repo;
-            await repoDraft.ensureFromLegacyIfMissing?.();
-            return repoDraft;
-        } catch (e) {
-            console.debug('QT10: repo not available yet; skipping persistence this cycle', e);
-            return null;
-        }
+        if (!QTF) return null;
+        if (repoDraft) return repoDraft;
+        const { repo } = QTF.use(getTabScopeId("QT"));
+        repoDraft = repo;
+        await repoDraft.ensureFromLegacyIfMissing?.();
+        return repoDraft;
     }
 
+    // Safe delegating wrapper: use lt.core.auth.withFreshAuth when available,
+    // otherwise just run the callback once (best-effort fallback).
+    const withFreshAuth = (fn) => {
+        const impl = lt?.core?.auth?.withFreshAuth;
+        return typeof impl === 'function' ? impl(fn) : fn();
+    };
 
-    // ===== Auth helpers =====
-    async function withFreshAuth(run) {
-        try { return await run(); }
-        catch (err) {
-            const status = err?.status || (/\b(\d{3})\b/.exec(err?.message || '') || [])[1];
-            if (+status === 419) { await lt.core.auth.getKey(); return await run(); }
-            throw err;
-        }
-    }
+
     async function ensureAuthOrToast() {
         try { if (await lt.core.auth.getKey()) return true; } catch { }
-        lt.core.hub.notify('warn', 'Auth looks stale. Retrying…', { toast: true });
+        lt.core.hub.notify('Auth looks stale. Retrying…', 'warn', { toast: true });
         return false;
     }
 
@@ -161,9 +114,6 @@
                 pollMs: 200, timeoutMs: 8000, logger: IS_TEST_ENV ? L : null
             });
             if (!viewModel) return;
-
-
-            // IMPORTANT: QT10 is CATALOG-ONLY; do NOT store Quote_Key/Quote_No here.
 
             // Watch CustomerNo → look up catalog → write to DRAFT scope
             let lastCustomerNo = null;
@@ -196,11 +146,7 @@
     async function applyCatalogFor(customerNo, vm) {
         if (!customerNo) return;
 
-        lt.core.hub.setStatus("Linking catalog…", "info", { sticky: true });
-        const task = {
-            success: (msg, t = 3000) => { lt.core.hub.setStatus('', 'info', { force: true }); lt.core.hub.notify(msg, 'success', { timeout: t }); },
-            error: (msg) => { lt.core.hub.setStatus('', 'info', { force: true }); lt.core.hub.notify(msg, 'error', { timeout: 3500 }); }
-        };
+        const task = lt.core.hub.beginTask('Linking catalog…', 'info');
 
         try {
             // 1) Customer → CatalogKey
@@ -333,9 +279,10 @@
         return await repo.get();
     };
 
-    W.QT10_checkDC = () => !!(findDC()?.makeFlatScopedRepo);
+    W.QT10_checkDC = () => !!(lt?.core?.data?.makeFlatScopedRepo);
     W.QT10_dcStatus = () => {
-        const dc = findDC();
-        return { hasCore: !!dc, hasFactory: !!dc?.makeFlatScopedRepo };
+        const hasFactory = !!(lt?.core?.data?.makeFlatScopedRepo);
+        return { hasCore: hasFactory, hasFactory };
     };
+
 })();
