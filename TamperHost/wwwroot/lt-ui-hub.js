@@ -139,10 +139,16 @@
             brand.innerHTML = '<span class="dot"></span><span class="brand-text">OneMonroe</span>';
             left.appendChild(brand);
 
+            // Dedicated status slot that must always be the last child in "right"
+            const statusSlot = document.createElement('span');
+            statusSlot.className = 'status-slot';
+            right.appendChild(statusSlot);
+
             wrap.append(left, center, right);
             root.appendChild(wrap);
 
             // API expected by lt.core facade
+            const DEFAULT_PILL_RESET_MS = 5000; // 5 seconds
             const mkStatus = (text, tone) => {
                 const w = document.createElement('span'); w.className = 'status-wrap';
                 const s = document.createElement('span'); s.className = `status ${tone}`;
@@ -167,7 +173,13 @@
                     } else if (def?.id) {
                         el.dataset.id = def.id;
                     }
-                    target.appendChild(el);
+
+                    // Keep status pill at the far right: insert new right-side items BEFORE statusSlot
+                    if (target === right) {
+                        right.insertBefore(el, statusSlot);
+                    } else {
+                        target.appendChild(el);
+                    }
                     return api;
                 },
                 remove(id) {
@@ -177,36 +189,46 @@
                     return api;
                 },
                 clear() {
-                    left.replaceChildren(); center.replaceChildren(); right.replaceChildren();
+                    left.replaceChildren();
+                    center.replaceChildren();
+                    // Preserve statusSlot at the far right; remove other right children
+                    [...right.children].forEach(n => { if (n !== statusSlot) n.remove(); });
+                    statusSlot.replaceChildren(); // clear the pill content
                     return api;
                 },
                 list() {
                     const all = [...left.children, ...center.children, ...right.children];
                     return all.map(n => n.dataset?.id).filter(Boolean);
                 },
-                setStatus(text, tone = 'info') {
-                    center.replaceChildren(mkStatus(text, tone));
+                setStatus(text, tone = 'info', opts = {}) {
+                    statusSlot.replaceChildren(mkStatus(text, tone));
+                    const sticky = !!opts?.sticky;
+                    const ms = (opts?.ms ?? opts?.timeout ?? DEFAULT_PILL_RESET_MS);
+                    if (!sticky && text) {
+                        setTimeout(() => {
+                            try { if (statusSlot.isConnected) statusSlot.replaceChildren(); } catch { }
+                        }, ms);
+                    }
                     return api;
                 },
                 beginTask(label, tone = 'info') {
                     const wrapNode = document.createElement('span'); wrapNode.className = 'status-wrap';
                     const spin = document.createElement('span'); spin.className = 'spinner';
-                    const lab = document.createElement('span'); lab.className = `status ${tone}`;
-                    lab.textContent = label || 'Working…';
+                    const lab = document.createElement('span'); lab.className = `status ${tone}`; lab.textContent = label || 'Working…';
                     wrapNode.append(spin, lab);
-                    center.replaceChildren(wrapNode);
+                    statusSlot.replaceChildren(wrapNode);
                     return {
                         update(text) { if (typeof text === 'string') lab.textContent = text; return this; },
                         success(text = 'Done') { lab.className = 'status success'; lab.textContent = text; spin.remove(); return this; },
                         error(text = 'Error') { lab.className = 'status danger'; lab.textContent = text; spin.remove(); return this; },
-                        clear() { center.replaceChildren(); return this; }
+                        clear() { statusSlot.replaceChildren(); return this; }
                     };
                 },
-                notify(kind, text, { ms = 2500, sticky = false } = {}) {
-                    api.setStatus(text, kind);
-                    if (!sticky) setTimeout(() => center.replaceChildren(), ms);
+                notify(kind, text, { ms = DEFAULT_PILL_RESET_MS, sticky = false } = {}) {
+                    // Reuse setStatus behavior so sticky/ms work the same
+                    api.setStatus(text, kind, { ms, sticky });
                     return api;
-                }
+                },
             };
 
             return { host, left, center, right, api };

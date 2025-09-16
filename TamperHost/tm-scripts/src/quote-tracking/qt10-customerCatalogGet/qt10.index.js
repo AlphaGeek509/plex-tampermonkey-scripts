@@ -35,13 +35,20 @@
     // avoid depending on TMUtils timing; use regex on pathname
     if (!CFG.ROUTES.some(rx => rx.test(location.pathname))) return;
 
-    (async () => {
-        // Prefer navbar mount globally
-        window.__LT_HUB_MOUNT = 'body';
-        // Let lt-core mount the hub (defaults to 'nav'); don't pre-mount here.
-        lt.core.hub.setStatus("Ready", "info");
-    })();
+    //(async () => {
+    //    // Prefer navbar mount globally
+    //    window.__LT_HUB_MOUNT = 'body';
+    //    // Let lt-core mount the hub (defaults to 'nav'); don't pre-mount here.
+    //    lt.core.hub.setStatus("Ready", "info");
+    //})();
 
+    (async () => {
+        // Force body mount and initialize the hub before the first status call
+        window.__LT_HUB_MOUNT = "body";
+        await window.ensureLTHub?.({ mount: "body" });
+        // Flash a quick “Ready” message (auto-clears per lt-ui-hub’s default)
+        lt.core.hub.notify("Ready", "info", { sticky: true });
+    })();
 
 
 
@@ -191,12 +198,11 @@
             const display = codeTrimmed || String(catalogKey ?? '');  // fall back to key if code is blank
 
             // If you’d like to show both when available:
-            const msg = codeTrimmed
-                ? `Linked: ${codeTrimmed} (key ${catalogKey})`
-                : `Linked: key ${catalogKey}`;
+            const msg = codeTrimmed ? `Linked: ${codeTrimmed} (key ${catalogKey})` : `Linked: key ${catalogKey}`;
+            task.success(msg);
+            // Flash success for ~3s (core API is notify(text, tone, opts))
+            lt.core.hub.notify(msg, "success", { ms: 3000 });
 
-            // Flash the success for ~3s
-            task.success(msg, 3000);
 
         } catch (err) {
             task.error('No catalog found for this customer.');

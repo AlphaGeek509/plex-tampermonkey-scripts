@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         lt-core
 // @namespace    lt
-// @version      1.7
+// @version      1.7.6
 // @description  Shared core: auth + http + plex DS + hub (status/toast) + theme bridge + tiny utils
 // @run-at       document-start
 // @grant        none
@@ -24,19 +24,18 @@
             try {
                 if (ROOT.PlexAuth?.getKey) return await ROOT.PlexAuth.getKey();
                 if (ROOT.PlexAPI?.getKey) return await ROOT.PlexAPI.getKey();
-            } catch { }
+            } catch { /* non-fatal */ }
             return null;
         },
 
         /**
-         * Simple wrapper that ensures an auth key is present before running fn.
+         * Run a function after ensuring we have an auth key.
          * If a refresh hook exists we’ll attempt it once.
          */
         async withFreshAuth(fn) {
             let key = await core.auth.getKey();
             if (!key) {
                 try {
-                    // Best-effort refresh patterns if present in your environment
                     if (ROOT.PlexAuth?.refresh) {
                         await ROOT.PlexAuth.refresh();
                         key = await core.auth.getKey();
@@ -44,14 +43,14 @@
                         await ROOT.PlexAPI.refresh();
                         key = await core.auth.getKey();
                     }
-                } catch { }
+                } catch { /* non-fatal */ }
             }
             return fn(key || undefined);
         }
     };
 
     // -------------------------
-    // HTTP (keeps your behavior)
+    // HTTP
     // Delegates to TMUtils.fetchData when available; falls back to fetch()
     // -------------------------
     core.http = core.http || {
@@ -91,7 +90,7 @@
     };
 
     // --------------------------------------
-    // Plex DS helpers (keeps your behavior)
+    // Plex DS helpers
     // --------------------------------------
     core.plex = core.plex || {
         async ds(sourceId, payload = {}, opts = {}) {
@@ -114,8 +113,6 @@
 
     // ---------------- Hub facade (prefers lt-ui-hub; mounts on first use) ----------------
     core.hub = core.hub || (() => {
-        const ROOT = (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window);
-
         // --- small pill fallback (used only if lt-ui-hub missing) ---
         const fallback = (() => {
             const api = {};
@@ -126,86 +123,62 @@
                 if (!pill) {
                     pill = document.createElement('div');
                     pill.id = 'lt-hub-pill';
-                    pill.className = 'lt-hub-pill lt-tone-info';
-                    pill.style.cssText = [
-                        'position:fixed', 'top:8px', 'right:8px', 'z-index:2147483647',
-                        'padding:6px 10px', 'border-radius:8px', 'font:12px/1.2 system-ui',
-                        'background:#eee', 'color:#111', 'box-shadow:0 6px 16px rgba(0,0,0,.15)'
-                    ].join(';');
-                    (document.body || document.documentElement).appendChild(pill);
+                    pill.style.cssText = `
+                        position: fixed;
+                        top: 10px; right: 10px;
+                        z-index: 2147483000;
+                        background: rgba(0,0,0,.8);
+                        color: #fff;
+                        font: 13px system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+                        padding: 6px 10px; border-radius: 999px;
+                        box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+                    `;
+                    pill.textContent = '…';
+                    document.documentElement.appendChild(pill);
                 }
                 return pill;
             }
-            function removePill() { const p = document.querySelector('#lt-hub-pill'); if (p) p.remove(); }
 
-            api.setStatus = function (text, tone = 'info', opts = {}) {
-                const pill = ensurePill();
-                pill.textContent = text || '';
-                pill.className = `lt-hub-pill lt-tone-${tone || 'info'}`;
-                api._sticky = !!(opts && opts.sticky && text);
-                if (!api._sticky && (!text || text === '')) removePill();
+            api.setStatus = (text, tone = 'info', { sticky = false } = {}) => {
+                const el = ensurePill();
+                el.textContent = text || '';
+                api._sticky = !!sticky;
+                if (!api._sticky) setTimeout(() => { try { el.remove(); } catch { } }, 2000);
                 return api;
             };
 
-            api.toast = function (msg, timeout = 3000) {
-                try {
-                    const el = document.createElement('div');
-                    el.className = 'lt-toast';
-                    el.textContent = msg;
-                    el.style.cssText = [
-                        'position:fixed', 'bottom:16px', 'right:16px', 'z-index:2147483647',
-                        'padding:8px 12px', 'border-radius:10px',
-                        'background:rgba(0,0,0,.82)', 'color:#fff', 'font:12px/1.2 system-ui',
-                        'box-shadow:0 10px 24px rgba(0,0,0,.35)', 'max-width:420px'
-                    ].join(';');
-                    (document.body || document.documentElement).appendChild(el);
-                    setTimeout(() => el.remove(), Math.max(500, timeout || 3000));
-                } catch { }
+            api.notify = (_level, text, { ms = 2500 } = {}) => {
+                const el = ensurePill();
+                el.textContent = text || '';
+                setTimeout(() => { try { el.remove(); } catch { } }, Math.max(500, ms | 0));
                 return api;
             };
 
-            api.notify = function (text, tone = 'info', opts = {}) {
-                api.setStatus(text, tone, opts);
-                if (!opts?.sticky && opts?.timeout) {
-                    setTimeout(() => api.setStatus('', tone, { sticky: false }), opts.timeout);
-                }
-                return api;
-            };
-
-            api.beginTask = function (label, tone = 'info') {
-                api.setStatus(label, tone, { sticky: true });
-                const ctl = {
-                    update(txt, t = tone) { api.setStatus(txt, t, { sticky: true }); return ctl; },
-                    success(msg = 'Done', ms = 2500) { api.setStatus('', 'info', { sticky: false }); api.notify(msg, 'success', { timeout: ms }); return ctl; },
-                    error(msg = 'Failed') { api.setStatus('', 'info', { sticky: false }); api.notify(msg, 'error', { timeout: 3500 }); return ctl; },
-                    clear() { api.setStatus('', 'info', { sticky: false }); return ctl; },
-                    done(msg, ms) { return ctl.success(msg, ms); }
-                };
-                return ctl;
-            };
+            api.toast = (msg, ms = 3000) => api.notify('info', msg, { ms });
 
             return api;
         })();
 
         // --- queue until lt-ui-hub mounts ---
         let mounted = false;
-        let mounting = null;              // Promise
-        const queue = [];                 // [{fn, args}]
+        let mounting = null;               // Promise
+        const queue = [];                  // [{fn, args}]
 
         async function mountUiHubOnce() {
             if (mounted) return true;
             if (mounting) return mounting;
+
             mounting = (async () => {
                 try {
-                    // If ensureLTHub is available, mount the sticky full-width bar where you want it
-                    const ensureFn = (typeof ensureLTHub === 'function')
-                        ? ensureLTHub
-                        : (typeof ROOT.ensureLTHub === 'function' ? ROOT.ensureLTHub : null);
+                    // If ensureLTHub is available, mount the full-width bar
+                    const ensureFn =
+                        (typeof ensureLTHub === 'function') ? ensureLTHub :
+                            (typeof ROOT.ensureLTHub === 'function' ? ROOT.ensureLTHub : null);
 
                     if (ensureFn) {
                         await ensureFn({
                             theme: { name: 'OneMonroe' },
-                            // default to 'nav', but honor any earlier selection
+                            // default to body; honor any earlier selection
                             mount: (ROOT.__LT_HUB_MOUNT || 'body'),
                             pageRootSelectors: [
                                 '#plexSidetabsMenuPage',
@@ -218,11 +191,10 @@
                             stick: false,
                             gap: 8
                         });
-
                     }
+
                     const hubObj = (typeof ltUIHub !== 'undefined') ? ltUIHub : ROOT.ltUIHub;
                     mounted = !!hubObj;
-
                     return mounted;
                 } catch {
                     mounted = false;
@@ -234,10 +206,11 @@
                         try {
                             if (hub && typeof hub[fn] === 'function') hub[fn](...args);
                             else fallback[fn](...args);
-                        } catch { }
+                        } catch { /* non-fatal */ }
                     }
                 }
             })();
+
             return mounting;
         }
 
@@ -248,7 +221,7 @@
                 : null;
 
             if (hubNow && typeof hubNow[fn] === 'function') {
-                try { hubNow[fn](...args); } catch { /* fall through */ }
+                try { hubNow[fn](...args); } catch { /* non-fatal */ }
                 return;
             }
 
@@ -266,6 +239,7 @@
         // Public API (sync looking; internally queues/delegates)
         return {
             setStatus(text, tone = 'info', opts = {}) { delegateOrQueue('setStatus', text, tone, opts); return this; },
+
             notify(text, tone = 'info', opts = {}) {
                 // lt-ui-hub signature: notify(kind, text, {ms, sticky, toast})
                 const ms = opts?.timeout ?? opts?.ms ?? 2500;
@@ -273,11 +247,13 @@
                 if (!mounted && typeof ROOT.ensureLTHub !== 'function') fallback.notify(text, tone, opts);
                 return this;
             },
+
             toast(msg, timeout = 3000) {
                 delegateOrQueue('notify', 'info', msg, { ms: timeout, toast: true });
                 if (!mounted && typeof ROOT.ensureLTHub !== 'function') fallback.toast(msg, timeout);
                 return this;
             },
+
             beginTask(label, tone = 'info') {
                 if (mounted && ROOT.ltUIHub?.beginTask) return ROOT.ltUIHub.beginTask(label, tone);
                 // queue a synthetic beginTask using status + success/error helpers
@@ -293,16 +269,13 @@
                 mountUiHubOnce().then(() => {
                     const hubNow = (typeof ltUIHub !== 'undefined') ? ltUIHub : ROOT.ltUIHub;
                     if (hubNow?.beginTask) {
-                        try { hubNow.beginTask(label, tone); } catch { }
+                        try { hubNow.beginTask(label, tone); } catch { /* non-fatal */ }
                     }
                 });
-
                 return ctl;
             }
         };
     })();
-
-
 
     // -------------------
     // Theme bridge (@resource THEME_CSS → GM_addStyle)
@@ -315,7 +288,7 @@
                 const css = (typeof GM_getResourceText === 'function') ? GM_getResourceText('THEME_CSS') : '';
                 if (css && typeof GM_addStyle === 'function') GM_addStyle(css);
             } catch (e) {
-                try { console.warn('[lt-core] theme.apply failed', e); } catch { }
+                try { console.warn('[lt-core] theme.apply failed', e); } catch { /* non-fatal */ }
             }
         }
     };
@@ -347,6 +320,5 @@
 
     // Tiny ready signal
     try { console.debug?.('[lt-core] ready'); } catch { }
-
 
 })();
