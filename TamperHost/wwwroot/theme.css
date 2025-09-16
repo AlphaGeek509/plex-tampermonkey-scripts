@@ -35,7 +35,7 @@
 
 /* Toast */
 .lt-toast {
-    box-shadow: 0 8px 24px rgba(0,0,0,.25);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
 }
 
 /* Optional: general accents you can reuse */
@@ -71,7 +71,7 @@
 }
 
     .lt-btn--ghost:hover {
-        background: rgba(11,95,255,.08);
+        background: rgba(11,95,255,0.08);
     }
 
 /* Hub: brand + status */
@@ -87,7 +87,7 @@
         width: 8px;
         height: 8px;
         border-radius: 999px;
-        background: var(--lt-brand, #111);
+        background: var(--lt-brand, #111111);
     }
 
 .lt-hub .status-wrap {

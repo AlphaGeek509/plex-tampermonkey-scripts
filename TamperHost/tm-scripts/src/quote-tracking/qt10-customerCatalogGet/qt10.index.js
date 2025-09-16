@@ -36,9 +36,13 @@
     if (!CFG.ROUTES.some(rx => rx.test(location.pathname))) return;
 
     (async () => {
-        try { await (window.ensureLTHub?.()); } catch { }
+        // Prefer navbar mount globally
+        window.__LT_HUB_MOUNT = 'nav';
+        // Let lt-core mount the hub (defaults to 'nav'); don't pre-mount here.
         lt.core.hub.setStatus("Ready", "info");
     })();
+
+
 
 
     function getTabScopeId(ns = 'QT') {

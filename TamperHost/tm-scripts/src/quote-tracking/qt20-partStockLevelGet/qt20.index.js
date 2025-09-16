@@ -12,17 +12,12 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : true;
     const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
     const raf = () => new Promise(r => requestAnimationFrame(r));
 
+    // Ensure the hub mounts early; QT20 runs inside a modal context
     (async () => {
-        // ensureLTDock is provided by @require’d lt-ui-dock.js
-        const dock = await window.ensureLTDock?.();
-        dock?.register({
-            id: 'qt35-attachments',
-            label: 'Attachments',
-            title: 'Open QT35 Attachments',
-            weight: 120,
-            onClick: () => openAttachmentsModal()
-        });
+        try { await (window.ensureLTHub?.()); } catch { }
+        lt.core.hub.setStatus('Ready', 'info');
     })();
+
 
 
     // ===== Routes / UI anchors =====
@@ -37,8 +32,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : true;
         ACTION_BAR_SEL: '#QuoteWizardSharedActionBar',
         GRID_SEL: '.plex-grid',
         POLL_MS: 200,
-        TIMEOUT_MS: 12_000,
-        TOAST_MS: 3500,
+        TIMEOUT_MS: 12000,
         SETTINGS_KEY: 'qt20_settings_v2',
         DEFAULTS: { includeBreakdown: true, includeTimestamp: true }
     };
@@ -70,18 +64,12 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : true;
         return m ? Number(m[1]) : null;
     }
 
-    // ===== 419 re-auth wrapper
-    async function withFreshAuth(run) {
-        try { return await run(); }
-        catch (err) {
-            const s = err?.status || ((/(\b\d{3}\b)/.exec(err?.message || '') || [])[1]);
-            if (+s === 419) {
-                try { await window.lt?.core?.auth?.getKey?.(); } catch { try { await window.TMUtils?.getApiKey?.({ force: true }); } catch { } }
-                return await run();
-            }
-            throw err;
-        }
-    }
+    // ===== Auth wrapper (prefers lt.core.auth.withFreshAuth; falls back to plain run)
+    const withFreshAuth = (fn) => {
+        const impl = lt?.core?.auth?.withFreshAuth;
+        return (typeof impl === 'function') ? impl(fn) : fn();
+    };
+
 
     // ===== Settings (GM)
     function loadSettings() {
@@ -133,12 +121,9 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : true;
 
 
     // ===== Click handler (no repo writes)
-    async function handleClick(btn, modalEl) {
-        btn.style.pointerEvents = 'none'; btn.style.opacity = '0.5';
-        const restore = () => { btn.style.pointerEvents = ''; btn.style.opacity = ''; };
-
+    async function runStockFetchFromModal() {
+        const task = lt.core.hub.beginTask('Fetching stock…', 'info');
         try {
-            TMUtils.toast('⏳ Fetching stock levels…', 'info', 5000);
             await ensureWizardVM();
 
             // Resolve Quote Key (used for logging only now)
@@ -186,11 +171,15 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : true;
             const setOk = window.TMUtils?.setObsValue?.(vm, 'NoteNew', newNote);
             if (!setOk && ta) { ta.value = newNote; ta.dispatchEvent(new Event('input', { bubbles: true })); }
 
-            TMUtils.toast(`✅ ${stamp}`, 'success', CFG.TOAST_MS);
+            task.success('Stock updated', 1500);
+            lt.core.hub.notify('success', 'Stock results copied to Note', { timeout: 2500, toast: true });
+
             dlog('QT20 success', { qk, partNo, basePart, sum, breakdown });
 
         } catch (err) {
-            TMUtils.toast(`❌ ${err.message || err}`, 'error', 8000);
+            task.error('Failed');
+            lt.core.hub.notify('error', `Stock check failed: ${err?.message || err}`, { timeout: 4000, toast: true });
+
             derr('handleClick:', err);
         } finally {
             restore();
@@ -320,6 +309,43 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : true;
         }
     }
 
+    const HUB_BTN_ID = 'qt20-stock-btn';
+
+    function getActiveModalTitle() {
+        const t = document.querySelector('.plex-dialog-has-buttons .plex-dialog-title');
+        return (t?.textContent || '').trim().replace(/\s+/g, ' ');
+    }
+
+    function isTargetModalOpen() {
+        return document.body.classList.contains('modal-open')
+            && /^quote\s*part\s*detail$/i.test(getActiveModalTitle());
+    }
+
+    async function ensureHubButton() {
+        try { await (window.ensureLTHub?.()); } catch { }
+        lt.core.hub.registerButton({
+            id: HUB_BTN_ID,
+            label: 'Stock',
+            title: 'Fetch stock for current part',
+            section: 'left',
+            weight: 110,
+            onClick: () => runStockFetchFromModal()
+        });
+    }
+
+    function removeHubButton() {
+        lt.core.hub.remove?.(HUB_BTN_ID);
+    }
+
+    async function reconcileHubButtonVisibility() {
+        if (isTargetModalOpen()) {
+            await ensureHubButton();
+        } else {
+            removeHubButton();
+        }
+    }
+
+
     // ===== Boot / SPA wiring
     let stopObserve = null;
     let offUrl = null;
@@ -342,6 +368,21 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : true;
         await raf();
         await ensureWizardVM();
         startModalObserver();
+
+        // Show/hide the button as the modal opens/closes and titles change
+        reconcileHubButtonVisibility();
+
+        const bodyObs = new MutationObserver(muts => {
+            if (muts.some(m => m.type === 'attributes')) reconcileHubButtonVisibility();
+        });
+        bodyObs.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+        // Modal title may change after opening
+        const modalRoot = document.querySelector('.plex-dialog-has-buttons') || document.body;
+        const titleObs = new MutationObserver(() => reconcileHubButtonVisibility());
+        titleObs.observe(modalRoot, { subtree: true, childList: true, characterData: true });
+
+
         dlog('initialized');
     }
 

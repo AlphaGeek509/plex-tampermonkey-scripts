@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         lt-core
 // @namespace    lt
-// @version      1.4.2
+// @version      1.5
 // @description  Shared core: auth + http + plex DS + hub (status/toast) + theme bridge + tiny utils
 // @run-at       document-start
 // @grant        none
@@ -205,7 +205,8 @@
                     if (ensureFn) {
                         await ensureFn({
                             theme: { name: 'OneMonroe' },
-                            mount: 'beforePage',
+                            // default to 'nav', but honor any earlier selection
+                            mount: (ROOT.__LT_HUB_MOUNT || 'nav'),
                             pageRootSelectors: [
                                 '#plexSidetabsMenuPage',
                                 '.plex-sidetabs-menu-page',
@@ -213,9 +214,11 @@
                                 '.plex-sidetabs-menu-page-content-container',
                                 '.plex-actions-wrapper'
                             ],
-                            stick: true,
+                            // when living in the navbar we never want to alter page layout
+                            stick: false,
                             gap: 8
                         });
+
                     }
                     const hubObj = (typeof ltUIHub !== 'undefined') ? ltUIHub : ROOT.ltUIHub;
                     mounted = !!hubObj;
