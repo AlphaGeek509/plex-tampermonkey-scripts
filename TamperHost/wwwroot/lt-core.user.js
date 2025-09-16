@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         lt-core
 // @namespace    lt
-// @version      1.5
+// @version      1.7
 // @description  Shared core: auth + http + plex DS + hub (status/toast) + theme bridge + tiny utils
 // @run-at       document-start
 // @grant        none
@@ -206,7 +206,7 @@
                         await ensureFn({
                             theme: { name: 'OneMonroe' },
                             // default to 'nav', but honor any earlier selection
-                            mount: (ROOT.__LT_HUB_MOUNT || 'nav'),
+                            mount: (ROOT.__LT_HUB_MOUNT || 'body'),
                             pageRootSelectors: [
                                 '#plexSidetabsMenuPage',
                                 '.plex-sidetabs-menu-page',
