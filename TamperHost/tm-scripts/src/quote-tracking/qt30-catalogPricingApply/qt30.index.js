@@ -11,8 +11,9 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
         DS_BreakpointsByPart: 4809,
         GRID_SEL: '.plex-grid',
         toastMs: 3500,
-        wizardTargetPage: 'Part Summary',
         settingsKey: 'qt30_settings_v1',
+        SHOW_ON_PAGES_RE: /^part\s*summary$/i,
+        FORCE_SHOW_BTN: false,
         defaults: { deleteZeroQtyRows: true, unitPriceDecimals: 3, enableHoverAffordance: true },
     };
 
@@ -21,7 +22,6 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
     TMUtils.setDebug?.(IS_TEST);
     const L = TMUtils.getLogger?.('QT30');
     const log = (...a) => { if (DEV || IS_TEST) L?.log?.(...a); };
-    const warn = (...a) => { if (DEV || IS_TEST) L?.warn?.(...a); };
     const err = (...a) => { if (DEV || IS_TEST) L?.error?.(...a); };
     const KO = (typeof unsafeWindow !== 'undefined' && unsafeWindow.ko) ? unsafeWindow.ko : window.ko;
     const ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
@@ -90,18 +90,20 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
     }
 
     function getActiveWizardPageName() {
-        const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
-        const activeEl = document.querySelector('.plex-wizard-page.active, .plex-wizard-page[aria-current="page"]');
-        const vm = activeEl ? KO?.dataFor?.(activeEl) : null;
-        const name = vm ? (KO?.unwrap?.(vm.name) ?? (typeof vm.name === 'function' ? vm.name() : vm.name)) : '';
-        if (name) return String(name);
-        const nav = document.querySelector('.plex-wizard-page-list .active, .plex-wizard-page-list [aria-current="page"]');
-        return (nav?.textContent || '').trim();
+        // Active LI renders the page name as a direct text node (qt35 logic)
+        const li = document.querySelector('.plex-wizard-page-list .plex-wizard-page.active');
+        if (!li) return '';
+        return (li.textContent || '').trim().replace(/\s+/g, ' ');
     }
+    function isOnTargetWizardPage() {
+        return CONFIG.SHOW_ON_PAGES_RE.test(getActiveWizardPageName());
+    }
+
 
     async function ensureHubButton() {
         const hub = await getHub({ mount: "nav" });
         if (!hub?.registerButton) return;
+
         const already = hub.list?.()?.includes(HUB_BTN_ID);
         if (already) return;
 
@@ -109,26 +111,62 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             id: HUB_BTN_ID,
             label: 'Apply Pricing',
             title: 'Apply customer catalog pricing',
+            weight: 120,
             onClick: () => runApplyPricing()
         });
-
-        // initial enable/disable by page
-        refreshHubButtonEnablement();
     }
 
-    function refreshHubButtonEnablement() {
-        const hub = window.ltUIHub;
-        if (!hub?.updateButton) return;
-        const onTarget = getActiveWizardPageName().toLowerCase() === 'part summary';
-        hub.updateButton(HUB_BTN_ID, { disabled: !onTarget, title: onTarget ? 'Apply customer catalog pricing' : 'Switch to Part Summary' });
+    // ===== SPA wiring (qt35 pattern) =====
+    let booted = false; let offUrl = null;
+
+    function wireNav(handler) { offUrl?.(); offUrl = window.TMUtils?.onUrlChange?.(handler); }
+
+    async function reconcileHubButtonVisibility() {
+        // Show only on target page (unless forced)
+        if (CONFIG.FORCE_SHOW_BTN || isOnTargetWizardPage()) {
+            await ensureHubButton();
+        } else {
+            const hub = await getHub();
+            hub?.remove?.(HUB_BTN_ID);
+        }
     }
 
-    TMUtils.onUrlChange?.(refreshHubButtonEnablement);
-    new MutationObserver(refreshHubButtonEnablement)
-        .observe(document.documentElement, { subtree: true, childList: true, attributes: true });
+    let pageObserver = null;
+    function startWizardPageObserver() {
+        const root = document.querySelector('.plex-wizard-page-list');
+        if (!root) return;
+        pageObserver = new MutationObserver((mut) => {
+            if (mut.some(m => m.type === 'attributes' || m.type === 'childList')) {
+                reconcileHubButtonVisibility();
+            }
+        });
+        pageObserver.observe(root, { subtree: true, attributes: true, attributeFilter: ['class'], childList: true });
+        window.addEventListener('hashchange', reconcileHubButtonVisibility);
+    }
+    function stopWizardPageObserver() {
+        try { window.removeEventListener('hashchange', reconcileHubButtonVisibility); } catch { }
+        try { pageObserver?.disconnect(); } catch { }
+        pageObserver = null;
+    }
 
-    // call once at bootstrap
-    ensureHubButton();
+    async function init() {
+        if (booted) return;
+        booted = true;
+
+        try { await getHub({ mount: "nav" }); } catch { }
+        await reconcileHubButtonVisibility();
+        startWizardPageObserver();
+    }
+    function teardown() {
+        booted = false;
+        offUrl?.(); offUrl = null;
+        stopWizardPageObserver();
+    }
+
+    // initialize for current route + wire route changes
+    init();
+    wireNav(() => { if (ROUTES.some(rx => rx.test(location.pathname))) init(); else teardown(); });
+
 
     async function runApplyPricing() {
         const task = lt.core.hub.beginTask('Applying catalog pricing…', 'info');
@@ -151,10 +189,9 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             }
             if (!catalogKey) { task.error('No Catalog Key'); lt.core.hub.notify('No catalog found for this quote', 'warn', { ms: 4000 }); return; }
 
-            // Collect parts from KO grid now
-            const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
-
+            // Collect parts from KO grid now (reuse top-level KO)
             const grid = document.querySelector(CONFIG.GRID_SEL);
+
             const raw = (grid && KO?.dataFor && Array.isArray(KO.dataFor(grid)?.datasource?.raw))
                 ? KO.dataFor(grid).datasource.raw : [];
 
@@ -243,8 +280,8 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             task.error('Failed');
             lt.core.hub.notify(`Apply failed: ${e?.message || e}`, 'error', { ms: 4000 });
         } finally {
-            // optional: refresh enablement if page changed due to SPA nav
-            try { refreshHubButtonEnablement(); } catch { }
+            // reconcile presence if SPA navigation changed the page
+            try { await reconcileHubButtonVisibility(); } catch { }
         }
     }
 
@@ -258,7 +295,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             if (grid && KO?.dataFor) {
                 const gridVM = KO.dataFor(grid);
                 const raw0 = Array.isArray(gridVM?.datasource?.raw) ? gridVM.datasource.raw[0] : null;
-                const v = raw0 ? TMUtils.getObsValue?.(raw0, 'QuoteKey') : null;
+                const v = raw0 ? TMUtils.getObsValue?.(raw0, ['QuoteKey', 'Quote_Key']) : null;
                 if (v != null) return Number(v);
             }
         } catch { }
@@ -266,7 +303,11 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             const rootEl = document.querySelector('.plex-wizard, .plex-page');
             const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
             const rootVM = rootEl ? KO?.dataFor?.(rootEl) : null;
-            const v = rootVM && (TMUtils.getObsValue?.(rootVM, 'QuoteKey') || TMUtils.getObsValue?.(rootVM, 'Quote.QuoteKey'));
+            const v = rootVM && (
+                TMUtils.getObsValue?.(rootVM, ['QuoteKey', 'Quote_Key']) ||
+                TMUtils.getObsValue?.(rootVM, ['Quote.QuoteKey', 'Quote.Quote_Key'])
+            );
+
             if (v != null) return Number(v);
         } catch { }
         const m = /[?&]QuoteKey=(\d+)/i.exec(location.search);
