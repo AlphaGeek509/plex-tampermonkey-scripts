@@ -1,4 +1,4 @@
-// src/quote-tracking/qt35-attachmentsGet/qt35.index.js
+// tm-scripts/src/quote-tracking/qt35-attachmentsGet/qt35.index.js
 
 (() => {
     'use strict';
@@ -37,14 +37,36 @@
 
 
     const ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
+    const FORCE_SHOW_BTN = false; // set to true during testing
     if (!ROUTES.some(rx => rx.test(location.pathname))) return;
+
+    // Mount hub into the NAV bar like QT10
+    // NOTE: Do not await at top-level. init() performs the awaited mount.
+    ROOT.__LT_HUB_MOUNT = "nav";
 
     const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
     const raf = () => new Promise(r => requestAnimationFrame(r));
 
+    // Robust hub getter that tolerates late-loading lt-ui-hub
+    async function getHub(opts = { mount: "nav" }) {
+        for (let i = 0; i < 50; i++) { // ~5s total
+            const ensure = (ROOT.ensureLTHub || window.ensureLTHub);
+            if (typeof ensure === 'function') {
+                try {
+                    const hub = await ensure(opts);
+                    if (hub) return hub;
+                } catch { /* keep retrying */ }
+            }
+            await new Promise(r => setTimeout(r, 100));
+        }
+        return null;
+    }
+
+
     const CFG = {
         ACTION_BAR_SEL: '#QuoteWizardSharedActionBar',
         GRID_SEL: '.plex-grid',
+        //SHOW_ON_PAGES_RE: /\bsummary\b/i,
         SHOW_ON_PAGES_RE: /^part\s*summary$/i,
         DS_ATTACHMENTS_BY_QUOTE: 11713,
         ATTACHMENT_GROUP_KEY: 11,
@@ -52,9 +74,6 @@
         POLL_MS: 200,
         TIMEOUT_MS: 12000
     };
-
-    // === Per-tab scope id (same as QT10) ===
-
 
     function getTabScopeId(ns = 'QT') {
         try {
@@ -250,37 +269,68 @@
     // ===== Hub button =====
     const HUB_BTN_ID = 'qt35-attachments-btn';
 
-    function ensureHubButton() {
-        try { await(window.ensureLTHub?.()); } catch { }
+    async function ensureHubButton() {
+        const hub = await getHub({ mount: "nav" });
+        if (!hub) { dlog('ensureHubButton: hub not available'); return; }
+        if (typeof hub.registerButton !== 'function') { dlog('ensureHubButton: hub.registerButton missing'); return; }
 
-        // Registers (or updates) a button in our hub. Section: left.
-        lt.core.hub.registerButton({
+        const list = hub.list?.();
+        const already = Array.isArray(list) && list.includes(HUB_BTN_ID);
+        if (already) {
+            // Button exists; nothing to do here
+            return;
+        }
+
+        dlog('ensureHubButton: registering…', { id: HUB_BTN_ID });
+        hub.registerButton('left', {
             id: HUB_BTN_ID,
             label: 'Attachments 0',
             title: 'Refresh attachments (manual)',
-            section: 'left',
             weight: 120,
             onClick: () => runOneRefresh(true)
         });
+        try { window.__HUB = hub; dlog('ensureHubButton: hub.list()', hub.list?.()); } catch { }
+        dlog('ensureHubButton: registered');
     }
 
-    function setBadgeCount(n) {
+    async function setBadgeCount(n) {
         const count = Number(n ?? 0);
-        try { await(window.ensureLTHub?.()); } catch { }
+        const hub = await getHub({ mount: "nav" });
+        if (!hub?.registerButton) return;
 
-        lt.core.hub.registerButton({
-            id: HUB_BTN_ID,
-            label: `Attachments ${count}`,
-            title: 'Refresh attachments (manual)',
-            section: 'left',
-            weight: 120,
-            onClick: () => runOneRefresh(true)
-        });
+        // If hub supports updateButton, use it; otherwise minimal churn
+        if (typeof hub.updateButton === 'function') {
+            hub.updateButton(HUB_BTN_ID, { label: `Attachments ${count}` });
+            return;
+        }
+
+        // Fallback: only re-register if not present (avoid remove/re-add churn)
+        const list = hub.list?.();
+        const already = Array.isArray(list) && list.includes(HUB_BTN_ID);
+        if (!already) {
+            hub.registerButton('left', {
+                id: HUB_BTN_ID,
+                label: `Attachments ${count}`,
+                title: 'Refresh attachments (manual)',
+                weight: 120,
+                onClick: () => runOneRefresh(true)
+            });
+        } else {
+            // No update API; do a gentle replace
+            hub.remove?.(HUB_BTN_ID);
+            hub.registerButton('left', {
+                id: HUB_BTN_ID,
+                label: `Attachments ${count}`,
+                title: 'Refresh attachments (manual)',
+                weight: 120,
+                onClick: () => runOneRefresh(true)
+            });
+        }
     }
 
     let refreshInFlight = false;
     async function runOneRefresh(manual = false) {
-        ensureHubButton(); // guarantees the button is present
+        await ensureHubButton(); // guarantees the button is present
         if (refreshInFlight) return;
         refreshInFlight = true;
         const t = lt.core.hub.beginTask("Fetching Attachments…", "info");
@@ -324,8 +374,8 @@
             // Optional toast when user clicked manually
             if (manual) {
                 lt.core.hub.notify(
-                    ok ? 'success' : 'warn',
                     ok ? `✅ ${count} attachment(s)` : '⚠️ No attachments',
+                    ok ? 'success' : 'warn',
                     { timeout: 2000, toast: true }
                 );
             }
@@ -335,8 +385,8 @@
             derr('refresh failed', err);
             t.error(`❌ Attachments refresh failed: ${err?.message || err}`, 4000);
             lt.core.hub.notify(
-                'error',
                 `❌ Attachments refresh failed: ${err?.message || err}`,
+                'error',
                 { timeout: 4000, toast: true }
             );
         } finally {
@@ -354,13 +404,15 @@
         booted = true;
         await raf();
 
-        try { await (window.ensureLTHub?.()); } catch { }
-        ensureHubButton();
+        try { await getHub({ mount: "nav" }); } catch { }
+        await ensureHubButton();
+        try { await getHub(); } catch { }
 
         startWizardPageObserver();
-        reconcileHubButtonVisibility();
+        await reconcileHubButtonVisibility();
 
         const show = isOnTargetWizardPage();
+
         if (show) {
             await ensureWizardVM();
 
@@ -377,10 +429,17 @@
                 setBadgeCount(0);
             }
         } else {
-            // Not on a target page: show a benign default
-            setBadgeCount(0);
-            // Off target page: make sure the button is gone
-            lt.core.hub.remove?.(HUB_BTN_ID);
+            // Not on a target page
+            if (FORCE_SHOW_BTN) {
+                await ensureHubButton();
+                setBadgeCount(0);
+            } else {
+                setBadgeCount(0);
+                try {
+                    const hub = await getHub();
+                    hub?.remove?.(HUB_BTN_ID);
+                } catch { /* noop */ }
+            }
         }
 
         dlog('initialized');
@@ -390,61 +449,39 @@
         offUrl?.();
         offUrl = null;
         stopWizardPageObserver();
+        stopPromote(); // ensure background timer is cleared
     }
 
     init();
 
-    // Place near other module-level lets
-    let lastWizardPage = null;
     let pageObserver = null;
 
     function startWizardPageObserver() {
         const root = document.querySelector('.plex-wizard-page-list');
         if (!root) return;
-        const obs = new MutationObserver((mut) => {
-            // class flips or child changes indicate page change
+        pageObserver = new MutationObserver((mut) => {
             if (mut.some(m => m.type === 'attributes' || m.type === 'childList')) {
                 reconcileHubButtonVisibility();
             }
         });
-        obs.observe(root, { subtree: true, attributes: true, attributeFilter: ['class'], childList: true });
+        pageObserver.observe(root, { subtree: true, attributes: true, attributeFilter: ['class'], childList: true });
         window.addEventListener('hashchange', reconcileHubButtonVisibility);
     }
 
     async function reconcileHubButtonVisibility() {
-        if (isOnTargetWizardPage()) {
+        const pageName = getActiveWizardPageName();
+        dlog('reconcileHubButtonVisibility:', { pageName });
+        if (FORCE_SHOW_BTN || isOnTargetWizardPage()) {
             await ensureHubButton();
         } else {
-            lt.core.hub.remove?.(HUB_BTN_ID);
+            const hub = await getHub();
+            dlog('reconcileHubButtonVisibility: removing button (off target page)');
+            hub?.remove?.(HUB_BTN_ID);
         }
     }
-
-    //function startWizardPageObserver() {
-    //    const root = document.querySelector('.plex-wizard') || document.body;
-    //    lastWizardPage = getActiveWizardPageName();
-    //    pageObserver?.disconnect();
-    //    pageObserver = new MutationObserver(() => {
-    //        const name = getActiveWizardPageName();
-    //        if (name !== lastWizardPage) {
-    //            lastWizardPage = name;
-    //            if (isOnTargetWizardPage()) {
-    //                queueMicrotask(async () => {
-    //                    const qk = getQuoteKeyDeterministic();
-    //                    if (qk && Number.isFinite(qk) && qk > 0) {
-    //                        await ensureRepoForQuote(qk);
-    //                        await mergeDraftIntoQuoteOnce(qk);
-    //                        await runOneRefresh(false);
-    //                        try { await hydratePartSummaryOnce(qk); } catch { }
-    //                    }
-    //                });
-    //            }
-    //        }
-    //    });
-    //    pageObserver.observe(root, { attributes: true, childList: true, subtree: true, attributeFilter: ['class', 'aria-current'] });
-    //}
-
     function stopWizardPageObserver() {
-        pageObserver?.disconnect();
+        try { window.removeEventListener('hashchange', reconcileHubButtonVisibility); } catch { }
+        try { pageObserver?.disconnect(); } catch { }
         pageObserver = null;
     }
 

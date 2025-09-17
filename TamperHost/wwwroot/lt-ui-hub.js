@@ -168,10 +168,14 @@
                         el.className = 'hbtn';
                         if (def?.id) el.dataset.id = def.id;
                         el.textContent = def?.label ?? 'Action';
+                        if (def?.title) el.title = String(def.title);
+                        if (def?.ariaLabel) el.setAttribute('aria-label', String(def.ariaLabel));
                         if (typeof def?.onClick === 'function') el.addEventListener('click', def.onClick);
                         if (def?.disabled) el.disabled = true;
                     } else if (def?.id) {
                         el.dataset.id = def.id;
+                        if (def?.title) el.title = String(def.title);
+                        if (def?.ariaLabel) el.setAttribute('aria-label', String(def.ariaLabel));
                     }
 
                     // Keep status pill at the far right: insert new right-side items BEFORE statusSlot
@@ -179,6 +183,26 @@
                         right.insertBefore(el, statusSlot);
                     } else {
                         target.appendChild(el);
+                    }
+                    return api;
+                },
+                updateButton(id, patch = {}) {
+                    const n = root.querySelector(`[data-id="${CSS.escape(id)}"]`);
+                    if (!n) return api;
+
+                    if (typeof patch.label === 'string' && n.tagName === 'BUTTON') {
+                        n.textContent = patch.label;
+                    }
+                    if (typeof patch.title === 'string') n.title = patch.title;
+                    if (typeof patch.ariaLabel === 'string') n.setAttribute('aria-label', patch.ariaLabel);
+                    if ('disabled' in patch && n.tagName === 'BUTTON') {
+                        n.disabled = !!patch.disabled;
+                    }
+                    if (typeof patch.onClick === 'function' && n.tagName === 'BUTTON') {
+                        const clone = n.cloneNode(true);
+                        clone.addEventListener('click', patch.onClick);
+                        clone.dataset.id = id;
+                        n.replaceWith(clone);
                     }
                     return api;
                 },

@@ -27,54 +27,34 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
     const ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
     if (!ROUTES.some(rx => rx.test(location.pathname))) { log('QT30: wrong route, skipping'); return; }
 
+    // Hub-first mount (nav variant) — align with qt10/qt20/qt35
+    window.__LT_HUB_MOUNT = "nav";
     (async () => {
-        // ensureLTDock is provided by @require’d lt-ui-dock.js
-        const dock = await window.ensureLTDock?.();
-        dock?.register({
-            id: 'qt35-attachments',
-            label: 'Attachments',
-            title: 'Open QT35 Attachments',
-            weight: 120,
-            onClick: () => openAttachmentsModal()
-        });
+        try { await window.ensureLTHub?.({ mount: "nav" }); } catch { }
+        lt.core.hub.notify("Ready", "info", { sticky: true });
     })();
 
 
-
     // ===== QuoteRepo via lt-data-core flat {header, lines} =====
-    let QT = null;
-    async function waitForDC(timeoutMs = 20000) {
-        const start = Date.now();
-        while (Date.now() - start < timeoutMs) {
-            const LT = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.lt : window.lt);
-            if (LT?.core?.data?.createDataContext) {
-                if (LT.core.data.makeFlatScopedRepo) return LT.core.data;
-            }
-            await (TMUtils.sleep?.(50) || new Promise(r => setTimeout(r, 50)));
-        }
-        throw new Error('DataCore not ready');
-    }
+    let QT = null, quoteRepo = null, lastScope = null;
+
     async function getQT() {
         if (QT) return QT;
-        const DC = await waitForDC();
-        if (!DC.makeFlatScopedRepo) { await (TMUtils.sleep?.(50) || new Promise(r => setTimeout(r, 50))); }
+        const DC = lt.core?.data;
+        if (!DC?.makeFlatScopedRepo) throw new Error('DataCore not ready');
         QT = DC.makeFlatScopedRepo({ ns: 'QT', entity: 'quote', legacyEntity: 'QuoteHeader' });
         return QT;
     }
 
-
-    let quoteRepo = null, lastScope = null;
     async function ensureRepoForQuote(qk) {
         if (!qk) return null;
         if (!quoteRepo || lastScope !== qk) {
             const { repo } = (await getQT()).use(Number(qk));
-            await repo.ensureFromLegacyIfMissing();
+            await repo.ensureFromLegacyIfMissing?.();
             quoteRepo = repo; lastScope = qk;
         }
         return quoteRepo;
     }
-
-
 
     // ---------- Settings (GM tolerant) ----------
     const loadSettings = () => {
@@ -88,189 +68,158 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
         catch { GM_setValue(CONFIG.settingsKey, JSON.stringify(next)); }
     };
 
-    // ---------- Toast (robust in DEV) ----------
-    function devToast(msg, level = 'info', ms = CONFIG.toastMs) {
-        try { TMUtils.toast?.(msg, level, ms); if (DEV) console.debug('[QT30 DEV] toast:', level, msg); return; } catch { }
-        if (!DEV) return;
-        const el = document.createElement('div');
-        Object.assign(el.style, {
-            position: 'fixed', right: '16px', bottom: '16px', zIndex: 2147483647,
-            padding: '10px 12px', borderRadius: '8px', boxShadow: '0 6px 20px rgba(0,0,0,.25)',
-            font: '14px/1.3 system-ui, Segoe UI, Arial', color: '#fff',
-            background: level === 'success' ? '#1b5e20' : level === 'warn' ? '#7f6000' : level === 'error' ? '#b71c1c' : '#424242',
-            whiteSpace: 'pre-wrap', maxWidth: '36ch'
-        });
-        el.textContent = String(msg); document.body.appendChild(el); setTimeout(() => el.remove(), ms || 3500);
-    }
 
-    // ---------- Auth helpers ----------
-    async function ensureAuthOrToast() {
-        try { const key = await lt.core.auth.getKey(); if (key) return true; } catch { }
-        devToast('Sign-in required. Please log in, then click again.', 'warn', 5000);
-        return false;
-    }
+    // Delegate to lt.core.auth wrapper (qt20/qt35 pattern)
+    const withFreshAuth = (fn) => {
+        const impl = lt?.core?.auth?.withFreshAuth;
+        return (typeof impl === 'function') ? impl(fn) : fn();
+    };
 
-    async function withFreshAuth(run) {
-        try { return await run(); }
-        catch (e) {
-            const status = +(e?.status || (/\b(\d{3})\b/.exec(e?.message || '') || [])[1] || 0);
-            if (status === 419) { try { await TMUtils.getApiKey?.({ force: true }); } catch { } return await run(); }
-            throw e;
-        }
-    }
+    // Hub button registration (qt35 pattern)
+    const HUB_BTN_ID = 'qt30-apply-pricing';
 
-
-    // ---------- Inject UI ----------
-    const stopObserve = TMUtils.observeInsertMany?.('#QuoteWizardSharedActionBar', injectPricingControls)
-        || TMUtils.observeInsert?.('#QuoteWizardSharedActionBar', injectPricingControls);
-
-    TMUtils.onUrlChange?.(() => {
-        if (!ROUTES.some(rx => rx.test(location.pathname))) { try { stopObserve?.(); } catch { } return; }
-        document.querySelectorAll('#QuoteWizardSharedActionBar').forEach(injectPricingControls);
-    });
-
-    document.querySelectorAll('#QuoteWizardSharedActionBar').forEach(injectPricingControls);
-
-    function injectPricingControls(ul) {
-        try {
-            if (!ul || ul.dataset.qt30Injected) return;
-            ul.dataset.qt30Injected = '1';
-
-            const li = document.createElement('li');
-            li.id = 'lt-apply-catalog-pricing';
-            li.style.display = 'none';
-
-            const a = document.createElement('a');
-            a.href = 'javascript:void(0)';
-            a.textContent = 'LT Apply Catalog Pricing';
-            a.title = 'Click to apply customer specific catalog pricing';
-            a.setAttribute('aria-label', 'Apply catalog pricing');
-            a.setAttribute('role', 'button');
-            Object.assign(a.style, { cursor: 'pointer', transition: 'filter .15s, textDecorationColor: .15s' });
-
-            const S = loadSettings();
-            if (S.enableHoverAffordance) {
-                a.addEventListener('mouseenter', () => { a.style.filter = 'brightness(1.08)'; a.style.textDecoration = 'underline'; });
-                a.addEventListener('mouseleave', () => { a.style.filter = ''; a.style.textDecoration = ''; });
-                a.addEventListener('focus', () => { a.style.outline = '2px solid #4a90e2'; a.style.outlineOffset = '2px'; });
-                a.addEventListener('blur', () => { a.style.outline = ''; a.style.outlineOffset = ''; });
+    async function getHub(opts = { mount: "nav" }) {
+        for (let i = 0; i < 50; i++) {
+            const ensure = (window.ensureLTHub || unsafeWindow?.ensureLTHub);
+            if (typeof ensure === 'function') {
+                try { const hub = await ensure(opts); if (hub) return hub; } catch { }
             }
-            a.addEventListener('click', () => handleApplyClick(a));
-            li.appendChild(a); ul.appendChild(li);
-            showOnlyOnPartSummary(li, CONFIG.wizardTargetPage);
-            log('QT30: button injected');
-        } catch (e) { err('QT30 inject:', e); }
+            await new Promise(r => setTimeout(r, 100));
+        }
+        return null;
     }
 
-    function showOnlyOnPartSummary(li, targetName) {
-        const getActiveWizardPageName = () => {
-            const activeEl = document.querySelector('.plex-wizard-page.active, .plex-wizard-page[aria-current="page"]');
-            const vm = activeEl ? KO?.dataFor?.(activeEl) : null;
-            const name = vm ? KO?.unwrap?.(vm.name) ?? (typeof vm.name === 'function' ? vm.name() : vm.name) : '';
-            if (name) return String(name);
-            const nav = document.querySelector('.plex-wizard-page-list .active, .plex-wizard-page-list [aria-current="page"]');
-            return (nav?.textContent || '').trim();
-        };
-        const toggle = () => { li.style.display = (getActiveWizardPageName() === targetName) ? '' : 'none'; };
-        const nav = document.querySelector('.plex-wizard-page-list');
-        if (nav) new MutationObserver(toggle).observe(nav, { childList: true, subtree: true, attributes: true });
-        toggle();
+    function getActiveWizardPageName() {
+        const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
+        const activeEl = document.querySelector('.plex-wizard-page.active, .plex-wizard-page[aria-current="page"]');
+        const vm = activeEl ? KO?.dataFor?.(activeEl) : null;
+        const name = vm ? (KO?.unwrap?.(vm.name) ?? (typeof vm.name === 'function' ? vm.name() : vm.name)) : '';
+        if (name) return String(name);
+        const nav = document.querySelector('.plex-wizard-page-list .active, .plex-wizard-page-list [aria-current="page"]');
+        return (nav?.textContent || '').trim();
     }
 
-    // ---------- Main handler (fully ported) ----------
-    async function handleApplyClick(btn) {
-        btn.style.pointerEvents = 'none'; btn.style.opacity = '0.5';
-        const restore = () => { btn.style.pointerEvents = ''; btn.style.opacity = ''; };
+    async function ensureHubButton() {
+        const hub = await getHub({ mount: "nav" });
+        if (!hub?.registerButton) return;
+        const already = hub.list?.()?.includes(HUB_BTN_ID);
+        if (already) return;
 
+        hub.registerButton('left', {
+            id: HUB_BTN_ID,
+            label: 'Apply Pricing',
+            title: 'Apply customer catalog pricing',
+            onClick: () => runApplyPricing()
+        });
+
+        // initial enable/disable by page
+        refreshHubButtonEnablement();
+    }
+
+    function refreshHubButtonEnablement() {
+        const hub = window.ltUIHub;
+        if (!hub?.updateButton) return;
+        const onTarget = getActiveWizardPageName().toLowerCase() === 'part summary';
+        hub.updateButton(HUB_BTN_ID, { disabled: !onTarget, title: onTarget ? 'Apply customer catalog pricing' : 'Switch to Part Summary' });
+    }
+
+    TMUtils.onUrlChange?.(refreshHubButtonEnablement);
+    new MutationObserver(refreshHubButtonEnablement)
+        .observe(document.documentElement, { subtree: true, childList: true, attributes: true });
+
+    // call once at bootstrap
+    ensureHubButton();
+
+    async function runApplyPricing() {
+        const task = lt.core.hub.beginTask('Applying catalog pricing…', 'info');
         try {
-            devToast('⏳ Applying catalog pricing…', 'info', 5000);
-            if (!(await ensureAuthOrToast())) throw new Error('No API key/session');
+            // auth
+            try { if (!(await lt.core.auth.getKey())) { lt.core.hub.notify('Sign-in required', 'warn', { ms: 4000 }); task.error('No session'); return; } } catch { }
 
-            const quoteKey = getQuoteKeyDeterministic();
-            if (!quoteKey) throw new Error('Quote_Key missing');
+            const qk = getQuoteKeyDeterministic();
+            if (!qk) { task.error('Quote_Key missing'); return; }
 
-            // 1) Catalog key (repo-cached)
-            await ensureRepoForQuote(quoteKey);
-            const header = await quoteRepo.getHeader();
-            let catalogKey = TMUtils.getObsValue(header, ['Catalog_Key', 'CatalogKey'], { first: true }) ?? null;
+            await ensureRepoForQuote(qk);
+            const header = await quoteRepo.getHeader?.() || {};
+            let catalogKey = TMUtils.getObsValue?.(header, ['Catalog_Key', 'CatalogKey'], { first: true }) ?? null;
 
             if (!catalogKey) {
-                devToast('⏳ Fetching Catalog Key…', 'info');
-                const rows1 = await withFreshAuth(() =>
-                    lt.core.plex.dsRows(CONFIG.DS_CatalogKeyByQuoteKey, { Quote_Key: quoteKey })
-                );
+                task.update('Fetching Catalog Key…');
+                const rows1 = await withFreshAuth(() => lt.core.plex.dsRows(CONFIG.DS_CatalogKeyByQuoteKey, { Quote_Key: qk }));
                 catalogKey = rows1?.[0]?.Catalog_Key || null;
-                if (catalogKey) await quoteRepo.patchHeader({ Quote_Key: Number(quoteKey), Catalog_Key: Number(catalogKey) });
+                if (catalogKey) await quoteRepo.patchHeader?.({ Quote_Key: Number(qk), Catalog_Key: Number(catalogKey) });
             }
+            if (!catalogKey) { task.error('No Catalog Key'); lt.core.hub.notify('No catalog found for this quote', 'warn', { ms: 4000 }); return; }
 
-            if (!catalogKey) { devToast(oneOf(NO_CATALOG_MESSAGES), 'warn', 5000); return; }
-            devToast(`✅ Catalog Key: ${catalogKey}`, 'success', 1800);
+            // Collect parts from KO grid now
+            const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
 
-            // 2) Breakpoints by part
+            const grid = document.querySelector(CONFIG.GRID_SEL);
+            const raw = (grid && KO?.dataFor && Array.isArray(KO.dataFor(grid)?.datasource?.raw))
+                ? KO.dataFor(grid).datasource.raw : [];
+
+            const partNos = [...new Set(raw.map(r => TMUtils.getObsValue?.(r, "PartNo", { first: true, trim: true })).filter(Boolean))];
+            if (!partNos.length) { task.error('No PartNo values'); lt.core.hub.notify('No PartNo values found', 'warn', { ms: 4000 }); return; }
+
+            task.update(`Loading ${partNos.length} part(s)…`);
             const now = new Date();
-
-            // Acquire KO grid rows at click time
-            const raw = (() => {
-                try {
-                    const grid = document.querySelector(CONFIG.GRID_SEL);
-                    if (grid && KO?.dataFor) {
-                        const gridVM = KO.dataFor(grid);
-                        return Array.isArray(gridVM?.datasource?.raw) ? gridVM.datasource.raw : [];
-                    }
-                } catch { }
-                return [];
-            })();
-
-            const partNos = [...new Set(
-                raw.map((r) => TMUtils.getObsValue(r, "PartNo", { first: true, trim: true }))
-                    .filter(Boolean)
-            )];
-
-            if (!partNos.length) { devToast('⚠️ No PartNo values found', 'warn', 4000); return; }
-
-            devToast(`⏳ Loading ${partNos.length} part(s)…`, 'info');
             const priceMap = {};
             await Promise.all(partNos.map(async (p) => {
-                const rows = await withFreshAuth(() =>
-                    lt.core.plex.dsRows(CONFIG.DS_BreakpointsByPart, { Catalog_Key: catalogKey, Catalog_Part_No: p })
-                ) || [];
+                const rows = await withFreshAuth(() => lt.core.plex.dsRows(CONFIG.DS_BreakpointsByPart, { Catalog_Key: catalogKey, Catalog_Part_No: p })) || [];
                 priceMap[p] = rows
                     .filter(r => r.Catalog_Part_No === p && new Date(r.Effective_Date) <= now && now <= new Date(r.Expiration_Date))
                     .sort((a, b) => a.Breakpoint_Quantity - b.Breakpoint_Quantity);
-                log(`QT30: loaded ${priceMap[p].length} breakpoints for ${p}`);
             }));
 
-            // 3) Apply or delete per row
-            devToast('⏳ Applying prices…', 'info');
+            // 3) Apply or delete per row (qt-standard loop)
             const S = loadSettings();
             const round = (n) => +(+n).toFixed(S.unitPriceDecimals);
-            const base = location.origin;
+
+            // Reuse grid/raw resolved above (avoid redeclaration)
 
             for (let i = 0; i < raw.length; i++) {
                 const row = raw[i];
                 const qty = +(TMUtils.getObsValue(row, 'Quantity', { first: true, trim: true }) || 0);
 
-                // Delete zero-qty rows (ported)
+                // Delete zero-qty rows (standard behavior)
                 if (qty <= 0 && S.deleteZeroQtyRows) {
-                    const qk = TMUtils.getObsValue(row, 'QuoteKey', { first: true, trim: true });
-                    const qpk = TMUtils.getObsValue(row, 'QuotePartKey', { first: true, trim: true });
-                    const qpr = TMUtils.getObsValue(row, 'QuotePriceKey', { first: true, trim: true });
+                    const qkRow = TMUtils.getObsValue(row, ['QuoteKey', 'Quote_Key'], { first: true, trim: true });
+                    const qpk = TMUtils.getObsValue(row, ['QuotePartKey', 'Quote_Part_Key'], { first: true, trim: true });
+                    const qpr = TMUtils.getObsValue(row, ['QuotePriceKey', 'Quote_Price_Key'], { first: true, trim: true });
 
-                    if (qk && qpk && qpr) {
+                    if (qkRow && qpk && qpr) {
                         try {
-                            const res = await lt.core.http.post('/SalesAndCRM/QuotePart/DeleteQuotePrice', {
-                                quoteKey: qk, quotePartKey: qpk, quotePriceKey: qpr
-                            });
-                            const ok = (res?.ok === true) || (res?.status >= 200 && res?.status < 300); // TMUtils.fetchData returns body; fallback if needed
-                            devToast(ok ? `🗑 Deleted row[${i}]` : `❌ Delete failed row[${i}]`, ok ? 'success' : 'error');
+                            // Build x-www-form-urlencoded payload so it works whether TMUtils.fetchData or native fetch is used
+                            const form = new URLSearchParams();
+                            form.set('QuoteKey', String(Number(qkRow)));
+                            form.set('QuotePartKey', String(Number(qpk)));
+                            form.set('QuotePriceKey', String(Number(qpr)));
+
+                            // Anti-forgery token (if present on page)
+                            const rvt = document.querySelector('input[name="__RequestVerificationToken"]')?.value
+                                || document.querySelector('meta[name="__RequestVerificationToken"]')?.content;
+                            if (rvt) form.set('__RequestVerificationToken', rvt);
+
+                            await withFreshAuth(() => lt.core.http.post(
+                                '/SalesAndCRM/QuotePart/DeleteQuotePrice',
+                                form.toString(),
+                                { headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' } }
+                            ));
+
+                            lt.core.hub.notify(`Deleted row[${i}]`, 'success', { ms: 2500 });
+
                         } catch (e) {
-                            devToast(`❌ Delete error row[${i}]`, 'error', 6000); err('QT30 delete error', e);
+                            err('QT30 delete error', e);
+                            lt.core.hub.notify(`Delete failed row[${i}]`, 'error', { ms: 3000 });
                         }
+                    } else {
+                        lt.core.hub.notify(`Skip delete row[${i}] — missing keys`, 'warn', { ms: 2500 });
                     }
+
                     continue;
                 }
 
-                // Apply price
+                // Apply price to non-zero rows
                 if (qty > 0) {
                     const partNo = TMUtils.getObsValue(row, 'PartNo', { first: true, trim: true });
                     const bp = pickPrice(priceMap[partNo], qty);
@@ -280,42 +229,50 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
                 }
             }
 
-            // 4) Refresh wizard so UI reflects changes (ported)
-            const wiz = unsafeWindow.plex?.currentPage?.QuoteWizard;
-            if (wiz?.navigatePage) {
-                const orig = wiz.navigatePage.bind(wiz);
-                wiz.navigatePage = (page) => { const ret = orig(page); setTimeout(() => devToast('🎉 All updated!', 'success'), 800); return ret; };
-                wiz.navigatePage(wiz.activePage());
-            } else {
-                devToast('🎉 All updated!', 'success');
-            }
+            task.update('Refreshing grid…');
+            const mode = await refreshQuoteGrid();
+
+            task.success('Pricing applied');
+            lt.core.hub.notify(
+                mode ? 'Pricing applied and grid refreshed' : 'Pricing applied (reload may be needed)',
+                'success',
+                { ms: 3000 }
+            );
 
         } catch (e) {
-            devToast(`❌ ${e.message || e}`, 'error', 8000); err('QT30:', e);
-        } finally { restore(); }
+            task.error('Failed');
+            lt.core.hub.notify(`Apply failed: ${e?.message || e}`, 'error', { ms: 4000 });
+        } finally {
+            // optional: refresh enablement if page changed due to SPA nav
+            try { refreshHubButtonEnablement(); } catch { }
+        }
     }
 
-    // ---------- Helpers ----------
 
+    // ---------- Helpers ----------
+    // Deterministic QuoteKey (qt35 pattern)
     function getQuoteKeyDeterministic() {
         try {
             const grid = document.querySelector(CONFIG.GRID_SEL);
+            const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
             if (grid && KO?.dataFor) {
                 const gridVM = KO.dataFor(grid);
                 const raw0 = Array.isArray(gridVM?.datasource?.raw) ? gridVM.datasource.raw[0] : null;
-                const v = raw0 ? window.TMUtils?.getObsValue?.(raw0, 'QuoteKey') : null;
+                const v = raw0 ? TMUtils.getObsValue?.(raw0, 'QuoteKey') : null;
                 if (v != null) return Number(v);
             }
         } catch { }
         try {
             const rootEl = document.querySelector('.plex-wizard, .plex-page');
+            const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
             const rootVM = rootEl ? KO?.dataFor?.(rootEl) : null;
-            const v = rootVM && (window.TMUtils?.getObsValue?.(rootVM, 'QuoteKey') || window.TMUtils?.getObsValue?.(rootVM, 'Quote.QuoteKey'));
+            const v = rootVM && (TMUtils.getObsValue?.(rootVM, 'QuoteKey') || TMUtils.getObsValue?.(rootVM, 'Quote.QuoteKey'));
             if (v != null) return Number(v);
         } catch { }
         const m = /[?&]QuoteKey=(\d+)/i.exec(location.search);
         return m ? Number(m[1]) : null;
     }
+
     function pickPrice(bps, qty) {
         if (!bps?.length) return null;
         if (qty < bps[0].Breakpoint_Quantity) return bps[0].Breakpoint_Price;
@@ -330,23 +287,45 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
         TMUtils.setObsValue(row, 'RvCustomizedUnitPrice', price);
     }
 
-    // ---------- Messages (ported) ----------
-    const NO_CATALOG_MESSAGES = [
-        '🚫 No catalog selected – cannot fetch prices.',
-        '⚠️ Missing customer catalog – pricing skipped.',
-        '🔍 No catalog found – prices unavailable.',
-        '❗ Catalog not set – please pick a catalog.',
-        '🛑 Cannot load prices without a customer catalog.',
-        '📛 No catalog key – unable to lookup prices.',
-        '⚠️ Prices require a catalog – none configured.',
-        '🚨 No catalog detected – skipping price lookup.',
-        'ℹ️ Select a catalog first to retrieve pricing.',
-        '🙈 No catalog chosen – hiding price fetch.'
-    ];
-    const oneOf = (arr) => arr[Math.floor(Math.random() * arr.length)];
+    /**
+     * Try to refresh the Quote grid visuals after apply/delete ops.
+     * Order of attempts:
+     *  1) KO grid VM datasource.read() (async)
+     *  2) grid VM .refresh() (sync)
+     *  3) Wizard nav to current page (rebinds page)
+     * Returns a string describing which path succeeded, or null.
+     */
+    async function refreshQuoteGrid() {
+        // Prefer a KO-level refresh if available
+        try {
+            const gridEl = document.querySelector(CONFIG.GRID_SEL);
+            const gridVM = gridEl && KO?.dataFor?.(gridEl);
+
+            if (typeof gridVM?.datasource?.read === 'function') {
+                await gridVM.datasource.read();   // async re-query/rebind
+                return 'ds.read';
+            }
+            if (typeof gridVM?.refresh === 'function') {
+                gridVM.refresh();                  // sync visual refresh
+                return 'vm.refresh';
+            }
+        } catch { }
+
+        // Fallback: wizard navigate to the same active page to force rebind
+        try {
+            const wiz = unsafeWindow.plex?.currentPage?.QuoteWizard;
+            if (wiz?.navigatePage) {
+                const active = (typeof wiz.activePage === 'function') ? wiz.activePage() : wiz.activePage;
+                wiz.navigatePage(active);
+                return 'wiz.navigatePage';
+            }
+        } catch { }
+
+        return null;
+    }
 
     // ---------- Tiny DEV test seam ----------
     if (DEV && typeof window !== 'undefined') {
-        window.__QT30__ = { pickPrice, applyPriceToRow, handleApplyClick };
+        window.__QT30__ = { pickPrice, applyPriceToRow, runApplyPricing };
     }
 })();

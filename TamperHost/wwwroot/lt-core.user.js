@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         lt-core
 // @namespace    lt
-// @version      1.7.6
+// @version      1.8
 // @description  Shared core: auth + http + plex DS + hub (status/toast) + theme bridge + tiny utils
 // @run-at       document-start
 // @grant        none
@@ -247,13 +247,15 @@
                 if (!mounted && typeof ROOT.ensureLTHub !== 'function') fallback.notify(text, tone, opts);
                 return this;
             },
-
             toast(msg, timeout = 3000) {
                 delegateOrQueue('notify', 'info', msg, { ms: timeout, toast: true });
                 if (!mounted && typeof ROOT.ensureLTHub !== 'function') fallback.toast(msg, timeout);
                 return this;
             },
-
+            updateButton(id, patch = {}) {
+                delegateOrQueue('updateButton', id, patch);
+                return this;
+            },
             beginTask(label, tone = 'info') {
                 if (mounted && ROOT.ltUIHub?.beginTask) return ROOT.ltUIHub.beginTask(label, tone);
                 // queue a synthetic beginTask using status + success/error helpers

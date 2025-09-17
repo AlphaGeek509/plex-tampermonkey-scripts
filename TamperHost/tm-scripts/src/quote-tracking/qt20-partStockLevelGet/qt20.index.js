@@ -1,7 +1,9 @@
 // tm-scripts/src/qt20-partStockLevelGet/qt20.index.js
 
 /* Build-time dev flag (esbuild sets __BUILD_DEV__), with a runtime fallback */
-const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : true;
+const DEV = (typeof __BUILD_DEV__ !== 'undefined')
+    ? __BUILD_DEV__
+    : /localhost|127\.0\.0\.1|^test\./i.test(location.hostname);
 
 (() => {
     'use strict';
@@ -12,17 +14,16 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : true;
     const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
     const raf = () => new Promise(r => requestAnimationFrame(r));
 
-    // Ensure the hub mounts early; QT20 runs inside a modal context
+    // Guard against double-mount; qt10/qt35 already do this
+    if (!('__LT_HUB_MOUNT' in window) || !window.__LT_HUB_MOUNT) window.__LT_HUB_MOUNT = 'nav';
     (async () => {
-        try { await (window.ensureLTHub?.()); } catch { }
-        lt.core.hub.setStatus('Ready', 'info');
+        try { await window.ensureLTHub?.({ mount: window.__LT_HUB_MOUNT }); } catch { }
+        // "Ready" handled by qt10 to avoid duplicate sticky pills
     })();
-
-
 
     // ===== Routes / UI anchors =====
     const ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
-    if (!(window.TMUtils && window.TMUtils.matchRoute && window.TMUtils.matchRoute(ROUTES))) return;
+    if (!ROUTES.some(rx => rx.test(location.pathname))) return;
 
     const CFG = {
         ACTIONS_UL_SEL: '.plex-dialog-has-buttons .plex-actions-wrapper ul.plex-actions',
@@ -40,8 +41,15 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : true;
     // ===== KO/Wizard helpers
     async function ensureWizardVM() {
         const anchor = document.querySelector(CFG.GRID_SEL) ? CFG.GRID_SEL : CFG.ACTION_BAR_SEL;
-        const { viewModel } = await (window.TMUtils?.waitForModelAsync(anchor, { pollMs: CFG.POLL_MS, timeoutMs: CFG.TIMEOUT_MS, requireKo: true }) ?? { viewModel: null });
-        return viewModel;
+        if (window.TMUtils?.waitForModelAsync) {
+            const { viewModel } = await window.TMUtils.waitForModelAsync(anchor, {
+                pollMs: CFG.POLL_MS, timeoutMs: CFG.TIMEOUT_MS, requireKo: true
+            }) ?? { viewModel: null };
+            if (viewModel) return viewModel;
+        }
+        // Fallback: try KO root near the wizard/page
+        const rootEl = document.querySelector('.plex-wizard, .plex-page');
+        return rootEl && (KO?.dataFor?.(rootEl) || null);
     }
 
     function getQuoteKeyDeterministic() {
@@ -74,13 +82,14 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : true;
     // ===== Settings (GM)
     function loadSettings() {
         try {
-            const v = GM_getValue(CFG.SETTINGS_KEY, CFG.DEFAULTS);
-            return typeof v === 'string' ? { ...CFG.DEFAULTS, ...JSON.parse(v) } : { ...CFG.DEFAULTS, ...v };
+            const raw = GM_getValue(CFG.SETTINGS_KEY, null);
+            if (!raw) return { ...CFG.DEFAULTS };
+            const obj = (typeof raw === 'string') ? JSON.parse(raw) : raw;
+            return { ...CFG.DEFAULTS, ...obj };
         } catch { return { ...CFG.DEFAULTS }; }
     }
     function saveSettings(next) {
-        try { GM_setValue(CFG.SETTINGS_KEY, next); }
-        catch { GM_setValue(CFG.SETTINGS_KEY, JSON.stringify(next)); }
+        try { GM_setValue(CFG.SETTINGS_KEY, JSON.stringify(next)); } catch { }
     }
 
     // ===== Stock helpers
@@ -121,7 +130,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : true;
 
 
     // ===== Click handler (no repo writes)
-    async function runStockFetchFromModal() {
+    async function handleClick(modalEl) {
         const task = lt.core.hub.beginTask('Fetching stock…', 'info');
         try {
             await ensureWizardVM();
@@ -164,7 +173,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : true;
             const current = window.TMUtils?.getObsValue?.(vm, 'NoteNew', { trim: true }) || '';
             const baseNote = (/^(null|undefined)$/i.test(current) ? '' : current);
             const cleaned = baseNote.replace(
-                /(?:^|\s)STK:\s*[\d,]+(?:\s*pcs)?(?:\s*\([^)]*\))?(?:\s*@[0-9:\-\/\s]+)?/gi,
+                /(?:^|\s)STK:\s*\d[\d,]*(?:\s*pcs)?(?:\s*\([^()]*\))?(?:\s*@\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})?/gi,
                 ''
             ).trim();
             const newNote = cleaned ? `${cleaned} ${stamp}` : stamp;
@@ -172,13 +181,13 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : true;
             if (!setOk && ta) { ta.value = newNote; ta.dispatchEvent(new Event('input', { bubbles: true })); }
 
             task.success('Stock updated', 1500);
-            lt.core.hub.notify('success', 'Stock results copied to Note', { timeout: 2500, toast: true });
+            lt.core.hub.notify('Stock results copied to Note', 'success', { ms: 2500, toast: true });
 
             dlog('QT20 success', { qk, partNo, basePart, sum, breakdown });
 
         } catch (err) {
             task.error('Failed');
-            lt.core.hub.notify('error', `Stock check failed: ${err?.message || err}`, { timeout: 4000, toast: true });
+            lt.core.hub.notify(`Stock check failed: ${err?.message || err}`, 'error', { ms: 4000, toast: true });
 
             derr('handleClick:', err);
         } finally {
@@ -231,7 +240,10 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : true;
             btn.addEventListener('mouseleave', () => { btn.style.filter = ''; btn.style.textDecoration = ''; });
             btn.addEventListener('focus', () => { btn.style.outline = '2px solid #4a90e2'; btn.style.outlineOffset = '2px'; });
             btn.addEventListener('blur', () => { btn.style.outline = ''; btn.style.outlineOffset = ''; });
-            btn.addEventListener('click', () => handleClick(btn, modal));
+            btn.addEventListener('click', () => handleClick(modal));
+            btn.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(modal); }
+            });
             liMain.appendChild(btn);
             ul.appendChild(liMain);
 
@@ -321,30 +333,45 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : true;
             && /^quote\s*part\s*detail$/i.test(getActiveModalTitle());
     }
 
+    function getActiveModalRoot() {
+        return document.querySelector('.plex-dialog-has-buttons') || document.querySelector('.plex-dialog');
+    }
+
     async function ensureHubButton() {
-        try { await (window.ensureLTHub?.()); } catch { }
-        lt.core.hub.registerButton({
+        try { await window.ensureLTHub?.(); } catch { }
+        const hub = lt?.core?.hub;
+        if (!hub || !hub.registerButton) return; // UI not ready yet
+
+        // Don't double-register
+        if (hub.has?.(HUB_BTN_ID)) return;
+
+        hub.registerButton({
             id: HUB_BTN_ID,
             label: 'Stock',
             title: 'Fetch stock for current part',
             section: 'left',
             weight: 110,
-            onClick: () => runStockFetchFromModal()
+            onClick: () => handleClick(getActiveModalRoot())
         });
     }
 
     function removeHubButton() {
-        lt.core.hub.remove?.(HUB_BTN_ID);
+        const hub = lt?.core?.hub;
+        hub?.remove?.(HUB_BTN_ID);
     }
 
-    async function reconcileHubButtonVisibility() {
+    function debounce(fn, ms = 50) {
+        let id = null;
+        return (...args) => { clearTimeout(id); id = setTimeout(() => fn(...args), ms); };
+    }
+
+    const reconcileHubButtonVisibility = debounce(async () => {
         if (isTargetModalOpen()) {
             await ensureHubButton();
         } else {
             removeHubButton();
         }
-    }
-
+    }, 50);
 
     // ===== Boot / SPA wiring
     let stopObserve = null;
