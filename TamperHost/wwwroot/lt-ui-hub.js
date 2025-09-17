@@ -259,7 +259,7 @@
         if (preExistingHost && ROOT.ltUIHub) return ROOT.ltUIHub;
 
         // Determine desired mount
-        const desiredMount = (ROOT.__LT_HUB_MOUNT || mountOpt || 'body'); // default to 'nav'
+        const desiredMount = (mountOpt || ROOT.__LT_HUB_MOUNT || 'nav');
 
         ROOT.__ensureLTHubPromise = (async () => {
             const { container } = await ROOT.waitForContainerAndAnchor(timeoutMs, selectors);
@@ -281,52 +281,237 @@
                     });
                 }
 
-                const li = document.createElement('li');
-                li.className = 'lt-hub-nav';
-                li.style.display = 'inline-flex';
-                li.style.alignItems = 'center';
-                li.style.gap = '8px';
-                navRight.prepend(li);
-                li.appendChild(host);
+                // Resolve the actual <nav> container
+                const navBar =
+                    (navRight && navRight.closest('nav')) ||
+                    document.getElementById('navBar') ||
+                    document.querySelector('.plex-navbar-container.navbar');
 
-                // Nav variant: no page padding or fixed positioning
-                host.setAttribute('data-variant', 'nav');
+                if (!navBar) throw new Error('lt-ui-hub: navBar not found');
+
+                // Create (or reuse) a dedicated full-width row inside <nav>,
+                // inserted before the normal Plex navbar content wrapper.
+                const beforeNode = navBar.querySelector(':scope > .plex-navbar-title-container navbar-left') || null;
+
+                let row = navBar.querySelector(':scope > .lt-hub-row');
+                if (!row) {
+                    row = document.createElement('div');
+                    row.className = 'lt-hub-row';
+
+                    // Minimal inline style; hub handles its own inner layout.
+                    row.style.display = 'block';
+                    row.style.boxSizing = 'border-box';
+                    row.style.width = '100%';
+
+                    // Optional thin divider to mimic native rows:
+                    // row.style.borderBottom = '1px solid rgba(0,0,0,.08)';
+
+                    if (beforeNode) navBar.insertBefore(row, beforeNode);
+                    else navBar.appendChild(row);
+                }
+
+                // --- Full-bleed: cancel nav's L/R padding and borders for our row only ---
+                const applyEdgeToEdge = () => {
+                    const cs = getComputedStyle(navBar);
+                    const pl = parseFloat(cs.paddingLeft) || 0;
+                    const pr = parseFloat(cs.paddingRight) || 0;
+                    const bl = parseFloat(cs.borderLeftWidth) || 0;
+                    const br = parseFloat(cs.borderRightWidth) || 0;
+
+                    // Extend across padding + borders
+                    row.style.marginLeft = (pl + bl) ? `-${pl + bl}px` : '0';
+                    row.style.marginRight = (pr + br) ? `-${pr + br}px` : '0';
+                    row.style.width = (pl + pr + bl + br) ? `calc(100% + ${pl + pr + bl + br}px)` : '100%';
+                };
+
+                // Avoid duplicate listeners on route changes
+                if (!row.dataset.edgeApplied) {
+                    applyEdgeToEdge();
+                    window.addEventListener('resize', applyEdgeToEdge, { passive: true });
+                    new MutationObserver(applyEdgeToEdge)
+                        .observe(navBar, { attributes: true, attributeFilter: ['style', 'class'] });
+                    row.dataset.edgeApplied = '1';
+                }
+
+
+                // Move the hub host into our row (full-width)
+                if (host.parentNode !== row) row.appendChild(host);
+
+                // Use hub’s default (full-width) look — not compact "nav" inline
+                host.setAttribute('data-variant', 'row');
                 Object.assign(host.style, {
                     position: 'static',
                     top: '', left: '', right: '',
-                    width: 'auto', zIndex: 'auto', pointerEvents: 'auto'
+                    width: '100%',
+                    maxWidth: '100%',
+                    zIndex: 'auto',
+                    pointerEvents: 'auto'
                 });
-            } else {
-                // Body variant: insert at top of content, add page padding
-                const contentNode =
-                    container.querySelector(':scope > .plex-sidetabs-menu-page-content') ||
-                    document.querySelector('.plex-sidetabs-menu-page-content');
+                // Ensure the shadow root's top-level .hub respects full width
+                try {
+                    const hubRoot = host.shadowRoot?.querySelector('.hub');
+                    if (hubRoot) hubRoot.style.width = '100%';
+                } catch { }
 
-                if (contentNode) {
-                    const first = contentNode.firstElementChild;
-                    first ? contentNode.insertBefore(host, first) : contentNode.appendChild(host);
-                } else {
-                    container.prepend(host);
+
+                // Let the navbar grow naturally. Some skins force a fixed height (≈45px).
+                // Override to "auto" and keep a sensible minimum = 45px + hub-row height.
+                const BASE_H = 45; // native Plex top bar
+                navBar.style.height = 'auto';
+
+                // Track hub height and adjust min-height so the second row is fully visible.
+                const updateMinHeight = () => {
+                    const h = Math.max(0, host.getBoundingClientRect().height || 0);
+                    //navBar.style.minHeight = `${BASE_H + h}px`;
+                };
+
+                // Initial + reactive sizing
+                requestAnimationFrame(() => { updateMinHeight(); requestAnimationFrame(updateMinHeight); });
+                try { document.fonts?.ready?.then(updateMinHeight); } catch { }
+                window.addEventListener('resize', updateMinHeight, { passive: true });
+
+                // React to hub content changes
+                try {
+                    const ro = new ResizeObserver(updateMinHeight);
+                    ro.observe(host);
+                } catch { }
+
+                // --- Production-only shortfall fix (no persistent banner) ---
+                // Apply only when there is NO persistent banner (TEST has one; PROD typically does not).
+                const hasPersistentBanner = !!document.querySelector('.plex-env-persistent-banner-container');
+                if (!hasPersistentBanner) {
+                    const BASE_NAV_H = 45; // baseline Plex navbar height
+
+                    const PAGE_SEL = [
+                        '.plex-sidetabs-menu-page',
+                        '.plex-sidetabs-menu-page-content-container',
+                        '.plex-sidetabs-menu-page-content'
+                    ];
+
+                    function getPx(v) {
+                        if (!v) return null;
+                        const n = parseFloat(v);
+                        return Number.isFinite(n) ? n : null;
+                    }
+
+                    function captureBase(el) {
+                        // Store the original inline values once so we can re-derive later
+                        const ds = el.dataset;
+                        if (!ds.ltBaseH && el.style.height) ds.ltBaseH = el.style.height;
+                        if (!ds.ltBaseMax && el.style.maxHeight) ds.ltBaseMax = el.style.maxHeight;
+                        if (!ds.ltBaseMin && el.style.minHeight) ds.ltBaseMin = el.style.minHeight;
+                    }
+
+                    function applyExtra(el, extra) {
+                        captureBase(el);
+                        const ds = el.dataset;
+
+                        // From base inline values (or current computed), add 'extra'
+                        const baseH = getPx(ds.ltBaseH) ?? getPx(el.style.height);
+                        const baseMax = getPx(ds.ltBaseMax) ?? getPx(el.style.maxHeight);
+                        const baseMin = getPx(ds.ltBaseMin) ?? getPx(el.style.minHeight);
+
+                        if (baseH != null) el.style.height = `${Math.max(0, baseH + extra)}px`;
+                        if (baseMax != null) el.style.maxHeight = `${Math.max(0, baseMax + extra)}px`;
+                        if (baseMin != null) el.style.minHeight = `${Math.max(0, baseMin + extra)}px`;
+                    }
+
+                    function adjustPageHeights() {
+                        // Compute how much taller than the baseline Plex nav we are
+                        const navH = Math.max(0, navBar.getBoundingClientRect().height || 0);
+                        const extra = Math.max(0, navH - BASE_NAV_H);
+                        if (!extra) return; // Nothing to do when no extra row
+
+                        PAGE_SEL.forEach(sel => {
+                            document.querySelectorAll(sel).forEach(el => applyExtra(el, extra));
+                        });
+                    }
+
+                    // Initial + reactive applications
+                    requestAnimationFrame(() => { adjustPageHeights(); requestAnimationFrame(adjustPageHeights); });
+                    window.addEventListener('resize', adjustPageHeights, { passive: true });
+
+                    // Observe nav height changes (e.g., if hub content grows/shrinks)
+                    try {
+                        const r2 = new ResizeObserver(adjustPageHeights);
+                        r2.observe(navBar);
+                    } catch { }
+
+                    // If Plex rewrites inline heights later, re-apply our adjustment
+                    const mo = new MutationObserver(muts => {
+                        let hit = false;
+                        for (const m of muts) {
+                            if (m.type === 'attributes' && m.attributeName === 'style') { hit = true; break; }
+                            if (m.type === 'childList') { hit = true; break; }
+                        }
+                        if (hit) adjustPageHeights();
+                    });
+                    mo.observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['style'] });
                 }
 
-                // Make sure body gets top padding based on hub height
-                document.body.classList.add('lt-hub-padded');
-                const setPad = () => {
+            } else {
+                // Body variant (non-overlay): insert a spacer ahead of the hub equal to
+                // Plex's fixed chrome (banner + navbar). Then make the hub sticky at top:0.
+                const contentNode =
+                    container.querySelector(':scope > .plex-sidetabs-menu-page-content') ||
+                    document.querySelector('.plex-sidetabs-menu-page-content') ||
+                    container;
+
+                // Ensure a spacer exists as the first child
+                let spacer = contentNode.querySelector(':scope > .lt-hub-spacer');
+                if (!spacer) {
+                    spacer = document.createElement('div');
+                    spacer.className = 'lt-hub-spacer';
+                    spacer.style.width = '100%';
+                    spacer.style.height = '0px';     // sized dynamically
+                    spacer.style.margin = '0';
+                    spacer.style.padding = '0';
+                    spacer.style.flex = '0 0 auto';
+                    contentNode.prepend(spacer);
+                }
+
+                // Place the hub immediately after the spacer
+                if (spacer.nextSibling !== host) {
+                    if (host.parentNode) host.parentNode.removeChild(host);
+                    spacer.after(host);
+                }
+
+                // Track hub height (for consumers/metrics only)
+                const setHubH = () => {
                     const h = Math.max(0, host.getBoundingClientRect().height || 0);
                     document.documentElement.style.setProperty('--lt-hub-h', `${h}px`);
                 };
-                requestAnimationFrame(() => { setPad(); requestAnimationFrame(setPad); });
-                try { document.fonts?.ready?.then(setPad); } catch { }
-                window.addEventListener('resize', setPad, { passive: true });
 
-                // Keep fixed positioning for body variant
+                // Compute Plex chrome height: persistent banner + main nav
+                const computeChromeTop = () => {
+                    const doc = document.documentElement;
+                    const css = getComputedStyle(doc);
+                    const bannerH = parseInt(css.getPropertyValue('--side-menu-persistent-banner-height')) || 0;
+                    const nav = document.querySelector('#navBar');
+                    const navH = nav ? Math.max(0, nav.getBoundingClientRect().height || 0) : 0;
+                    const chromeTop = bannerH + navH;
+                    doc.style.setProperty('--lt-fixed-top', `${chromeTop}px`);
+                    //spacer.style.height = `${chromeTop}px`;
+                };
+
+                // Recalc on layout/DOM changes
+                const recalc = () => { setHubH(); computeChromeTop(); };
+                requestAnimationFrame(() => { recalc(); requestAnimationFrame(recalc); });
+                try { document.fonts?.ready?.then(recalc); } catch { }
+                window.addEventListener('resize', recalc, { passive: true });
+                new MutationObserver(recalc).observe(document.documentElement, { childList: true, subtree: true });
+
+                // Make the hub sticky at the local top (no double-offset)
                 Object.assign(host.style, {
-                    position: 'fixed',
-                    top: '0', left: '0', right: '0',
-                    width: 'auto',
-                    zIndex: '2147483000',
+                    position: 'sticky',
+                    top: '0',
+                    left: '0',
+                    right: '0',
+                    width: '100%',
+                    zIndex: '10',          // above content, below modals
                     pointerEvents: 'auto'
                 });
+
             }
 
             ROOT.ltUIHub = api;
@@ -344,7 +529,7 @@
 
     // Optional: lazy auto-mount (safe—won’t error if not used)
     try {
-        Promise.resolve().then(() => ROOT.ensureLTHub?.({ mount: (ROOT.__LT_HUB_MOUNT || 'body') }).catch(() => { }));
+        Promise.resolve().then(() => ROOT.ensureLTHub?.({ mount: (ROOT.__LT_HUB_MOUNT || 'nav') }).catch(() => { }));
     } catch { }
 
 })();

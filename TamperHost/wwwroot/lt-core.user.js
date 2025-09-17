@@ -179,7 +179,7 @@
                         await ensureFn({
                             theme: { name: 'OneMonroe' },
                             // default to body; honor any earlier selection
-                            mount: (ROOT.__LT_HUB_MOUNT || 'body'),
+                            mount: (ROOT.__LT_HUB_MOUNT || 'nav'),
                             pageRootSelectors: [
                                 '#plexSidetabsMenuPage',
                                 '.plex-sidetabs-menu-page',

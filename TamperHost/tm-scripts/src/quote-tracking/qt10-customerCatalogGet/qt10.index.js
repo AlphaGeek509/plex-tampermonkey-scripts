@@ -2,7 +2,7 @@
 // Drop-in module (bundled by build-plus/esbuild). No TM header here; your build injects it.
 // Restores business logic from qt10.backup.js and fixes RepoBase class invocation.
 
-(function () {
+(async function () {
 
     'use strict';
 
@@ -35,22 +35,10 @@
     // avoid depending on TMUtils timing; use regex on pathname
     if (!CFG.ROUTES.some(rx => rx.test(location.pathname))) return;
 
-    //(async () => {
-    //    // Prefer navbar mount globally
-    //    window.__LT_HUB_MOUNT = 'body';
-    //    // Let lt-core mount the hub (defaults to 'nav'); don't pre-mount here.
-    //    lt.core.hub.setStatus("Ready", "info");
-    //})();
+    window.__LT_HUB_MOUNT = "nav";
+    await window.ensureLTHub?.({ mount: "nav" });
 
-    (async () => {
-        // Force body mount and initialize the hub before the first status call
-        window.__LT_HUB_MOUNT = "body";
-        await window.ensureLTHub?.({ mount: "body" });
-        // Flash a quick “Ready” message (auto-clears per lt-ui-hub’s default)
-        lt.core.hub.notify("Ready", "info", { sticky: true });
-    })();
-
-
+    lt.core.hub.notify("Ready", "info", { sticky: true });
 
     function getTabScopeId(ns = 'QT') {
         try {

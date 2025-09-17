@@ -12,7 +12,7 @@
     "bump:major": "node ../build-plus.js --major"
   },
   "tmVersions": {
-    "QT10": "3.6.148",
+    "QT10": "3.6.171",
     "QT20": "3.6.29",
     "QT30": "3.6.33",
     "QT35": "3.6.86",
