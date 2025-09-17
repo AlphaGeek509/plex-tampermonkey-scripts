@@ -123,10 +123,17 @@
         color: #991b1b;
     }
 
-/* QT50 validation failure highlight */
+/* QT50: validation highlights */
 .qtv-row-fail {
     outline: 2px solid rgba(185, 28, 28, 0.6); /* red-700 */
     background: rgba(254, 226, 226, 0.35); /* red-100 */
-    transition: background 160ms ease-in;
+    transition: background 160ms ease-in, outline 160ms ease-in;
 }
+
+/* Rule-specific accent for max unit price */
+.qtv-row-fail--price-maxunit {
+    outline-color: rgba(153, 27, 27, 0.8); /* deeper red */
+    background: rgba(254, 202, 202, 0.45); /* red-200 */
+}
+
 

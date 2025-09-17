@@ -60,24 +60,39 @@ export async function mountValidationButton(TMUtils) {
                         'error',
                         { sticky: true }
                     );
+
+                    // 🔴 Apply highlights now (don’t wait for keepAlive)
+                    if (settings.highlightFailures !== false) {
+                        ensureValidationStyles();
+                        highlightIssues(issues);
+                        scrollToFirstIssue(issues);
+                    }
+                    if (settings.blockNextUntilValid) setNextDisabled(true);
+
                 }
 
                 // cache last status for SPA redraws
                 TMUtils.state = TMUtils.state || {};
                 TMUtils.state.lastValidation = res;
 
-                // Keep "Next" button state sticky for a few SPA ticks if enabled
-                if (settings.blockNextUntilValid) {
-                    let ticks = 0;
-                    const timer = setInterval(() => {
-                        const last = TMUtils?.state?.lastValidation;
+                // Keep "Next" button state + highlights sticky for a few SPA ticks if enabled
+                let ticks = 0;
+                const keepAlive = setInterval(() => {
+                    const last = TMUtils?.state?.lastValidation;
+
+                    // re-apply highlights if grid re-rendered
+                    if (settings.highlightFailures !== false && last?.issues?.length) {
+                        highlightIssues(last.issues);
+                    }
+
+                    // persist Next disabled when configured
+                    if (settings.blockNextUntilValid) {
                         const shouldBlock = !!(last && last.ok === false);
                         syncNextButtonDisabled(shouldBlock);
-                        if (++ticks >= 8) clearInterval(timer); // ~6s total
-                    }, 750);
-                }
+                    }
 
-
+                    if (++ticks >= 8) clearInterval(keepAlive); // ~6s
+                }, 750);
             } catch (err) {
                 lt.core.hub.notify?.(`Validation error: ${err?.message || err}`, 'error', { ms: 6000 });
                 task.error?.('Error');
@@ -113,9 +128,94 @@ function refreshLabel(btn) {
     btn.title = `Rules: ${parts.join(', ') || 'none'}`;
 }
 
-function clearValidationHighlights() {
-    document.querySelectorAll('.qtv-row-fail').forEach(el => el.classList.remove('qtv-row-fail'));
+// --- KO + grid helpers ---
+const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
+
+/** Tag visible grid rows with data-quote-part-key by reading KO context */
+function ensureRowKeyAttributes() {
+    const grid = document.querySelector('.plex-grid');
+    if (!grid) return 0;
+    const rows = grid.querySelectorAll(
+        'tr, .k-grid-content tr, .plex-grid-row, .k-table-row, .k-grid .k-grid-content .k-table-row'
+    );
+    let tagged = 0;
+    for (const r of rows) {
+        if (r.hasAttribute('data-quote-part-key')) { tagged++; continue; }
+        try {
+            const ctx = KO?.contextFor?.(r);
+            const vm = ctx?.$data ?? ctx?.$root ?? null;
+            const qpk = TMUtils.getObsValue?.(vm, 'QuotePartKey');
+            if (qpk != null && qpk !== '' && Number(qpk) > 0) {
+                r.setAttribute('data-quote-part-key', String(qpk));
+                tagged++;
+            }
+        } catch { /* ignore per-row failures */ }
+    }
+    return tagged;
 }
+
+function clearValidationHighlights() {
+    document.querySelectorAll('.qtv-row-fail').forEach(el => {
+        el.classList.remove('qtv-row-fail');
+        el.classList.remove('qtv-row-fail--price-maxunit');
+    });
+}
+
+function findGridRowByQuotePartKey(qpk) {
+    const grid = document.querySelector('.plex-grid');
+    if (!grid) return null;
+
+    // Fast path: attribute (preferred)
+    let row = grid.querySelector(`[data-quote-part-key="${CSS.escape(String(qpk))}"]`);
+    if (row) return row.closest('tr, .k-grid-content tr, .plex-grid-row') || row;
+
+    // If attributes are missing, try to tag them once then retry
+    if (ensureRowKeyAttributes() > 0) {
+        row = grid.querySelector(`[data-quote-part-key="${CSS.escape(String(qpk))}"]`);
+        if (row) return row.closest('tr, .k-grid-content tr, .plex-grid-row') || row;
+    }
+
+    // Last resort: textual scan (less reliable, but works today)
+    const rows = grid.querySelectorAll(
+        'tr, .k-grid-content tr, .plex-grid-row, .k-table-row, .k-grid .k-grid-content .k-table-row'
+    );
+    for (const r of rows) {
+        const txt = (r.textContent || '').trim();
+        if (txt.includes(String(qpk))) return r;
+    }
+    return null;
+}
+
+/** Add highlight classes; special class for max unit price */
+function highlightIssues(issues) {
+    if (!Array.isArray(issues) || !issues.length) return;
+
+    // Ensure rows are tagged to make selection fast & stable
+    ensureRowKeyAttributes();
+
+    for (const iss of issues) {
+        const row = findGridRowByQuotePartKey(iss.quotePartKey);
+        if (!row) continue;
+        row.classList.add('qtv-row-fail');
+
+        // rule-specific accent: price.maxUnitPrice
+        const kind = String(iss.kind || '').toLowerCase();
+        if (kind === 'price.maxunitprice') {
+            row.classList.add('qtv-row-fail--price-maxunit');
+        }
+    }
+}
+
+function scrollToFirstIssue(issues) {
+    const first = (issues || [])[0];
+    if (!first) return;
+    const row = findGridRowByQuotePartKey(first.quotePartKey);
+    if (row && typeof row.scrollIntoView === 'function') {
+        row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+}
+
+
 function buildIssuesSummary(issues, { maxGroups = 4, maxQpks = 5 } = {}) {
     const grouped = (issues || []).reduce((m, it) => {
         const k = it.kind || 'other';
@@ -134,3 +234,20 @@ function buildIssuesSummary(issues, { maxGroups = 4, maxQpks = 5 } = {}) {
     return parts.join(' • ') || 'See details';
 }
 
+const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : true;
+if (DEV) {
+    (unsafeWindow || window).QTV_DEBUG = (unsafeWindow || window).QTV_DEBUG || {};
+    (unsafeWindow || window).QTV_DEBUG.tagStats = () => {
+        const grid = document.querySelector('.plex-grid');
+        const rows = grid ? grid.querySelectorAll('tr, .k-grid-content tr, .plex-grid-row, .k-table-row, .k-grid .k-grid-content .k-table-row') : [];
+        const tagged = grid ? grid.querySelectorAll('[data-quote-part-key]') : [];
+        console.log('[QTV] rows:', rows.length, 'tagged:', tagged.length);
+        return { total: rows.length, tagged: tagged.length };
+    };
+    (unsafeWindow || window).QTV_DEBUG.hiliTest = (qpk) => {
+        ensureValidationStyles();
+        const r = findGridRowByQuotePartKey(qpk);
+        if (r) { r.classList.add('qtv-row-fail', 'qtv-row-fail--price-maxunit'); r.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+        return !!r;
+    };
+}
