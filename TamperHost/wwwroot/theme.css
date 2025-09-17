@@ -122,3 +122,11 @@
         background: #fef2f2;
         color: #991b1b;
     }
+
+/* QT50 validation failure highlight */
+.qtv-row-fail {
+    outline: 2px solid rgba(185, 28, 28, 0.6); /* red-700 */
+    background: rgba(254, 226, 226, 0.35); /* red-100 */
+    transition: background 160ms ease-in;
+}
+

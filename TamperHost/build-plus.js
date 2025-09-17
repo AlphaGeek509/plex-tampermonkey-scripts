@@ -115,13 +115,13 @@ const MODULES = [
         src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'qt35-attachmentsGet', 'qt35.index.js'),
         out: path.join(ROOT, 'wwwroot', 'qt35.user.js')
     },
-    //{
-    //    id: 'QT50',
-    //    featureName: 'Quote Validation',
-    //    bannerBase: 'validation',
-    //    src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'validation', 'qtv.entry.js'),
-    //    out: path.join(ROOT, 'wwwroot', 'qt50.user.js')
-    //}
+    {
+        id: 'QT50',
+        featureName: 'Quote Validation',
+        bannerBase: 'validation',
+        src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'qt50', 'qtv.entry.js'),
+        out: path.join(ROOT, 'wwwroot', 'qt50.user.js')
+    }
 ];
 
 

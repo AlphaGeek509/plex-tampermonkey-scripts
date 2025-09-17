@@ -63,63 +63,46 @@ function emitChanged() {
 // ---------- UI (gear + panel) ----------
 GM_registerMenuCommand?.('⚙️ Open QT Validation Settings', showPanel);
 
-// Only set up the gear/observers when we're actually on the wizard route
 if (ON_ROUTE) {
-    ensureGearOnToolbar();
-    TMUtils?.onUrlChange?.(ensureGearOnToolbar);
-    if (!TMUtils?.onUrlChange) {
-        const iid = setInterval(ensureGearOnToolbar, 500);
-        setTimeout(() => clearInterval(iid), 6000);
-    }
+    ensureHubGear();
+    TMUtils?.onUrlChange?.(ensureHubGear);
+    setTimeout(ensureHubGear, 500); // gentle retry during SPA loads
 }
 
-function ensureGearOnToolbar() {
-    // Only on the Quote Wizard route
-    if (!TMUtils.matchRoute?.(ROUTES)) {
-        document.querySelectorAll('#lt-qtv-gear-host').forEach(li => (li.style.display = 'none'));
-        return;
-    }
+async function ensureHubGear() {
+    // only show gear on the Part Summary page
+    const onWizard = TMUtils.matchRoute?.(ROUTES);
+    const onTarget = onWizard && (document.querySelector('.plex-wizard-page-list .plex-wizard-page.active, .plex-wizard-page-list .plex-wizard-page[aria-current="page"]')?.textContent || '')
+        .trim().toLowerCase() === CONFIG.wizardTargetPage.toLowerCase();
 
-    // Inject into every visible action bar (wizard renders one per page)
-    const bars = document.querySelectorAll('#QuoteWizardSharedActionBar');
-    if (!bars.length) return;
-
-    bars.forEach(bar => injectGearIntoActionBar(bar));
-}
-
-function injectGearIntoActionBar(ul) {
-    try {
-        if (!ul) return;
-        // Avoid duplicate injection
-        if (ul.querySelector('#lt-qtv-gear-host')) {
-            // Ensure visibility is accurate for the current page
-            const li = ul.querySelector('#lt-qtv-gear-host');
-            showOnlyOnPartSummary(li, CONFIG.wizardTargetPage);
-            return;
+    const hub = await (async function getHub(opts = { mount: 'nav' }) {
+        for (let i = 0; i < 50; i++) {
+            const ensure = (window.ensureLTHub || unsafeWindow?.ensureLTHub);
+            if (typeof ensure === 'function') {
+                try { const h = await ensure(opts); if (h) return h; } catch { }
+            }
+            await new Promise(r => setTimeout(r, 100));
         }
+        return null;
+    })();
 
-        const li = document.createElement('li');
-        li.id = 'lt-qtv-gear-host';
-        li.style.display = 'none'; // hidden unless on the target wizard page
+    if (!hub?.registerButton) return;
 
-        const a = document.createElement('a');
-        a.href = 'javascript:void(0)';
-        a.textContent = 'LT Validation Settings';
-        a.title = 'Open Quote Validation settings';
-        a.setAttribute('aria-label', 'Quote Validation settings');
-        a.setAttribute('role', 'button');
-        a.style.cursor = 'pointer';
-        a.addEventListener('click', showPanel);
-
-        li.appendChild(a);
-        ul.appendChild(li);
-
-        // Show/hide based on active wizard page name
-        showOnlyOnPartSummary(li, CONFIG.wizardTargetPage);
-    } catch (e) {
-        if (DEV) console.warn('QT50: injectGearIntoActionBar error', e);
+    const ID = 'qt50-settings';
+    const listed = hub.list?.()?.includes(ID);
+    if (onTarget && !listed) {
+        hub.registerButton('right', {
+            id: ID,
+            label: 'Validation ⚙︎',
+            title: 'Open Quote Validation settings',
+            weight: 30,
+            onClick: showPanel
+        });
+    } else if (!onTarget && listed) {
+        hub.remove?.(ID);
     }
 }
+
 
 function showOnlyOnPartSummary(li, targetName) {
     const getActiveWizardPageName = () => {

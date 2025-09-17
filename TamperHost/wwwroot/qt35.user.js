@@ -1,17 +1,17 @@
 // ==UserScript==
 // @name         QT35_DEV
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.6.100
+// @version      3.6.101
 // @description  Displays read-only “Attachments: N” in the Quote Wizard action bar.
 // @match       https://lyntron.on.plex.com/SalesAndCRM*
 // @match       https://lyntron.on.plex.com/SalesAndCrm*
 // @match       https://lyntron.test.on.plex.com/SalesAndCRM*
 // @match       https://lyntron.test.on.plex.com/SalesAndCrm*
 // // @require      http://localhost:5000/lt-plex-tm-utils.user.js
-// @require      http://localhost:5000/lt-plex-auth.user.js?v=3.6.100-1758144171663
-// @require      http://localhost:5000/lt-ui-hub.js?v=3.6.100-1758144171663
-// @require      http://localhost:5000/lt-core.user.js?v=3.6.100-1758144171663
-// @require      http://localhost:5000/lt-data-core.user.js?v=3.6.100-1758144171663
+// @require      http://localhost:5000/lt-plex-auth.user.js?v=3.6.101-1758146037970
+// @require      http://localhost:5000/lt-ui-hub.js?v=3.6.101-1758146037970
+// @require      http://localhost:5000/lt-core.user.js?v=3.6.101-1758146037970
+// @require      http://localhost:5000/lt-data-core.user.js?v=3.6.101-1758146037970
 // // @resource     THEME_CSS http://localhost:5000/theme.css
 // @grant        GM_registerMenuCommand
 // @grant        GM_getValue

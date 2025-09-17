@@ -28,11 +28,12 @@ export default function maxUnitPrice(ctx, settings, utils) {
             const num = toNum(raw);
 
             if (Number.isFinite(num) && num > max) {
+                const fmt = (n) => (Number.isFinite(n) ? n.toLocaleString('en-US', { maximumFractionDigits: 6 }) : String(n));
                 issues.push({
                     kind: 'price.maxUnitPrice',
                     level: 'error',
                     quotePartKey: qp,
-                    message: `QP ${qp} Qty ${qty}: Unit Price ${raw} > Max ${max}`,
+                    message: `QP ${qp} Qty ${qty}: Unit Price ${fmt(num)} > Max ${fmt(max)}`,
                     meta: { unitRaw: raw, unitNum: num, max }
                 });
             }

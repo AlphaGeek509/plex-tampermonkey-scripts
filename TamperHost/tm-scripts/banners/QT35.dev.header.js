@@ -7,8 +7,8 @@
 // @match       https://lyntron.on.plex.com/SalesAndCrm*
 // @match       https://lyntron.test.on.plex.com/SalesAndCRM*
 // @match       https://lyntron.test.on.plex.com/SalesAndCrm*
-// __REQUIRES__
-// __RESOURCES__
+__REQUIRES__
+__RESOURCES__
 // @grant        GM_registerMenuCommand
 // @grant        GM_getValue
 // @grant        GM_setValue
