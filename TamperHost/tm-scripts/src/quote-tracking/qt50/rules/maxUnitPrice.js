@@ -33,7 +33,7 @@ export default function maxUnitPrice(ctx, settings, utils) {
                     kind: 'price.maxUnitPrice',
                     level: 'error',
                     quotePartKey: qp,
-                    message: `QP ${qp} Qty ${qty}: Unit Price ${fmt(num)} > Max ${fmt(max)}`,
+                    message: `Unit Price ${fmt(num)} > Max ${fmt(max)}`,
                     meta: { unitRaw: raw, unitNum: num, max }
                 });
             }

@@ -23,16 +23,12 @@ export const KEYS = {
     autoManageLtPartNoOnQuote: 'qtv.autoManageLtPartNoOnQuote',
     minUnitPrice: 'qtv.minUnitPrice',
     maxUnitPrice: 'qtv.maxUnitPrice',
-    blockNextUntilValid: 'qtv.blockNextUntilValid',
-    highlightFailures: 'qtv.highlightFailures'
 };
 const DEF = {
     [KEYS.enabled]: true,
     [KEYS.autoManageLtPartNoOnQuote]: true,
-    [KEYS.minUnitPrice]: null,
+    [KEYS.minUnitPrice]: 0,
     [KEYS.maxUnitPrice]: 10,
-    [KEYS.blockNextUntilValid]: true,
-    [KEYS.highlightFailures]: true
 };
 const getVal = k => {
     const v = GM_getValue(k, DEF[k]);
@@ -45,9 +41,7 @@ export function getSettings() {
         enabled: getVal(KEYS.enabled),
         autoManageLtPartNoOnQuote: getVal(KEYS.autoManageLtPartNoOnQuote),
         minUnitPrice: getVal(KEYS.minUnitPrice),
-        maxUnitPrice: getVal(KEYS.maxUnitPrice),
-        blockNextUntilValid: getVal(KEYS.blockNextUntilValid),
-        highlightFailures: getVal(KEYS.highlightFailures)
+        maxUnitPrice: getVal(KEYS.maxUnitPrice)
     };
 }
 export function onSettingsChange(fn) {
@@ -186,14 +180,6 @@ function showPanel() {
       </label>
     </div>
 
-    <label style="display:block; margin:8px 0;">
-      <input type="checkbox" id="qtv-blockNext"> Block Next until all validations pass
-    </label>
-
-    <label style="display:block; margin:8px 0;">
-      <input type="checkbox" id="qtv-highlight"> Highlight failures on the grid
-    </label>
-
     <div style="border-top:1px solid #eee; margin:12px 0 10px;"></div>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
       <button id="qtv-export" class="btn btn-default">Export</button>
@@ -209,14 +195,10 @@ function showPanel() {
     panel.querySelector('#qtv-autoManageLtPartNoOnQuote').checked = getVal(KEYS.autoManageLtPartNoOnQuote);
     setNumberOrBlank(panel.querySelector('#qtv-min'), getVal(KEYS.minUnitPrice));
     setNumberOrBlank(panel.querySelector('#qtv-max'), getVal(KEYS.maxUnitPrice));
-    panel.querySelector('#qtv-blockNext').checked = getVal(KEYS.blockNextUntilValid);
-    panel.querySelector('#qtv-highlight').checked = getVal(KEYS.highlightFailures);
 
     // Change handlers
     panel.querySelector('#qtv-enabled')?.addEventListener('change', e => setVal(KEYS.enabled, !!e.target.checked));
     panel.querySelector('#qtv-autoManageLtPartNoOnQuote')?.addEventListener('change', e => setVal(KEYS.autoManageLtPartNoOnQuote, !!e.target.checked));
-    panel.querySelector('#qtv-blockNext')?.addEventListener('change', e => setVal(KEYS.blockNextUntilValid, !!e.target.checked));
-    panel.querySelector('#qtv-highlight')?.addEventListener('change', e => setVal(KEYS.highlightFailures, !!e.target.checked));
 
     panel.querySelector('#qtv-min')?.addEventListener('change', e => {
         const v = parseNumberOrNull(e.target.value); setVal(KEYS.minUnitPrice, v); setNumberOrBlank(e.target, v);
@@ -251,8 +233,6 @@ function showPanel() {
                 if ('autoManageLtPartNoOnQuote' in data) setVal(KEYS.autoManageLtPartNoOnQuote, !!data.autoManageLtPartNoOnQuote);
                 if ('minUnitPrice' in data) setVal(KEYS.minUnitPrice, toNullOrNumber(data.minUnitPrice));
                 if ('maxUnitPrice' in data) setVal(KEYS.maxUnitPrice, toNullOrNumber(data.maxUnitPrice));
-                if ('blockNextUntilValid' in data) setVal(KEYS.blockNextUntilValid, !!data.blockNextUntilValid);
-                if ('highlightFailures' in data) setVal(KEYS.highlightFailures, !!data.highlightFailures);
                 overlay.remove(); TMUtils.toast?.('Validation settings imported.', 'success', 1800);
             } else throw new Error('Invalid JSON.');
         } catch (err) {

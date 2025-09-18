@@ -31,8 +31,63 @@ export async function runValidation(TMUtils, settings) {
 
     const utils = { get: (obj, path, opts) => TMUtils.getObsValue(obj, path, opts) };
 
-    const issues = rules.flatMap(rule => rule(ctx, settings, utils));
-    const ok = issues.every(i => i.level !== 'error');
+    const issuesRaw = rules.flatMap(rule => rule(ctx, settings, utils));
+    const ok = issuesRaw.every(i => i.level !== 'error');
+
+    // Enrich issues with UI-facing data (lineNumber, partNo, ruleLabel)
+    const toNum = (v) => Number(String(v ?? '').replace(/[^\d.-]/g, ''));
+    const ruleLabelFrom = (iss) => {
+        // Preferred: rule function sets .meta.label (e.g., maxUnitPrice.meta.label)
+        if (iss?.meta?.label) return iss.meta.label;
+        if (iss?.kind) {
+            const k = String(iss.kind);
+            // prettify "price.maxUnitPrice" => "Max Unit Price"
+            const tail = k.split('.').pop();
+            return tail
+                ? tail.replace(/([a-z])([A-Z])/g, '$1 $2')
+                    .replace(/^./, (c) => c.toUpperCase())
+                : k;
+        }
+        return 'Validation';
+    };
+
+    // Build a quick map of row -> info
+    const rowInfo = new Map(); // vm -> { lineNumber, partNo }
+    for (let i = 0; i < ctx.rows.length; i++) {
+        const r = ctx.rows[i];
+        const lineNumber = i + 1;
+        const partNo = utils.get(r, 'PartNo', { trim: true }) ?? '';
+        rowInfo.set(r, { lineNumber, partNo });
+    }
+
+    // Also map QPK -> "primary" row for cheap lookup
+    const qpkToPrimaryInfo = new Map();
+    for (const [qp, primary] of ctx.primaryByQuotePart.entries()) {
+        const info = rowInfo.get(primary) || { lineNumber: null, partNo: utils.get(primary, 'PartNo', { trim: true }) ?? '' };
+        qpkToPrimaryInfo.set(qp, info);
+    }
+
+    // Build a SortOrder lookup by visual row index (from the VM, not the DOM)
+    const sortByLine = new Map();
+    for (let i = 0; i < ctx.rows.length; i++) {
+        const row = ctx.rows[i];
+        const lineNumber = i + 1;
+        const sortOrder = utils.get(row, 'SortOrder', { number: true });
+        sortByLine.set(lineNumber, sortOrder);
+    }
+
+    const issues = issuesRaw.map(iss => {
+        const qpk = iss.quotePartKey ?? -1;
+        const info = qpkToPrimaryInfo.get(qpk) || { lineNumber: null, partNo: '' };
+        return {
+            ...iss,
+            lineNumber: info.lineNumber,
+            partNo: info.partNo,
+            ruleLabel: ruleLabelFrom(iss),
+            sortOrder: sortByLine.get(info.lineNumber ?? -1)
+        };
+    });
+
 
     // stash if you want other modules to read it later
     TMUtils.state = TMUtils.state || {};
@@ -40,3 +95,4 @@ export async function runValidation(TMUtils, settings) {
 
     return { ok, issues };
 }
+

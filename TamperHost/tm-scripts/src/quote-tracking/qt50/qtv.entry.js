@@ -50,9 +50,7 @@ if (__BUILD_DEV__) {
             enabled: GM_getValue('qtv.enabled'),
             autoManageLtPartNoOnQuote: GM_getValue('qtv.autoManageLtPartNoOnQuote'),
             minUnitPrice: GM_getValue('qtv.minUnitPrice'),
-            maxUnitPrice: GM_getValue('qtv.maxUnitPrice'),
-            blockNextUntilValid: GM_getValue('qtv.blockNextUntilValid'),
-            highlightFailures: GM_getValue('qtv.highlightFailures')
+            maxUnitPrice: GM_getValue('qtv.maxUnitPrice')
         }),
         getValue: key => GM_getValue(key),
         setValue: (key, val) => GM_setValue(key, val),
@@ -96,7 +94,22 @@ if (__BUILD_DEV__) {
                 .map(r => ({ ...r, _UnitNum: toNum(r.RvCustomizedUnitPrice ?? r.RvUnitPriceCopy ?? r.UnitPrice) }))
                 .filter(r => Number.isFinite(r._UnitNum) && r._UnitNum > set)
                 .map(({ _UnitNum, ...r }) => r);
-        }
+        },
+
+        underMin: (min) => {
+            const set = Number(min);
+            const rows = unsafeWindow.QTV_DEBUG.grid({ plain: true });
+            const toNum = (v) => {
+                if (v == null) return NaN;
+                const s = String(v).trim();
+                return Number(s.replace(/[^\d.-]/g, ''));
+            };
+            return rows
+                .map(r => ({ ...r, _UnitNum: toNum(r.RvCustomizedUnitPrice ?? r.RvUnitPriceCopy ?? r.UnitPrice) }))
+                .filter(r => Number.isFinite(r._UnitNum) && r._UnitNum < set)
+                .map(({ _UnitNum, ...r }) => r);
+        },
+
     };
 }
 
