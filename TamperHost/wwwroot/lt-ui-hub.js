@@ -93,15 +93,61 @@
           padding: 4px 8px; border-radius: 999px; border: 1px solid rgba(0,0,0,.12);
           background: #f7f9fb; font-weight: 600;
         }
-        .dot { width: 8px; height: 8px; border-radius: 999px; background: #0ea5e9; }
-
-        button.hbtn {
-          all: unset; font: inherit; padding: 6px 12px; border-radius: 8px;
-          border: 1px solid rgba(0,0,0,.15); background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.08);
-          cursor: pointer;
+        /* Map global theme vars (from :root in theme.css) into the shadow tree */
+        :host {
+          --lt-brand: var(--brand-600, #0b5fff);
+          --lt-brand-700: var(--brand-700, #0a4fd6);
+          --lt-ink: var(--ink, #222);
+          --lt-ink-muted: var(--ink-muted, #666);
+          --lt-ok: var(--ok, #15803d);
+          --lt-warn: var(--warn, #b45309);
+          --lt-err: var(--err, #b91c1c);
         }
-        button.hbtn:focus { outline: 2px solid rgba(0,102,204,.35); outline-offset: 2px; }
-        button.hbtn[disabled] { opacity: .55; cursor: not-allowed; }
+
+        /* Brand token touches */
+        .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--lt-brand); }
+
+        /* Button system: primary / ghost, with accessible focus + hover states */
+        button.hbtn {
+          all: unset;
+          font: inherit;
+          padding: 8px 12px;
+          border-radius: 10px;
+          border: 1px solid transparent;
+          background: var(--lt-brand);
+          color: #fff;
+          box-shadow: 0 1px 3px rgba(0,0,0,.08);
+          cursor: pointer;
+          transition: background .18s ease, transform .06s ease, box-shadow .18s ease, border-color .18s ease, color .18s ease;
+        }
+        button.hbtn:hover {
+          background: var(--lt-brand-700);
+          box-shadow: 0 2px 8px rgba(0,0,0,.12);
+        }
+        button.hbtn:active { transform: translateY(0.5px); }
+
+        button.hbtn:focus-visible {
+          outline: 2px solid color-mix(in srgb, var(--lt-brand) 40%, white);
+          outline-offset: 2px;
+          box-shadow: 0 0 0 3px color-mix(in srgb, var(--lt-brand) 25%, transparent);
+        }
+
+        button.hbtn[disabled] {
+          opacity: .6;
+          cursor: not-allowed;
+          box-shadow: none;
+        }
+
+        /* Ghost variant (optional): add via classList while registering */
+        button.hbtn.hbtn--ghost {
+          background: transparent;
+          color: var(--lt-brand);
+          border-color: var(--lt-brand);
+        }
+        button.hbtn.hbtn--ghost:hover {
+          background: color-mix(in srgb, var(--lt-brand) 8%, transparent);
+        }
+
 
         .sep { width: 1px; height: 20px; background: rgba(0,0,0,.12); }
         .status {
@@ -165,7 +211,8 @@
                     if (!el) {
                         el = document.createElement('button');
                         el.type = 'button';
-                        el.className = 'hbtn';
+                        el.className = 'hbtn'; // default = primary brand
+                        // To render a ghost button, pass { className: 'hbtn hbtn--ghost' } via def.el or patch later.
                         if (def?.id) el.dataset.id = def.id;
                         el.textContent = def?.label ?? 'Action';
                         if (def?.title) el.title = String(def.title);
