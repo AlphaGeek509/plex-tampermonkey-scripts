@@ -65,7 +65,6 @@
 		<None Include="tm-scripts\src\quote-tracking\qt50\rules\maxUnitPrice.js" />
 		<None Include="tm-scripts\src\quote-tracking\qt50\qtv.entry.js" />
 		<None Include="tm-scripts\src\quote-tracking\qt50\injectButton.js" />
-		<None Include="tm-scripts\src\quote-tracking\qt50\highlighter.js" />
 		<None Include="tm-scripts\src\quote-tracking\qt50\engine.js" />
 		<None Include="tm-scripts\src\quote-tracking\qt50\index.js" />
 		<None Include="tm-scripts\src\shared\lt-ui-hub.js" />

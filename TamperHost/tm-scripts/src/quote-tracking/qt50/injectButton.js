@@ -4,6 +4,64 @@
 import { runValidation } from './engine';
 import { getSettings, onSettingsChange } from './index';
 
+// --- KO surface (qt30 pattern) ---
+const KO = (typeof unsafeWindow !== 'undefined' && unsafeWindow.ko) ? unsafeWindow.ko : window.ko;
+
+// --- summarize issues for status pill / toasts ---
+function buildIssuesSummary(issues) {
+    try {
+        const items = Array.isArray(issues) ? issues : [];
+        const agg = items.reduce((acc, it) => {
+            const lvl = String(it?.level || 'info').toLowerCase();
+            acc[lvl] = (acc[lvl] || 0) + 1;
+            if (it?.quotePartKey != null) acc.parts.add(it.quotePartKey);
+            return acc;
+        }, { error: 0, warning: 0, info: 0, parts: new Set() });
+
+        const partsCount = agg.parts.size;
+        const segs = [];
+        if (agg.error) segs.push(`${agg.error} error${agg.error === 1 ? '' : 's'}`);
+        if (agg.warning) segs.push(`${agg.warning} warning${agg.warning === 1 ? '' : 's'}`);
+        if (agg.info) segs.push(`${agg.info} info`);
+        const levelPart = segs.join(', ') || 'updates';
+
+        return `${levelPart} across ${partsCount || 0} part${partsCount === 1 ? '' : 's'}`;
+    } catch {
+        return '';
+    }
+}
+
+// --- QT30-style grid refresh (copied) ---
+async function refreshQuoteGrid() {
+    try {
+        const gridEl = document.querySelector('.plex-grid');
+        const gridVM = gridEl && KO?.dataFor?.(gridEl);
+
+        if (typeof gridVM?.datasource?.read === 'function') {
+            await gridVM.datasource.read();   // async re-query/rebind
+            return 'ds.read';
+        }
+        if (typeof gridVM?.refresh === 'function') {
+            gridVM.refresh();                  // sync visual refresh
+            return 'vm.refresh';
+        }
+    } catch { /* swallow */ }
+
+    // Fallback: wizard navigate to the active page (rebind)
+    try {
+        const wiz = unsafeWindow?.plex?.currentPage?.QuoteWizard;
+        if (wiz?.navigatePage) {
+            const active = (typeof wiz.activePage === 'function') ? wiz.activePage() : wiz.activePage;
+            wiz.navigatePage(active);
+            return 'wiz.navigatePage';
+        }
+    } catch { /* swallow */ }
+
+    return null;
+}
+
+
+
 const HUB_BTN_ID = 'qt50-validate';
 
 async function getHub(opts = { mount: 'nav' }) {
@@ -139,35 +197,71 @@ export async function mountValidationButton(TMUtils) {
                 clearValidationHighlights();
 
                 const res = await runValidation(TMUtils, settings);
+                const issues = Array.isArray(res?.issues) ? res.issues : [];
+                const count = issues.length;
+                const hasError = issues.some(i => String(i.level || '').toLowerCase() === 'error');
 
-                if (res?.ok) {
+                if (count === 0) {
                     lt.core.hub.notify?.('✅ Lines valid', 'success', { ms: 1800 });
                     task.done?.('Valid');
                 } else {
-                    const issues = Array.isArray(res?.issues) ? res.issues : [];
-                    const count = issues.length;
                     const summary = buildIssuesSummary(issues);
 
-                    lt.core.hub.notify?.(
-                        `❌ ${count} validation ${count === 1 ? 'issue' : 'issues'}`,
-                        'error',
-                        { ms: 6500 }
-                    );
-                    lt.core.hub.setStatus?.(
-                        `❌ ${count} issue${count === 1 ? '' : 's'} — ${summary}`,
-                        'error',
-                        { sticky: true }
+                    if (hasError) {
+                        lt.core.hub.notify?.(
+                            `❌ ${count} validation ${count === 1 ? 'issue' : 'issues'}`,
+                            'error',
+                            { ms: 6500 }
+                        );
+                        lt.core.hub.setStatus?.(
+                            `❌ ${count} issue${count === 1 ? '' : 's'} — ${summary}`,
+                            'error',
+                            { sticky: true }
+                        );
+                    } else {
+                        // Info/warn only (e.g., auto-manage posts)
+                        lt.core.hub.notify?.(
+                            `ℹ️ ${count} update${count === 1 ? '' : 's'} applied`,
+                            'info',
+                            { ms: 3500 }
+                        );
+                        lt.core.hub.setStatus?.(
+                            `ℹ️ ${count} update${count === 1 ? '' : 's'} — ${summary}`,
+                            'info',
+                            { sticky: true }
+                        );
+                    }
+
+                    // Always show details when we have any issues (info/warn/error)
+                    showValidationModal(issues);
+
+                    // If autoManage actually changed Part_No (level=warning), refresh the grid (qt30 pattern)
+                    const needsRefresh = issues.some(i =>
+                        String(i?.kind || '').includes('autoManageLtPartNoOnQuote') &&
+                        String(i?.level || '').toLowerCase() === 'warning' &&
+                        i?.meta?.changed === true
                     );
 
-                    // Open modal with details (we no longer auto-highlight rows or block Next)
-                    showValidationModal(issues);
+                    if (needsRefresh) {
+                        try {
+                            const mode = await refreshQuoteGrid();
+                            lt.core?.hub?.notify?.(
+                                mode ? `Grid refreshed (${mode})` : 'Grid refresh attempted (reload may be needed)',
+                                mode ? 'success' : 'info',
+                                { ms: 2500 }
+                            );
+                        } catch {
+                            lt.core?.hub?.notify?.('Grid refresh failed', 'warn', { ms: 3000 });
+                        }
+                    }
+
                 }
 
                 // cache last status for SPA redraws
                 TMUtils.state = TMUtils.state || {};
                 TMUtils.state.lastValidation = res;
             } catch (err) {
-                lt.core.hub.notify?.(`Validation error: ${err?.message || err}`, 'error', { ms: 6000 });
+                lt.core.hub.error?.(`Validation error: ${err?.message || err}`, 'error', { ms: 6000 });
                 task.error?.('Error');
             }
         }
@@ -195,9 +289,6 @@ function refreshLabel(btn) {
     if (s.maxUnitPrice != null) parts.push(`≤${s.maxUnitPrice}`);
     btn.title = `Rules: ${parts.join(', ') || 'none'}`;
 }
-
-// --- KO + grid helpers ---
-const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
 
 function ensureValidationStyles() {
     if (document.getElementById('qtv-styles')) return;
@@ -307,55 +398,6 @@ function findGridRowByQuotePartKey(qpk) {
     return null;
 }
 
-/** Add highlight classes; special class for max unit price */
-function highlightIssues(issues) {
-    if (!Array.isArray(issues) || !issues.length) return;
-
-    // Ensure rows are tagged to make selection fast & stable
-    ensureRowKeyAttributes();
-
-    for (const iss of issues) {
-        const row = findGridRowByQuotePartKey(iss.quotePartKey);
-        if (!row) continue;
-        row.classList.add('qtv-row-fail');
-
-        // rule-specific accents
-        const kind = String(iss.kind || '').toLowerCase();
-        if (kind === 'price.maxunitprice') {
-            row.classList.add('qtv-row-fail--price-maxunit');
-        } else if (kind === 'price.minunitprice') {
-            row.classList.add('qtv-row-fail--price-minunit');
-        }
-    }
-}
-
-function scrollToFirstIssue(issues) {
-    const first = (issues || [])[0];
-    if (!first) return;
-    const row = findGridRowByQuotePartKey(first.quotePartKey);
-    if (row && typeof row.scrollIntoView === 'function') {
-        row.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }
-}
-
-
-function buildIssuesSummary(issues, { maxGroups = 4, maxQpks = 5 } = {}) {
-    const grouped = (issues || []).reduce((m, it) => {
-        const k = it.kind || 'other';
-        if (!m.has(k)) m.set(k, []);
-        m.get(k).push(it.quotePartKey);
-        return m;
-    }, new Map());
-
-    const parts = [];
-    let gIndex = 0;
-    for (const [kind, qpks] of grouped) {
-        if (gIndex++ >= maxGroups) { parts.push('…'); break; }
-        const list = [...new Set(qpks)].slice(0, maxQpks).join(', ');
-        parts.push(`${kind}: QPK ${list}${qpks.length > maxQpks ? ', …' : ''}`);
-    }
-    return parts.join(' • ') || 'See details';
-}
 
 const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : true;
 if (DEV) {

@@ -31,7 +31,8 @@ export async function runValidation(TMUtils, settings) {
 
     const utils = { get: (obj, path, opts) => TMUtils.getObsValue(obj, path, opts) };
 
-    const issuesRaw = rules.flatMap(rule => rule(ctx, settings, utils));
+    const results = await Promise.all(rules.map(rule => rule(ctx, settings, utils)));
+    const issuesRaw = results.flat();
     const ok = issuesRaw.every(i => i.level !== 'error');
 
     // Enrich issues with UI-facing data (lineNumber, partNo, ruleLabel)
