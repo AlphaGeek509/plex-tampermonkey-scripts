@@ -38,6 +38,20 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
     // ===== QuoteRepo via lt-data-core flat {header, lines} =====
     let QT = null, quoteRepo = null, lastScope = null;
 
+    // Session-scoped id so draft survives page updates in this tab
+    function getTabScopeId(ns = "QT") {
+        try {
+            const k = `lt:${ns}:scopeId`;
+            let v = sessionStorage.getItem(k);
+            if (!v) { v = String(Math.floor(Math.random() * 2147483647)); sessionStorage.setItem(k, v); }
+            return Number(v);
+        } catch {
+            return Math.floor(Math.random() * 2147483647);
+        }
+    }
+
+
+
     async function getQT() {
         if (QT) return QT;
         const DC = lt.core?.data;
@@ -51,10 +65,75 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
         if (!quoteRepo || lastScope !== qk) {
             const { repo } = (await getQT()).use(Number(qk));
             await repo.ensureFromLegacyIfMissing?.();
-            quoteRepo = repo; lastScope = qk;
+            quoteRepo = repo;
+            lastScope = qk;
         }
         return quoteRepo;
     }
+
+    // Try current tab-scoped draft first; fall back to legacy "draft" scope
+    async function getDraftHeaderFlex() {
+        try {
+            const QTF = await getQT();
+            // Tab-scoped draft
+            let { repo: r1 } = QTF.use(getTabScopeId("QT"));
+            let d1 = await (r1.getHeader?.() || r1.get?.());
+            if (d1 && Object.keys(d1).length) return d1;
+
+            // Legacy "draft" scope (hashed string scope)
+            let { repo: r2 } = QTF.use("draft");
+            let d2 = await (r2.getHeader?.() || r2.get?.());
+            if (d2 && Object.keys(d2).length) return d2;
+
+            return null;
+        } catch {
+            return null;
+        }
+    }
+
+
+    // Draft → Quote promotion (single-shot), mirrors qt35
+    async function mergeDraftIntoQuoteOnce(qk) {
+        try {
+            if (!qk || !Number.isFinite(qk) || qk <= 0) return;
+            const QTF = await getQT();
+            const { repo: draftRepo } = QTF.use(window.getTabScopeId ? window.getTabScopeId("QT") : (window.__LT_QT_SCOPE_ID__ ||= Math.floor(Math.random() * 2147483647)));
+            const draft = (await draftRepo.getHeader?.()) || (await draftRepo.get?.());
+            if (!draft || !Object.keys(draft).length) return;
+
+            await ensureRepoForQuote(qk);
+            const current = (await quoteRepo.getHeader?.()) || {};
+            const curCust = String(current.Customer_No ?? "");
+            const newCust = String(draft.Customer_No ?? "");
+            const needsMerge =
+                Number((await draftRepo.get())?.Updated_At || 0) > Number(current.Promoted_At || 0) ||
+                curCust !== newCust ||
+                current.Catalog_Key !== draft.Catalog_Key ||
+                current.Catalog_Code !== draft.Catalog_Code;
+
+            if (!needsMerge) return;
+
+            await quoteRepo.patchHeader({
+                Quote_Key: Number(qk),
+                Customer_No: draft.Customer_No ?? null,
+                Catalog_Key: draft.Catalog_Key ?? null,
+                Catalog_Code: draft.Catalog_Code ?? null,
+                Promoted_From: "draft",
+                Promoted_At: Date.now(),
+                // Force hydration later if you add it to qt30
+                Quote_Header_Fetched_At: null
+            });
+
+            await draftRepo.clear?.();
+            try {
+                const { repo: legacy } = QTF.use("draft");
+                await legacy.clear?.();
+            } catch { }
+        } catch (e) {
+            // silent: keep qt30 resilient
+        }
+    }
+
 
     // ---------- Settings (GM tolerant) ----------
     const loadSettings = () => {
@@ -178,8 +257,42 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             if (!qk) { task.error('Quote_Key missing'); return; }
 
             await ensureRepoForQuote(qk);
-            const header = await quoteRepo.getHeader?.() || {};
-            let catalogKey = TMUtils.getObsValue?.(header, ['Catalog_Key', 'CatalogKey'], { first: true }) ?? null;
+
+            // Promote draft to quote header (one-shot), then read header
+            try {
+                const draft = await getDraftHeaderFlex();
+                if (draft && Object.keys(draft).length) {
+                    await quoteRepo.patchHeader?.({
+                        Quote_Key: Number(qk),
+                        Customer_No: draft.Customer_No ?? null,
+                        Catalog_Key: draft.Catalog_Key ?? null,
+                        Catalog_Code: draft.Catalog_Code ?? null,
+                        Promoted_From: "draft",
+                        Promoted_At: Date.now(),
+                        Quote_Header_Fetched_At: null
+                    });
+                }
+            } catch { /* keep resilient */ }
+
+            let header = await quoteRepo.getHeader?.() || {};
+            let catalogKey = TMUtils.getObsValue?.(header, ["Catalog_Key", "CatalogKey"], { first: true }) ?? null;
+
+            if (!catalogKey) {
+                try {
+                    const KO = (typeof unsafeWindow !== "undefined") ? unsafeWindow.ko : window.ko;
+                    const grid = document.querySelector(CONFIG.GRID_SEL);
+                    const gridVM = grid && KO?.dataFor ? KO.dataFor(grid) : null;
+                    const raw0 = Array.isArray(gridVM?.datasource?.raw) ? gridVM.datasource.raw[0] : null;
+                    const ck = raw0 ? TMUtils.getObsValue?.(raw0, ["CatalogKey", "Catalog_Key"], { first: true }) : null;
+
+                    if (ck != null) {
+                        catalogKey = Number(ck);
+                        await quoteRepo.patchHeader?.({ Quote_Key: Number(qk), Catalog_Key: catalogKey });
+                        header = await quoteRepo.getHeader?.() || {};
+                    }
+                } catch { /* non-fatal */ }
+            }
+
 
             if (!catalogKey) {
                 task.update('Fetching Catalog Key…');
