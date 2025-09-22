@@ -1,4 +1,4 @@
-﻿# --- Dependencies
+# --- Dependencies
 node_modules/
 jspm_packages/
 
@@ -41,3 +41,17 @@ Thumbs.db
 *.suo
 bin/
 obj/
+
+# --- Repo hygiene (TM project)
+# Keep release artifacts committed (served by jsDelivr tags)
+!TamperHost/wwwroot/
+!TamperHost/wwwroot/**/*.user.js
+!TamperHost/tm-scripts/banners/_template.header.tpl.js
+!TamperHost/tm-scripts/src/shared/lt-*.js
+!TamperHost/tm-scripts/src/shared/theme.css
+
+# Ignore local scratch / archives / maps
+TamperHost/project-tree.txt
+*.zip
+*.map
+local-dev/

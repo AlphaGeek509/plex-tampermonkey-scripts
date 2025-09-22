@@ -1,3 +1,4 @@
+// /tm-scripts/build-plus.js
 /**
  * build-plus.js — TM monorepo builder (modules-only, no legacy mode)
  *
@@ -126,17 +127,18 @@ const MODULES = [
 
 
 // --------------------------- shared requires/resources ---------------------------
-// Edit these to your actual dev/CDN URLs. We rely on rewriteRequires() to add ?v= stamps.
-const CDN_BASE = process.env.CDN_BASE || 'https://your-cdn';
+// Global default CDN for ALL modules; {VER} is replaced with the release version.
+const CDN_BASE = process.env.CDN_BASE || 'https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v{VER}/wwwroot';
+
 
 const SHARED = {
     dev: {
         requires: [
             'http://localhost:5000/lt-plex-tm-utils.user.js',
             'http://localhost:5000/lt-plex-auth.user.js',
-            'http://localhost:5000/lt-ui-hub.js',
             'http://localhost:5000/lt-core.user.js',
-            'http://localhost:5000/lt-data-core.user.js'                       
+            'http://localhost:5000/lt-data-core.user.js',
+            'http://localhost:5000/lt-ui-hub.js',
         ],
         resources: [
             ['THEME_CSS', 'http://localhost:5000/theme.css']
@@ -258,50 +260,29 @@ function rewriteRequires(header, versionStr, opts) {
 }
 
 
-// Banner loader: prefers ID-based names; supports feature-based names as fallback
-
 function loadBannerForModule(m, versionStr, opts) {
-    const envName = opts.release ? 'release' : 'dev';
-    const bannerEnv = opts.release ? 'prod' : 'dev'; // your files are .dev/.prod
-    const candidates = [
-        path.join(SRC_ROOT, 'banners', `${m.id}.${bannerEnv}.header.js`),
-        m.bannerBase ? path.join(SRC_ROOT, 'banners', `${m.bannerBase}.${bannerEnv}.header.js`) : null,
-        // Fallback to opposite env if not found
-        path.join(SRC_ROOT, 'banners', `${m.id}.${bannerEnv === 'prod' ? 'dev' : 'prod'}.header.js`),
-        m.bannerBase ? path.join(SRC_ROOT, 'banners', `${m.bannerBase}.${bannerEnv === 'prod' ? 'dev' : 'prod'}.header.js`) : null
-    ].filter(Boolean);
+    const envName = opts.release ? 'PROD' : 'DEV'; // release → PROD; else DEV
 
-    let header = '';
-    const chosen = candidates.find(p => fs.existsSync(p));
-    if (chosen) {
-        header = fs.readFileSync(chosen, 'utf8');
-    } else {
-        header =
-            `// ==UserScript==
-// @name         ${m.featureName} [${m.id}]
-// @namespace    Lyn-Tron / OneMonroe
-// @version      ${versionStr}
-// @description  Internal tooling for Plex apps
-// @match        *://*/*
-// @grant        none
-// @run-at       document-idle
-// @noframes
-// ==/UserScript==
+    // Always read the single template
+    const tplPath = path.join(__dirname, 'tm-scripts', 'banners', '_template.header.tpl.js');
+    let header = fs.readFileSync(tplPath, 'utf8');
 
-`;
-    }
+    const vars = getBannerVars(m, versionStr, envName, opts);
 
-    // Normalize, ensure trailing newline
-    header = header.replace(/\r\n/g, '\n');
-    if (!header.endsWith('\n')) header += '\n';
+    // Fill core tokens
+    header = header
+        .replaceAll('@@NAME@@', vars.NAME)
+        .replaceAll('@@VERSION@@', versionStr)
+        .replaceAll('@@DESC@@', vars.DESC)
+        .replaceAll('@@MATCHES@@', vars.MATCHES.join('\n'))
+        .replaceAll('@@UPDATE_URL@@', vars.UPDATE_URL)
+        .replaceAll('@@DOWNLOAD_URL@@', vars.DOWNLOAD_URL);
 
-    // Sync @version
-    header = header.replace(/(@version\s+)([^\s]+)/g, `$1${versionStr}`);
-
-    // Expand placeholders
+    // Expand __REQUIRES__/__RESOURCES__ (uses your existing SHARED maps)
     if (header.includes('__REQUIRES__') || header.includes('__RESOURCES__')) {
-        const reqLines = (SHARED[envName]?.requires || []).map(u => `// @require      ${u}`).join('\n');
-        const resLines = (SHARED[envName]?.resources || []).map(([name, url]) => `// @resource     ${name} ${url}`).join('\n');
+        const sharedKey = opts.release ? 'release' : 'dev';
+        const reqLines = (SHARED[sharedKey]?.requires || []).map(u => `// @require      ${u}`).join('\n');
+        const resLines = (SHARED[sharedKey]?.resources || []).map(([name, url]) => `// @resource     ${name} ${url}`).join('\n');
         header = header.replace(/__REQUIRES__/g, reqLines || '');
         header = header.replace(/__RESOURCES__/g, resLines || '');
         if ((SHARED[envName]?.resources || []).length) {
@@ -309,17 +290,83 @@ function loadBannerForModule(m, versionStr, opts) {
         }
     }
 
-    // Append ?v= and enforce lt-core → lt-data-core ordering
+    // Replace any {VER} token in CDN base
+    header = header.replace(/\{VER\}/g, versionStr);
+
+    // Append ?v= and enforce require ordering (your existing helper)
     header = rewriteRequires(header, versionStr, opts);
 
     return header;
 }
 
+function getBannerVars(m, versionStr, envName, opts) {
+    const isProd = !!opts.release;
+    const baseName = m.id; // e.g., 'QT10', 'QT20', 'QT50', etc.
+    const NAME = isProd ? baseName : `${baseName}_DEV`;
+    const DESC = isProd ? 'Production build' : 'DEV-only build; includes user-start gate';
+
+    // Matches: DEV includes test + prod; PROD is prod-only
+    const MATCHES = isProd
+        ? [
+            '// @match       https://lyntron.on.plex.com/SalesAndCRM*',
+            '// @match       https://lyntron.on.plex.com/SalesAndCrm*'
+        ]
+        : [
+            '// @match       https://lyntron.on.plex.com/SalesAndCRM*',
+            '// @match       https://lyntron.on.plex.com/SalesAndCrm*',
+            '// @match       https://lyntron.test.on.plex.com/SalesAndCRM*',
+            '// @match       https://lyntron.test.on.plex.com/SalesAndCrm*'
+        ];
+
+    const cdnBase = (isProd
+        ? (process.env.CDN_BASE || 'https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v{VER}/wwwroot')
+        : 'http://localhost:5000'
+    ).replace('{VER}', versionStr);
+
+    const fileName = path.basename(m.out);
+    const SELF_URL = `${cdnBase}/${fileName}`;
+
+    return { NAME, DESC, MATCHES, UPDATE_URL: SELF_URL, DOWNLOAD_URL: SELF_URL };
+}
+
+function injectUpdateDownload(header, m, versionStr, opts) {
+    // compute base for URLs
+    const base = opts.release
+        ? (process.env.CDN_BASE || 'https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v{VER}/wwwroot').replace('{VER}', versionStr)
+        : 'http://localhost:5000';
+
+    const fileName = path.basename(m.out); // e.g., qt10.user.js
+    const url = `${base}/${fileName}`;
+
+    const upRe = /^\s*\/\/\s*@updateURL[^\n]*$/m;
+    const dlRe = /^\s*\/\/\s*@downloadURL[^\n]*$/m;
+
+    const lineUp = `// @updateURL   ${url}`;
+    const lineDl = `// @downloadURL ${url}`;
+
+    // If present, replace; otherwise insert before end of header block.
+    if (upRe.test(header)) header = header.replace(upRe, lineUp);
+    if (dlRe.test(header)) header = header.replace(dlRe, lineDl);
+
+    if (!upRe.test(header) || !dlRe.test(header)) {
+        const endMarker = /\/\/\s*==\/UserScript==/;
+        if (endMarker.test(header)) {
+            header = header.replace(endMarker, `${lineUp}\n${lineDl}\n// ==/UserScript==`);
+        } else {
+            // Fallback: append to top
+            header = `${lineUp}\n${lineDl}\n${header}`;
+        }
+    }
+    return header;
+}
 
 async function emitModule(m, versionStr) {
     ensureDir(m.out);
     const entry = m.src;
-    const header = loadBannerForModule(m, versionStr, opts);
+    let header = loadBannerForModule(m, versionStr, opts);
+
+    // --- Inject/refresh @updateURL/@downloadURL ---
+    header = injectUpdateDownload(header, m, versionStr, opts);
 
     if (esbuild) {
         const buildOpts = {

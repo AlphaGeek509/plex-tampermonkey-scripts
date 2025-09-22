@@ -1,0 +1,139 @@
+/* OneMonroe brand theme (baseline) */
+:root {
+    --brand: #0b5fff; /* primary */
+    --brand-600: #0b5fff;
+    --brand-700: #0a4fd6;
+    --accent: #ff6a00; /* accent */
+    --muted: #f4f6f8;
+    --ink: #222;
+    --ink-muted: #666;
+    --ok: #15803d;
+    --warn: #b45309;
+    --err: #b91c1c;
+}
+
+/* Hub pill tones */
+.lt-hub-pill.lt-tone-info {
+    background: var(--brand-600);
+    color: #fff;
+}
+
+.lt-hub-pill.lt-tone-success {
+    background: var(--ok);
+    color: #fff;
+}
+
+.lt-hub-pill.lt-tone-warn {
+    background: var(--warn);
+    color: #fff;
+}
+
+.lt-hub-pill.lt-tone-error {
+    background: var(--err);
+    color: #fff;
+}
+
+/* Toast */
+.lt-toast {
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+}
+
+/* Optional: general accents you can reuse */
+.lt-accent {
+    color: var(--accent);
+}
+
+.lt-muted {
+    color: var(--ink-muted);
+}
+
+/* Buttons (optional utility) */
+.lt-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .5rem .8rem;
+    border-radius: .6rem;
+    border: 1px solid transparent;
+    background: var(--brand-600);
+    color: #fff;
+    cursor: pointer
+}
+
+    .lt-btn:hover {
+        background: var(--brand-700);
+    }
+
+.lt-btn--ghost {
+    background: transparent;
+    color: var(--brand-600);
+    border-color: var(--brand-600);
+}
+
+    .lt-btn--ghost:hover {
+        background: rgba(11,95,255,0.08);
+    }
+
+/* Hub: brand + status */
+.lt-hub .brand {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 10px;
+    font-weight: 600;
+}
+
+    .lt-hub .brand .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--lt-brand, #111111);
+    }
+
+.lt-hub .status-wrap {
+    display: flex;
+    align-items: center;
+}
+
+.lt-hub .status-pill {
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    line-height: 1.1;
+    border: 1px solid rgba(0,0,0,0.08);
+}
+
+    .lt-hub .status-pill.tone-info {
+        background: #eef2ff;
+        color: #1e40af;
+    }
+
+    .lt-hub .status-pill.tone-success {
+        background: #ecfdf5;
+        color: #065f46;
+    }
+
+    .lt-hub .status-pill.tone-warn {
+        background: #fffbeb;
+        color: #92400e;
+    }
+
+    .lt-hub .status-pill.tone-error {
+        background: #fef2f2;
+        color: #991b1b;
+    }
+
+/* QT50: validation highlights */
+.qtv-row-fail {
+    outline: 2px solid rgba(185, 28, 28, 0.6); /* red-700 */
+    background: rgba(254, 226, 226, 0.35); /* red-100 */
+    transition: background 160ms ease-in, outline 160ms ease-in;
+}
+
+/* Rule-specific accent for max unit price */
+.qtv-row-fail--price-maxunit {
+    outline-color: rgba(153, 27, 27, 0.8); /* deeper red */
+    background: rgba(254, 202, 202, 0.45); /* red-200 */
+}
+
+

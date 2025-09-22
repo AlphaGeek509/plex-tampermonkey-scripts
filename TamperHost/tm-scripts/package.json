@@ -7,16 +7,18 @@
   "scripts": {
     "dev": "node ../build-plus.js --patch --emit",
     "build": "node ../build-plus.js --release --patch --emit",
+    "release:qt10": "node ../build-plus.js --release --patch --emit --ids QT10",
+    "release:all": "node ../build-plus.js --release --patch --emit",
     "bump:patch": "node ../build-plus.js --patch",
     "bump:minor": "node ../build-plus.js --minor",
     "bump:major": "node ../build-plus.js --major"
   },
   "tmVersions": {
-    "QT10": "3.6.180",
-    "QT20": "3.6.34",
-    "QT30": "3.6.46",
-    "QT35": "3.6.101",
-    "QT50": "2.0.73"
+    "QT10": "3.6.182",
+    "QT20": "3.6.35",
+    "QT30": "3.6.47",
+    "QT35": "3.6.102",
+    "QT50": "2.0.74"
   },
   "tmFiles": {
     "QT10": [
