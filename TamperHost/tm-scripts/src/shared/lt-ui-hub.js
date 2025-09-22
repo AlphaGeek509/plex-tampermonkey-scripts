@@ -45,6 +45,36 @@
         );
     }
 
+    // Normalize persistent banner height at runtime so PROD matches TEST.
+    // TEST: .plex-env-persistent-banner-container ≈ 50px
+    // PROD: .plex-persistent-banner-container exists but is often 0px
+    function normalizePersistentBanner() {
+        const envBanner = document.querySelector('.plex-env-persistent-banner-container'); // TEST
+        const liveBanner = document.querySelector('.plex-persistent-banner-container');     // PROD
+
+        const envH = envBanner ? envBanner.offsetHeight : 0;
+        const liveH = liveBanner ? liveBanner.offsetHeight : 0;
+
+        // Read current CSS var (framework sets 0 by default in both themes).
+        const root = document.documentElement;
+        const cssVarStr = getComputedStyle(root).getPropertyValue('--side-menu-persistent-banner-height');
+        const cssVar = Number.parseFloat(cssVarStr) || 0;
+
+        // If TEST already has a real banner, mirror that value into the CSS var and exit.
+        if (envH > 0) {
+            root.style.setProperty('--side-menu-persistent-banner-height', `${envH}px`);
+            return;
+        }
+
+        // If PROD banner exists but contributes 0 and the var is 0, lift it to 50 (observed TEST baseline).
+        if (liveBanner && liveH === 0 && cssVar === 0) {
+            const FALLBACK = 50;
+            liveBanner.style.height = `${FALLBACK}px`;
+            root.style.setProperty('--side-menu-persistent-banner-height', `${FALLBACK}px`);
+        }
+    }
+
+
     if (!ROOT.createHub) {
         ROOT.createHub = function createHub() {
             // Host element (+shadow)
@@ -325,9 +355,51 @@
         // Reuse an in-flight promise if present
         if (ROOT.__ensureLTHubPromise) return ROOT.__ensureLTHubPromise;
 
-        // If there's already a host in DOM, try to reuse it
+        // If there's already a host in DOM, try to reuse it – but align its variant to requested mount.
         const preExistingHost = document.querySelector('[data-lt-hub="1"]');
-        if (preExistingHost && ROOT.ltUIHub) return ROOT.ltUIHub;
+        if (preExistingHost && ROOT.ltUIHub) {
+            const wantNav = (mountOpt || ROOT.__LT_HUB_MOUNT || 'nav') === 'nav';
+            const cur = preExistingHost.getAttribute('data-variant') || '';
+
+            if (wantNav && cur !== 'nav') {
+                // Remount the existing host into the navbar as a full-width row
+                let navRight =
+                    document.querySelector('#navBar .navbar-right') ||
+                    document.querySelector('.plex-navbar-container .navbar-right');
+
+                if (navRight) {
+                    const navBar =
+                        navRight.closest('#navBar, .plex-navbar-container') ||
+                        document.getElementById('navBar') ||
+                        document.querySelector('.plex-navbar-container');
+
+                    if (navBar) {
+                        let row = navBar.querySelector('.lt-hub-row');
+                        if (!row) {
+                            row = document.createElement('div');
+                            row.className = 'lt-hub-row';
+                            row.style.display = 'block';
+                            row.style.boxSizing = 'border-box';
+                            row.style.width = '100%';
+                            navBar.appendChild(row);
+                        }
+
+                        if (preExistingHost.parentNode !== row) row.appendChild(preExistingHost);
+                        preExistingHost.setAttribute('data-variant', 'nav');
+                        Object.assign(preExistingHost.style, {
+                            position: 'static',
+                            top: '', left: '', right: '',
+                            width: '100%',
+                            maxWidth: '100%',
+                            zIndex: 'auto',
+                            pointerEvents: 'auto'
+                        });
+                    }
+                }
+            }
+
+            return ROOT.ltUIHub;
+        }
 
         // Determine desired mount
         const desiredMount = (mountOpt || ROOT.__LT_HUB_MOUNT || 'nav');
@@ -418,6 +490,10 @@
                     zIndex: 'auto',
                     pointerEvents: 'auto'
                 });
+
+                // Align PROD with TEST’s banner baseline if needed.
+                normalizePersistentBanner();
+
                 // Ensure the shadow root's top-level .hub respects full width
                 try {
                     const hubRoot = host.shadowRoot?.querySelector('.hub');
@@ -437,7 +513,7 @@
                 };
 
                 // Initial + reactive sizing
-                requestAnimationFrame(() => { updateMinHeight(); requestAnimationFrame(updateMinHeight); });
+                requestAnimationFrame(() => { updateMinHeight(); requestAnimationFrame(updateMinHeight); normalizePersistentBanner(); });
                 try { document.fonts?.ready?.then(updateMinHeight); } catch { }
                 window.addEventListener('resize', updateMinHeight, { passive: true });
 
@@ -450,7 +526,7 @@
                 // --- Production-only shortfall fix (no persistent banner) ---
                 // Apply only when there is NO persistent banner (TEST has one; PROD typically does not).
                 const hasPersistentBanner = !!document.querySelector('.plex-env-persistent-banner-container');
-                if (!hasPersistentBanner) {
+                if (false) {
                     const BASE_NAV_H = 45; // baseline Plex navbar height
 
                     const PAGE_SEL = [
@@ -499,7 +575,7 @@
                     }
 
                     // Initial + reactive applications
-                    requestAnimationFrame(() => { adjustPageHeights(); requestAnimationFrame(adjustPageHeights); });
+                    requestAnimationFrame(() => { adjustPageHeights(); requestAnimationFrame(adjustPageHeights); normalizePersistentBanner(); });
                     window.addEventListener('resize', adjustPageHeights, { passive: true });
 
                     // Observe nav height changes (e.g., if hub content grows/shrinks)
@@ -567,7 +643,7 @@
 
                 // Recalc on layout/DOM changes
                 const recalc = () => { setHubH(); computeChromeTop(); };
-                requestAnimationFrame(() => { recalc(); requestAnimationFrame(recalc); });
+                requestAnimationFrame(() => { recalc(); requestAnimationFrame(recalc); normalizePersistentBanner(); });
                 try { document.fonts?.ready?.then(recalc); } catch { }
                 window.addEventListener('resize', recalc, { passive: true });
                 new MutationObserver(recalc).observe(document.documentElement, { childList: true, subtree: true });
