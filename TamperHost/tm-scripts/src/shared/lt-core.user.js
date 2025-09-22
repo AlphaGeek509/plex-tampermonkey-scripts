@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         lt-core
 // @namespace    lt
-// @version      3.7.8
+// @version      3.7.9
 // @description  Shared core: auth + http + plex DS + hub (status/toast) + theme bridge + tiny utils
 // @run-at       document-start
 // @grant        none
