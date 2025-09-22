@@ -1,16 +1,16 @@
 // ==UserScript==
 // @name        QT30
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     3.7.18
+// @version     3.7.30
 // @description Production build
 // @match       https://lyntron.on.plex.com/SalesAndCRM*
 // @match       https://lyntron.on.plex.com/SalesAndCrm*
-// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.18/TamperHost/wwwroot/lt-plex-tm-utils.user.js?v=3.7.18
-// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.18/TamperHost/wwwroot/lt-plex-auth.user.js?v=3.7.18
-// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.18/TamperHost/wwwroot/lt-ui-hub.js?v=3.7.18
-// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.18/TamperHost/wwwroot/lt-data-core.user.js?v=3.7.18
-// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.18/TamperHost/wwwroot/lt-core.user.js?v=3.7.18
-// @resource     THEME_CSS https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.18/TamperHost/wwwroot/theme.css
+// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.30/TamperHost/wwwroot/lt-plex-tm-utils.user.js?v=3.7.30
+// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.30/TamperHost/wwwroot/lt-plex-auth.user.js?v=3.7.30
+// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.30/TamperHost/wwwroot/lt-ui-hub.js?v=3.7.30
+// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.30/TamperHost/wwwroot/lt-data-core.user.js?v=3.7.30
+// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.30/TamperHost/wwwroot/lt-core.user.js?v=3.7.30
+// @resource     THEME_CSS https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.30/TamperHost/wwwroot/theme.css
 // @grant       GM_registerMenuCommand
 // @grant       GM_getValue
 // @grant       GM_setValue
