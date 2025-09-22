@@ -1,0 +1,46 @@
+{
+  "name": "tm-scripts",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Plex TamperMonkey scripts (source only).",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "node ../build-plus.js --patch --emit",
+    "build": "node ../build-plus.js --release --patch --emit",
+    "release:qt10": "node ../build-plus.js --release --patch --emit --ids QT10",
+    "release:all": "node ../build-plus.js --release --patch --emit",
+    "bump:patch": "node ../build-plus.js --patch",
+    "bump:minor": "node ../build-plus.js --minor",
+    "bump:major": "node ../build-plus.js --major"
+  },
+  "tmVersions": {
+    "QT10": "3.6.183",
+    "QT20": "3.6.36",
+    "QT30": "3.6.48",
+    "QT35": "3.6.103",
+    "QT50": "2.0.75",
+    "ALL": "0.0.1"
+  },
+  "tmFiles": {
+    "QT10": [
+      "src/quote-tracking/qt10-customerCatalogGet/qt10.index.js",
+      "../wwwroot/qt10.user.js"
+    ],
+    "QT20": [
+      "src/quote-tracking/qt20-partStockLevelGet/qt20.index.js",
+      "../wwwroot/qt20.user.js"
+    ],
+    "QT30": [
+      "src/quote-tracking/qt30-catalogPricingApply/qt30.index.js",
+      "../wwwroot/qt30.user.js"
+    ],
+    "QT35": [
+      "src/quote-tracking/qt35-attachmentsGet/qt35.index.js",
+      "../wwwroot/qt35.user.js"
+    ],
+    "QT50": [
+      "src/quote-tracking/validation/qtv.entry.js",
+      "../wwwroot/qt50.user.js"
+    ]
+  }
+}

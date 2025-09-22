@@ -1,37 +1,83 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <None Include=".version" />
-    <None Include="build-plus.js" />
-    <None Include=".gitattributes" />
-    <None Include=".gitignore" />
-    <Compile Include="Program.fs" />
-  </ItemGroup>
+	<!-- Clean out any stale includes first -->
+	<ItemGroup>
+		<!-- Remove any old 'common' or legacy patterns that leaked in -->
+		<Content Remove="tm-scripts\src\qtv\**" />
+		<Content Remove="tm-tdd\**" />
+		<Content Remove="wwwroot\dist\**" />
+		<Content Remove="wwwroot\zOldFiles\**" />
+		<None Remove="tm-tdd\**" />
+		<TypeScriptCompile Remove="tm-tdd\**" />
+		<Content Remove="tm-scripts\src\common\**" />
+		<EmbeddedResource Remove="tm-scripts\src\common\**" />
+		<EmbeddedResource Remove="tm-scripts\src\qtv\**" />
+		<EmbeddedResource Remove="wwwroot\dist\**" />
+		<EmbeddedResource Remove="wwwroot\zOldFiles\**" />
+		<!-- Never include node_modules in the project -->
+		<None Remove="**\node_modules\**" />
+		<Content Remove="**\node_modules\**" />
+		<TypeScriptCompile Remove="**\node_modules\**" />
+	</ItemGroup>
+	<ItemGroup>
+	  <Content Remove="wwwroot\lt-ui-hub.js" />
+	</ItemGroup>
 
-  <ItemGroup />
+	<!-- Solution-visible files (not compiled by .NET; just show in Solution Explorer) -->
+	<ItemGroup>
+		<!-- Top-level repo utilities -->
+		<None Include=".version" />
+		<None Include="build-plus.js" />
+		<None Include=".gitattributes" />
+		<None Include=".gitignore" />
+		<None Include="README.md" Condition="Exists('README.md')" />
+		<None Include="build-plus-original.js" />
+		<None Include="tm-scripts\banners\QT10.dev.header.js" />
+		<None Include="tm-scripts\banners\QT20.dev.header.js" />
+		<None Include="tm-scripts\banners\QT30.dev.header.js" />
+		<None Include="tm-scripts\banners\QT35.dev.header.js" />
+		<None Include="tm-scripts\banners\QT50.dev.header.js" />
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.StaticFiles" Version="2.3.0" />
-  </ItemGroup>
+		<!-- Package config and banners -->
+		<None Include="tm-scripts\package.json" />
+		<None Include="tm-scripts\src\domains\quote\quote.entity.js" />
+		<None Include="tm-scripts\src\domains\quote\quote.repo.js" />
+		<None Include="tm-scripts\src\data\core\data-context.js" />
+		<None Include="tm-scripts\src\data\core\repo-base.js" />
+		<None Include="tm-scripts\src\data\core\cache.js" />
+		<None Include="tm-scripts\src\data\core\pubsub.js" />
+		<None Include="tm-scripts\src\data\core\storage\memory.js" />
+		<None Include="tm-scripts\src\data\core\storage\session.js" />
+		<None Include="tm-scripts\src\data\core\storage\local.js" />
+		<None Include="tm-scripts\src\data\core\storage\gm.js" />
+		<None Include="tm-scripts\src\data\core\storage\composite.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt10-customerCatalogGet\qt10.index.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt20-partStockLevelGet\qt20.index.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt30-catalogPricingApply\qt30.index.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt35-attachmentsGet\qt35.index.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt50\rules\minUnitPrice.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt50\rules\autoManageLtPartNoOnQuote.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt50\rules\index.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt50\rules\maxUnitPrice.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt50\qtv.entry.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt50\injectButton.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt50\engine.js" />
+		<None Include="tm-scripts\src\quote-tracking\qt50\index.js" />
+		<None Include="tm-scripts\src\shared\lt-ui-hub.js" />
+		<None Include="tm-scripts\src\shared\keys.js" />
+		<None Include="tm-scripts\src\shared\ids.js" />
+		<None Include="tm-scripts\src\shared\lt-plex-auth.user.js" />
+		<None Include="tm-scripts\src\shared\lt-plex-tm-utils.user.js" />
+		<None Include="wwwroot\lt-ui-hub.js" />
 
-  <ItemGroup>
-    <Content Update="wwwroot\lt-plex-auth.user.js">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Update="wwwroot\lt-plex-tm-utils.user.js">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Update="wwwroot\QT10-GetCatalogByCustomer.user.js">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Update="FSharp.Core" Version="9.0.300" />
-  </ItemGroup>
+		<!-- Source (show for editing); mark as None so .NET doesn’t try to compile them -->
+	</ItemGroup>
+	<ItemGroup>
+	  <Compile Include="Program.fs" />
+	</ItemGroup>
 
 </Project>

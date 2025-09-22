@@ -1,15 +1,57 @@
-﻿
-# Visual Studio folders
-*.vs/
-**/bin/
-**/obj/
+# --- Dependencies
+node_modules/
+jspm_packages/
 
-# Rider (if ever used)
+# --- Build & caches
+dist/
+build/
+.cache/
+.temp/
+.out/
+.next/
+.nuxt/
+coverage/
+*.tsbuildinfo
+
+# --- Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# --- Env & local config
+.env
+.env.*.local
+*.local
+.vscode/
 .idea/
 
-# User-specific and temp files
+# --- OS cruft
+.DS_Store
+Thumbs.db
+
+# --- Optional: lock common frontend tools’ caches
+.eslintcache
+.stylelintcache
+
+# --- Optional (Windows/Visual Studio)
+.vs/
 *.user
 *.suo
+bin/
+obj/
 
-# VS solution index cache
-*slnx.sqlite
+# --- Repo hygiene (TM project)
+# Keep release artifacts committed (served by jsDelivr tags)
+!TamperHost/wwwroot/
+!TamperHost/wwwroot/**/*.user.js
+!TamperHost/tm-scripts/banners/_template.header.tpl.js
+!TamperHost/tm-scripts/src/shared/lt-*.js
+!TamperHost/tm-scripts/src/shared/theme.css
+
+# Ignore local scratch / archives / maps
+TamperHost/project-tree.txt
+*.zip
+*.map
+local-dev/

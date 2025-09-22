@@ -1,4 +1,3 @@
-// /tm-scripts/build-plus.js
 /**
  * build-plus.js — TM monorepo builder (modules-only, no legacy mode)
  *
@@ -91,7 +90,7 @@ const MODULES = [
     {
         id: 'QT10',
         featureName: 'Customer Catalog Get',
-        bannerBase: 'qt10-customerCatalogGet',
+        bannerBase: 'qt10-customerCatalogGet', 
         src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'qt10-customerCatalogGet', 'qt10.index.js'),
         out: path.join(ROOT, 'wwwroot', 'qt10.user.js')
     },
@@ -116,47 +115,14 @@ const MODULES = [
         src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'qt35-attachmentsGet', 'qt35.index.js'),
         out: path.join(ROOT, 'wwwroot', 'qt35.user.js')
     },
-    {
-        id: 'QT50',
-        featureName: 'Quote Validation',
-        bannerBase: 'validation',
-        src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'qt50', 'qtv.entry.js'),
-        out: path.join(ROOT, 'wwwroot', 'qt50.user.js')
-    }
+    //{
+    //    id: 'QT50',
+    //    featureName: 'Quote Validation',
+    //    bannerBase: 'validation',
+    //    src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'validation', 'qtv.entry.js'),
+    //    out: path.join(ROOT, 'wwwroot', 'qt50.user.js')
+    //}
 ];
-
-
-// --------------------------- shared requires/resources ---------------------------
-// Global default CDN for ALL modules; {VER} is replaced with the release version.
-const CDN_BASE = process.env.CDN_BASE || 'https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v{VER}/wwwroot';
-
-
-const SHARED = {
-    dev: {
-        requires: [
-            'http://localhost:5000/lt-plex-tm-utils.user.js',
-            'http://localhost:5000/lt-plex-auth.user.js',
-            'http://localhost:5000/lt-core.user.js',
-            'http://localhost:5000/lt-data-core.user.js',
-            'http://localhost:5000/lt-ui-hub.js',
-        ],
-        resources: [
-            ['THEME_CSS', 'http://localhost:5000/theme.css']
-        ]
-    },
-    release: {
-        requires: [
-            `${CDN_BASE}/lt-plex-tm-utils.user.js`,
-            `${CDN_BASE}/lt-plex-auth.user.js`,
-            `${CDN_BASE}/lt-ui-hub.js`,
-            `${CDN_BASE}/lt-core.user.js`,
-            `${CDN_BASE}/lt-data-core.user.js`            
-        ],
-        resources: [
-            ['THEME_CSS', `${CDN_BASE}/theme.css`]
-        ]
-    }
-};
 
 // --------------------------- helpers ---------------------------
 function bumpSemver(ver, mode, setStr) {
@@ -205,19 +171,6 @@ function resolveModuleById(id) {
     return MODULES.find(m => m.id.toLowerCase() === id.toLowerCase());
 }
 
-
-
-function ensureGrants(header, grants) {
-    if (!Array.isArray(grants) || grants.length === 0) return header;
-    const hasGrant = (g) => new RegExp(`^\\s*//\\s*@grant\\s+${g}\\b`, 'm').test(header);
-    let out = header;
-    for (const g of grants) {
-        if (!hasGrant(g)) {
-            out = out.replace(/(\/\/\s*==\/UserScript==)/, `// @grant        ${g}\n$1`);
-        }
-    }
-    return out;
-}
 // Rewrites @require lines: appends ?v=<stamp> and enforces core → data-core order
 function rewriteRequires(header, versionStr, opts) {
     const stamp = opts.release
@@ -243,130 +196,73 @@ function rewriteRequires(header, versionStr, opts) {
     // Nothing to reorder? done.
     if (!reqIdx.length) return lines.join('\n');
 
-    // Ensure lt-ui-hub comes BEFORE lt-core
-    let iHub = -1, iCore2 = -1;
+    // Ensure lt-core comes BEFORE lt-data-core
+    let iCore = -1, iDataCore = -1;
     for (const i of reqIdx) {
-        if (/lt-ui-hub\.js(\?|$)/i.test(lines[i])) iHub = i;
-        if (/lt-core\.user\.js(\?|$)/i.test(lines[i])) iCore2 = i;
+        if (/lt-core\.user\.js(\?|$)/i.test(lines[i])) iCore = i;
+        if (/lt-data-core\.user\.js(\?|$)/i.test(lines[i])) iDataCore = i;
     }
-    if (iHub >= 0 && iCore2 >= 0 && iHub > iCore2) {
-        const tmp = lines[iHub];
-        lines[iHub] = lines[iCore2];
-        lines[iCore2] = tmp;
+    if (iCore >= 0 && iDataCore >= 0 && iCore > iDataCore) {
+        // swap the two lines
+        const tmp = lines[iCore];
+        lines[iCore] = lines[iDataCore];
+        lines[iDataCore] = tmp;
     }
-
 
     return lines.join('\n');
 }
 
 
+// Banner loader: prefers ID-based names; supports feature-based names as fallback
 function loadBannerForModule(m, versionStr, opts) {
-    const envName = opts.release ? 'PROD' : 'DEV'; // release → PROD; else DEV
+    const env = opts.release ? 'prod' : 'dev';
+    const candidates = [
+        path.join(SRC_ROOT, 'banners', `${m.id}.${env}.header.js`),
+        m.bannerBase ? path.join(SRC_ROOT, 'banners', `${m.bannerBase}.${env}.header.js`) : null,
+        // Fallback to opposite env if not found
+        path.join(SRC_ROOT, 'banners', `${m.id}.${env === 'prod' ? 'dev' : 'prod'}.header.js`),
+        m.bannerBase ? path.join(SRC_ROOT, 'banners', `${m.bannerBase}.${env === 'prod' ? 'dev' : 'prod'}.header.js`) : null
+    ].filter(Boolean);
 
-    // Always read the single template
-    const tplPath = path.join(__dirname, 'tm-scripts', 'banners', '_template.header.tpl.js');
-    let header = fs.readFileSync(tplPath, 'utf8');
+    let header = '';
+    const chosen = candidates.find(p => fs.existsSync(p));
+    if (chosen) {
+        header = fs.readFileSync(chosen, 'utf8');
+    } else {
+        // minimal fallback header if none provided
+        header =
+            `// ==UserScript==
+// @name         ${m.featureName} [${m.id}]
+// @namespace    Lyn-Tron / OneMonroe
+// @version      ${versionStr}
+// @description  Internal tooling for Plex apps
+// @match        *://*/*
+// @grant        none
+// @run-at       document-idle
+// @noframes
+// ==/UserScript==
 
-    const vars = getBannerVars(m, versionStr, envName, opts);
-
-    // Fill core tokens
-    header = header
-        .replaceAll('@@NAME@@', vars.NAME)
-        .replaceAll('@@VERSION@@', versionStr)
-        .replaceAll('@@DESC@@', vars.DESC)
-        .replaceAll('@@MATCHES@@', vars.MATCHES.join('\n'))
-        .replaceAll('@@UPDATE_URL@@', vars.UPDATE_URL)
-        .replaceAll('@@DOWNLOAD_URL@@', vars.DOWNLOAD_URL);
-
-    // Expand __REQUIRES__/__RESOURCES__ (uses your existing SHARED maps)
-    if (header.includes('__REQUIRES__') || header.includes('__RESOURCES__')) {
-        const sharedKey = opts.release ? 'release' : 'dev';
-        const reqLines = (SHARED[sharedKey]?.requires || []).map(u => `// @require      ${u}`).join('\n');
-        const resLines = (SHARED[sharedKey]?.resources || []).map(([name, url]) => `// @resource     ${name} ${url}`).join('\n');
-        header = header.replace(/__REQUIRES__/g, reqLines || '');
-        header = header.replace(/__RESOURCES__/g, resLines || '');
-        if ((SHARED[envName]?.resources || []).length) {
-            header = ensureGrants(header, ['GM_addStyle', 'GM_getResourceText']);
-        }
+`;
     }
 
-    // Replace any {VER} token in CDN base
-    header = header.replace(/\{VER\}/g, versionStr);
+    // Normalize line endings and force a trailing newline
+    header = header.replace(/\r\n/g, '\n');
+    if (!header.endsWith('\n')) header += '\n';
 
-    // Append ?v= and enforce require ordering (your existing helper)
+    // Ensure banner @version matches the new version
+    header = header.replace(/(@version\s+)([^\s]+)/g, `$1${versionStr}`);
+
+    // Append ?v= to every @require and enforce lt-core → lt-data-core ordering
     header = rewriteRequires(header, versionStr, opts);
 
     return header;
-}
 
-function getBannerVars(m, versionStr, envName, opts) {
-    const isProd = !!opts.release;
-    const baseName = m.id; // e.g., 'QT10', 'QT20', 'QT50', etc.
-    const NAME = isProd ? baseName : `${baseName}_DEV`;
-    const DESC = isProd ? 'Production build' : 'DEV-only build; includes user-start gate';
-
-    // Matches: DEV includes test + prod; PROD is prod-only
-    const MATCHES = isProd
-        ? [
-            '// @match       https://lyntron.on.plex.com/SalesAndCRM*',
-            '// @match       https://lyntron.on.plex.com/SalesAndCrm*'
-        ]
-        : [
-            '// @match       https://lyntron.on.plex.com/SalesAndCRM*',
-            '// @match       https://lyntron.on.plex.com/SalesAndCrm*',
-            '// @match       https://lyntron.test.on.plex.com/SalesAndCRM*',
-            '// @match       https://lyntron.test.on.plex.com/SalesAndCrm*'
-        ];
-
-    const cdnBase = (isProd
-        ? (process.env.CDN_BASE || 'https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v{VER}/wwwroot')
-        : 'http://localhost:5000'
-    ).replace('{VER}', versionStr);
-
-    const fileName = path.basename(m.out);
-    const SELF_URL = `${cdnBase}/${fileName}`;
-
-    return { NAME, DESC, MATCHES, UPDATE_URL: SELF_URL, DOWNLOAD_URL: SELF_URL };
-}
-
-function injectUpdateDownload(header, m, versionStr, opts) {
-    // compute base for URLs
-    const base = opts.release
-        ? (process.env.CDN_BASE || 'https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v{VER}/wwwroot').replace('{VER}', versionStr)
-        : 'http://localhost:5000';
-
-    const fileName = path.basename(m.out); // e.g., qt10.user.js
-    const url = `${base}/${fileName}`;
-
-    const upRe = /^\s*\/\/\s*@updateURL[^\n]*$/m;
-    const dlRe = /^\s*\/\/\s*@downloadURL[^\n]*$/m;
-
-    const lineUp = `// @updateURL   ${url}`;
-    const lineDl = `// @downloadURL ${url}`;
-
-    // If present, replace; otherwise insert before end of header block.
-    if (upRe.test(header)) header = header.replace(upRe, lineUp);
-    if (dlRe.test(header)) header = header.replace(dlRe, lineDl);
-
-    if (!upRe.test(header) || !dlRe.test(header)) {
-        const endMarker = /\/\/\s*==\/UserScript==/;
-        if (endMarker.test(header)) {
-            header = header.replace(endMarker, `${lineUp}\n${lineDl}\n// ==/UserScript==`);
-        } else {
-            // Fallback: append to top
-            header = `${lineUp}\n${lineDl}\n${header}`;
-        }
-    }
-    return header;
 }
 
 async function emitModule(m, versionStr) {
     ensureDir(m.out);
     const entry = m.src;
-    let header = loadBannerForModule(m, versionStr, opts);
-
-    // --- Inject/refresh @updateURL/@downloadURL ---
-    header = injectUpdateDownload(header, m, versionStr, opts);
+    const header = loadBannerForModule(m, versionStr, opts);
 
     if (esbuild) {
         const buildOpts = {
@@ -388,18 +284,18 @@ async function emitModule(m, versionStr) {
         if (opts.watch) {
             const ctx = await esbuild.context(buildOpts);
             await ctx.watch();
-            console.log(`👀 Watching ${ m.id } (${ path.relative(ROOT, entry) }) → ${ path.relative(ROOT, m.out) } `);
+            console.log(`👀 Watching ${m.id} (${path.relative(ROOT, entry)}) → ${path.relative(ROOT, m.out)}`);
             return;
         } else {
             await esbuild.build(buildOpts);
             // Ensure output reflects the bumped version (also updates any VERSION constants)
             updateFileVersion(m.out, versionStr, opts.dry);
-            console.log(`📦 Emitted ${ m.id }: ${ path.relative(ROOT, m.out) } `);
+            console.log(`📦 Emitted ${m.id}: ${path.relative(ROOT, m.out)}`);
         }
     } else {
         // Fallback: concatenate banner + source (no bundling)
         if (!fs.existsSync(entry)) {
-            console.error(`❌ Source file not found for ${ m.id }: ${ entry } `);
+            console.error(`❌ Source file not found for ${m.id}: ${entry}`);
             return;
         }
         const body = fs.readFileSync(entry, 'utf8');
@@ -408,7 +304,7 @@ async function emitModule(m, versionStr) {
         if (!opts.dry) fs.writeFileSync(m.out, out, 'utf8');
         updateFileVersion(m.out, versionStr, opts.dry);
 
-        console.log(`📄 Copied(no esbuild) ${ m.id }: ${ path.relative(ROOT, m.out) } `);
+        console.log(`📄 Copied (no esbuild) ${m.id}: ${path.relative(ROOT, m.out)}`);
     }
 }
 
@@ -419,7 +315,7 @@ async function emitModule(m, versionStr) {
 // ─────────────────────────────────────────────────────────────────────────────
 function showMenu(modules) {
     console.log('\nSelect module(s) to process:');
-    modules.forEach((m, i) => console.log(`  ${ i + 1 }. ${ m.id } — ${ m.featureName } `));
+    modules.forEach((m, i) => console.log(`  ${i + 1}. ${m.id} — ${m.featureName}`));
     console.log('  a. ALL');
     console.log('  q. Quit');
     console.log('\nTip: enter a single number (e.g., 1) or a comma list (e.g., 1,3).');
@@ -500,7 +396,7 @@ async function promptSelectModules(modules) {
 
 
     if (!PKG_PATH || !fs.existsSync(PKG_PATH)) {
-        console.error(`❌ package.json not found under ${ SRC_ROOT } `);
+        console.error(`❌ package.json not found under ${SRC_ROOT}`);
         process.exit(1);
     }
     const pkg = JSON.parse(fs.readFileSync(PKG_PATH, 'utf8'));
@@ -524,7 +420,7 @@ async function promptSelectModules(modules) {
         }
 
         if (!opts.dry) pkg.tmVersions[id] = next;
-        console.log(`ℹ️  ${ id }: ${ cur } → ${ next } `);
+        console.log(`ℹ️  ${id}: ${cur} → ${next}`);
     }
 
     // 2) persist package.json
@@ -537,7 +433,7 @@ async function promptSelectModules(modules) {
         for (const id of opts.ids) {
             const m = resolveModuleById(id);
             if (!m) {
-                console.warn(`⚠️  Unknown module id (emit skipped): ${ id } `);
+                console.warn(`⚠️  Unknown module id (emit skipped): ${id}`);
                 continue;
             }
             await emitModule(m, updatedPerIdVersion[id]);
@@ -550,7 +446,7 @@ async function promptSelectModules(modules) {
         }
     }
 
-    console.log(opts.dry ? '\n🧪 DRY RUN complete.' : `\n🎉 Done!${ opts.emit ? ' (bump + emit)' : ' (bump only)' } \n`);
+    console.log(opts.dry ? '\n🧪 DRY RUN complete.' : `\n🎉 Done!${opts.emit ? ' (bump + emit)' : ' (bump only)'}\n`);
     process.exit(0);
 })().catch(err => {
     console.error('❌ Build failed:', err);
