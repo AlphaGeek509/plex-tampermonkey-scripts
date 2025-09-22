@@ -18,6 +18,17 @@
 
 const fs = require('fs');
 const path = require('path');
+
+// For library builds (isLib: true), expose a stable global on window/unsafeWindow.
+// Add/adjust as your libs require.
+const LIB_GLOBALS = {
+    LT_PLEX_TM_UTILS: 'TMUtils',
+    LT_PLEX_AUTH: 'LTPlexAuth',
+    LT_CORE: 'LTCore',
+    LT_DATA_CORE: 'LTDataCore',
+    LT_UI_HUB: 'LTHub'
+};
+
 const readline = require('readline');
 
 // Try to load esbuild (optional)
@@ -170,7 +181,8 @@ const MODULES = [
 
 // --------------------------- shared requires/resources ---------------------------
 // Global default CDN for ALL modules; {VER} is replaced with the release version.
-const CDN_BASE = process.env.CDN_BASE || 'https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v{VER}/wwwroot';
+const CDN_BASE = process.env.CDN_BASE || 'https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v{VER}/TamperHost/wwwroot';
+
 
 
 const SHARED = {
@@ -361,7 +373,7 @@ function getBannerVars(m, versionStr, envName, opts) {
         ];
 
     const cdnBase = (isProd
-        ? (process.env.CDN_BASE || 'https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v{VER}/wwwroot')
+        ? (process.env.CDN_BASE || 'https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v{VER}/TamperHost/wwwroot')
         : 'http://localhost:5000'
     ).replace('{VER}', versionStr);
 
@@ -372,19 +384,35 @@ function getBannerVars(m, versionStr, envName, opts) {
 }
 
 function injectUpdateDownload(header, m, versionStr, opts) {
-    // compute base for URLs
-    const base = opts.release
-        ? (process.env.CDN_BASE || 'https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v{VER}/wwwroot').replace('{VER}', versionStr)
-        : 'http://localhost:5000';
+    // Pinned (by tag) base for requires and for header when not using "latest"
+    const basePinned = (process.env.CDN_BASE ||
+        'https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v{VER}/TamperHost/wwwroot'
+    ).replace('{VER}', versionStr);
 
-    const fileName = path.basename(m.out); // e.g., qt10.user.js
-    const url = `${base}/${fileName}`;
+    // Latest (auto-update) base for the main script header (release only)
+    const baseLatest = 'https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@latest/TamperHost/wwwroot';
+
+    // Local base for dev
+    const baseDev = 'http://localhost:5000';
+
+    const fileName = path.basename(m.out);
+
+    // Allow overriding behavior via env:
+    // TM_UPDATEURL_LATEST = "1" (default) -> use @latest on release
+    // TM_UPDATEURL_LATEST = "0"           -> keep pinned even on release
+    const preferLatest = (process.env.TM_UPDATEURL_LATEST ?? '1') !== '0';
+
+    // Which URL to put into @updateURL/@downloadURL?
+    const urlForHeader =
+        opts.release
+            ? (preferLatest ? `${baseLatest}/${fileName}` : `${basePinned}/${fileName}`)
+            : `${baseDev}/${fileName}`;
 
     const upRe = /^\s*\/\/\s*@updateURL[^\n]*$/m;
     const dlRe = /^\s*\/\/\s*@downloadURL[^\n]*$/m;
 
-    const lineUp = `// @updateURL   ${url}`;
-    const lineDl = `// @downloadURL ${url}`;
+    const lineUp = `// @updateURL   ${urlForHeader}`;
+    const lineDl = `// @downloadURL ${urlForHeader}`;
 
     // If present, replace; otherwise insert before end of header block.
     if (upRe.test(header)) header = header.replace(upRe, lineUp);
@@ -395,12 +423,12 @@ function injectUpdateDownload(header, m, versionStr, opts) {
         if (endMarker.test(header)) {
             header = header.replace(endMarker, `${lineUp}\n${lineDl}\n// ==/UserScript==`);
         } else {
-            // Fallback: append to top
             header = `${lineUp}\n${lineDl}\n${header}`;
         }
     }
     return header;
 }
+
 
 async function emitModule(m, versionStr) {
     ensureDir(m.out);
@@ -414,7 +442,9 @@ async function emitModule(m, versionStr) {
                 bundle: true,
                 outfile: m.out,
                 sourcemap: opts.release ? false : 'inline',
+                // Keep syntax & whitespace minification, but DON'T rename identifiers for libs we want to export
                 minify: !!opts.release,
+                minifyIdentifiers: false,
                 target: ['chrome110', 'edge110', 'firefox110'],
                 legalComments: 'none',
                 format: 'iife',
@@ -422,6 +452,16 @@ async function emitModule(m, versionStr) {
                 splitting: false,
                 define: { __BUILD_DEV__: String(!opts.release) }
             };
+
+            // If this lib has a known global name, append a tiny footer to publish it.
+            const gName = LIB_GLOBALS[m.id];
+            if (gName) {
+                // This assumes your lib defines a top-level variable with the same name (e.g., const TMUtils = {...}).
+                // We attach it to unsafeWindow/window without throwing if minified or absent.
+                buildOpts.footer = {
+                    js: `;(function(g){try{if(typeof ${gName}!=='undefined'){g.${gName}=${gName};}}catch(e){}})(typeof unsafeWindow!=='undefined'?unsafeWindow:window);`
+                };
+            }
             if (opts.watch) {
                 const ctx = await esbuild.context(buildOpts);
                 await ctx.watch();
@@ -457,17 +497,28 @@ async function emitModule(m, versionStr) {
             entryPoints: [entry],
             bundle: true,
             outfile: m.out,
-            banner: { js: header },
             sourcemap: opts.release ? false : 'inline',
+            // Keep syntax & whitespace minification, but DON'T rename identifiers for libs we want to export
             minify: !!opts.release,
+            minifyIdentifiers: false,
             target: ['chrome110', 'edge110', 'firefox110'],
-            legalComments: 'none', 
-            // Ensure single-file, TM-safe output:
+            legalComments: 'none',
             format: 'iife',
             platform: 'browser',
             splitting: false,
-            define: { __BUILD_DEV__: String(!opts.release) }
+            define: { __BUILD_DEV__: String(!opts.release) },
+            banner: { js: header + '\n' }
         };
+
+        // If this lib has a known global name, append a tiny footer to publish it.
+        const gName = LIB_GLOBALS[m.id];
+        if (gName) {
+            // This assumes your lib defines a top-level variable with the same name (e.g., const TMUtils = {...}).
+            // We attach it to unsafeWindow/window without throwing if minified or absent.
+            buildOpts.footer = {
+                js: `;(function(g){try{if(typeof ${gName}!=='undefined'){g.${gName}=${gName};}}catch(e){}})(typeof unsafeWindow!=='undefined'?unsafeWindow:window);`
+            };
+        }
 
         if (opts.watch) {
             const ctx = await esbuild.context(buildOpts);

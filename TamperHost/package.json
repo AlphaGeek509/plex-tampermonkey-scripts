@@ -7,9 +7,6 @@
   },
   "scripts": {
     "dev": "npm run dev -w tm-scripts",
-    "build": "npm run build -w tm-scripts",
-    "bump:patch": "npm run bump:patch -w tm-scripts",
-    "bump:minor": "npm run bump:minor -w tm-scripts",
-    "bump:major": "npm run bump:major -w tm-scripts"
+    "build": "npm run build -w tm-scripts"
   }
 }

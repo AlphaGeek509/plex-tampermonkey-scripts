@@ -1,16 +1,16 @@
 // ==UserScript==
 // @name        QT10
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     3.7.9
+// @version     3.7.18
 // @description Production build
 // @match       https://lyntron.on.plex.com/SalesAndCRM*
 // @match       https://lyntron.on.plex.com/SalesAndCrm*
-// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.9/wwwroot/lt-plex-tm-utils.user.js?v=3.7.9
-// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.9/wwwroot/lt-plex-auth.user.js?v=3.7.9
-// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.9/wwwroot/lt-ui-hub.js?v=3.7.9
-// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.9/wwwroot/lt-data-core.user.js?v=3.7.9
-// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.9/wwwroot/lt-core.user.js?v=3.7.9
-// @resource     THEME_CSS https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.9/wwwroot/theme.css
+// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.18/TamperHost/wwwroot/lt-plex-tm-utils.user.js?v=3.7.18
+// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.18/TamperHost/wwwroot/lt-plex-auth.user.js?v=3.7.18
+// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.18/TamperHost/wwwroot/lt-ui-hub.js?v=3.7.18
+// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.18/TamperHost/wwwroot/lt-data-core.user.js?v=3.7.18
+// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.18/TamperHost/wwwroot/lt-core.user.js?v=3.7.18
+// @resource     THEME_CSS https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.18/TamperHost/wwwroot/theme.css
 // @grant       GM_registerMenuCommand
 // @grant       GM_getValue
 // @grant       GM_setValue
@@ -21,7 +21,8 @@
 // @noframes
 // @grant        GM_addStyle
 // @grant        GM_getResourceText
-// @updateURL   https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.9/wwwroot/qt10.user.js
-// @downloadURL https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.9/wwwroot/qt10.user.js
+// @updateURL   https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@latest/TamperHost/wwwroot/qt10.user.js
+// @downloadURL https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@latest/TamperHost/wwwroot/qt10.user.js
 // ==/UserScript==
+
 (()=>{(async function(){"use strict";let a={NAME:"QT10",ROUTES:[/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i],ANCHOR:'[data-val-property-name="CustomerNo"]',DS_CATALOG_BY_CUSTOMER:319,DS_CATALOG_CODE_BY_KEY:22696,GATE_USER_EDIT:!0},i=/test\.on\.plex\.com$/i.test(location.hostname);try{TMUtils.setDebug?.(i)}catch{}let f=TMUtils.getLogger?.(a.NAME),N=(...t)=>{i&&f?.log?.(...t)},w=(...t)=>{i&&f?.error?.(...t)};if(!a.ROUTES.some(t=>t.test(location.pathname)))return;window.__LT_HUB_MOUNT="nav",await window.ensureLTHub?.({mount:"nav"}),lt.core.hub.notify("Ready","info",{sticky:!0});function E(t="QT"){try{let e=`lt:${t}:scopeId`,r=sessionStorage.getItem(e);return r||(r=String(Math.floor(Math.random()*2147483647)),sessionStorage.setItem(e,r)),Number(r)}catch{return Math.floor(Math.random()*2147483647)}}let L="draft",k=null,m=lt.core?.data?.makeFlatScopedRepo?lt.core.data.makeFlatScopedRepo({ns:"QT",entity:"quote",legacyEntity:"QuoteHeader"}):null,u=null;async function c(){if(!m)return null;if(u)return u;let{repo:t}=m.use(E("QT"));return u=t,await u.ensureFromLegacyIfMissing?.(),u}let h=t=>{let e=lt?.core?.auth?.withFreshAuth;return typeof e=="function"?e(t):t()};async function D(){try{if(await lt.core.auth.getKey())return!0}catch{}return lt.core.hub.notify("Auth looks stale. Retrying\u2026","warn",{toast:!0}),!1}async function b(t,{timeoutMs:e=1e4,pollMs:r=150}={}){let l=Date.now();for(;Date.now()-l<e;){if(document.querySelector(t))return!0;await(TMUtils.sleep?.(r)||new Promise(o=>setTimeout(o,r)))}return!!document.querySelector(t)}let d=!1,_=!1,g=null,M=null;async function C(){if(!(d||_)){_=!0;try{if(!a.ROUTES.some(r=>r.test(location.pathname))||!await b(a.ANCHOR)||!await D())return;let{viewModel:t}=await TMUtils.waitForModelAsync(a.ANCHOR,{pollMs:200,timeoutMs:8e3,logger:i?f:null});if(!t)return;let e=null;g=TMUtils.watchBySelector({selector:a.ANCHOR,initial:!a.GATE_USER_EDIT,fireOn:"blur",settleMs:350,logger:i?f:null,onChange:async()=>{let r=TMUtils.getObsValue(t,"CustomerNo",{first:!0,trim:!0});!r||r===e||(e=r,await R(r,t))}}),d=!0}catch(t){d=!1,w(`${a.NAME} init failed:`,t)}finally{_=!1}}}async function R(t,e){if(!t)return;let r=lt.core.hub.beginTask("Linking catalog\u2026","info");try{let l=await h(()=>lt.core.plex.dsRows(a.DS_CATALOG_BY_CUSTOMER,{Customer_No:t})),s=(Array.isArray(l)?l[0]:null)?.Catalog_Key||0;if(!s){r.error("No catalog found for this customer.");return}let S=await h(()=>lt.core.plex.dsRows(a.DS_CATALOG_CODE_BY_KEY,{Catalog_Key:s})),T=(Array.isArray(S)?S.map(O=>O?.Catalog_Code).find(Boolean):null)||"";TMUtils.setObsValue(e,"CatalogKey",s),TMUtils.setObsValue(e,"CatalogCode",T),await c()&&U({Customer_No:String(t),Catalog_Key:Number(s),Catalog_Code:String(T||""),Catalog_Fetched_At:Date.now(),Updated_At:Date.now()});let p=typeof T=="string"?T.trim():"",I=p||String(s??""),A=p?`Linked: ${p} (key ${s})`:`Linked: key ${s}`;r.success(A),lt.core.hub.notify(A,"success",{ms:3e3})}catch(l){r.error("No catalog found for this customer."),w(l)}}let n={queue:null,timer:null};async function U(t,e=120,r=250){try{let o=await c();if(o)return await o.patchHeader(t),!0}catch(o){console.debug("QT10: repo not ready now, will retry",o)}if(n.queue={...n.queue||{},...t},n.timer)return!1;let l=e;return n.timer=setInterval(async()=>{try{let o=await c();if(!o){--l<=0&&(clearInterval(n.timer),n.timer=null,console.debug("QT10: gave up persisting draft after retries"));return}let s=n.queue;n.queue=null,clearInterval(n.timer),n.timer=null,await o.patchHeader(s),console.debug("QT10: draft persisted after retry",s)}catch(o){console.warn("QT10: retry persist error",o)}},r),!1}M=TMUtils.onUrlChange?.(()=>{if(!a.ROUTES.some(t=>t.test(location.pathname))){try{g?.()}catch{}g=null,d=!1,_=!1;return}setTimeout(C,0)}),setTimeout(C,0);let y=typeof unsafeWindow<"u"?unsafeWindow:window;y.QT10_debugDraft=async()=>{let e=await(await c())?.get();return console.debug("QT10 draft \u2192",e),e},y.QT10_forceDraft=async(t={})=>{let e=await c();return e?(await e.patchHeader({Customer_No:"TEST",Catalog_Key:99999,Catalog_Code:"TestCatalog",Updated_At:Date.now(),...t}),await e.get()):(console.warn("QT10: repo not ready"),null)},y.QT10_checkDC=()=>!!lt?.core?.data?.makeFlatScopedRepo,y.QT10_dcStatus=()=>{let t=!!lt?.core?.data?.makeFlatScopedRepo;return{hasCore:t,hasFactory:t}}})();})();
