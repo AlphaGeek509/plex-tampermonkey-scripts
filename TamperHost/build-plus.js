@@ -44,7 +44,7 @@ Usage:
   node build-plus.js --minor --emit                 # interactive picker
 
 Flags:
-  --patch | --minor | --major   Choose a bump type
+    --patch | --minor | --major   Choose a bump type (lockstep via tmVersions.ALL)
   --set 1.2.3                   Set exact version (overrides bump type)
   --ids <id...>                 Modules to process (QT10, QT20, QT30, QT35)
   --emit                        Build/copy outputs for selected modules
@@ -122,7 +122,49 @@ const MODULES = [
         bannerBase: 'validation',
         src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'qt50', 'qtv.entry.js'),
         out: path.join(ROOT, 'wwwroot', 'qt50.user.js')
+    },
+    // ---- shared CORE LIBS (no Tampermonkey banner; plain JS bundles) ----
+    {
+        id: 'LT_CORE',
+        featureName: 'Core Library',
+        bannerBase: 'none',
+        isLib: true,
+        src: path.join(SRC_ROOT, 'src', 'shared', 'lt-core.user.js'),
+        out: path.join(ROOT, 'wwwroot', 'lt-core.user.js')
+    },
+    {
+        id: 'LT_DATA_CORE',
+        featureName: 'Data Core Library',
+        bannerBase: 'none',
+        isLib: true,
+        src: path.join(SRC_ROOT, 'src', 'shared', 'lt-data-core.user.js'),
+        out: path.join(ROOT, 'wwwroot', 'lt-data-core.user.js')
+    },
+    {
+        id: 'LT_UI_HUB',
+        featureName: 'UI Hub Library',
+        bannerBase: 'none',
+        isLib: true,
+        src: path.join(SRC_ROOT, 'src', 'shared', 'lt-ui-hub.js'),
+        out: path.join(ROOT, 'wwwroot', 'lt-ui-hub.js')
+    },
+    {
+        id: 'LT_PLEX_AUTH',
+        featureName: 'Plex Auth Library',
+        bannerBase: 'none',
+        isLib: true,
+        src: path.join(SRC_ROOT, 'src', 'shared', 'lt-plex-auth.user.js'),
+        out: path.join(ROOT, 'wwwroot', 'lt-plex-auth.user.js')
+    },
+    {
+        id: 'LT_PLEX_TM_UTILS',
+        featureName: 'Plex TM Utils Library',
+        bannerBase: 'none',
+        isLib: true,
+        src: path.join(SRC_ROOT, 'src', 'shared', 'lt-plex-tm-utils.user.js'),
+        out: path.join(ROOT, 'wwwroot', 'lt-plex-tm-utils.user.js')
     }
+
 ];
 
 
@@ -148,9 +190,9 @@ const SHARED = {
         requires: [
             `${CDN_BASE}/lt-plex-tm-utils.user.js`,
             `${CDN_BASE}/lt-plex-auth.user.js`,
-            `${CDN_BASE}/lt-ui-hub.js`,
             `${CDN_BASE}/lt-core.user.js`,
-            `${CDN_BASE}/lt-data-core.user.js`            
+            `${CDN_BASE}/lt-data-core.user.js`,
+            `${CDN_BASE}/lt-ui-hub.js`
         ],
         resources: [
             ['THEME_CSS', `${CDN_BASE}/theme.css`]
@@ -285,7 +327,7 @@ function loadBannerForModule(m, versionStr, opts) {
         const resLines = (SHARED[sharedKey]?.resources || []).map(([name, url]) => `// @resource     ${name} ${url}`).join('\n');
         header = header.replace(/__REQUIRES__/g, reqLines || '');
         header = header.replace(/__RESOURCES__/g, resLines || '');
-        if ((SHARED[envName]?.resources || []).length) {
+        if ((SHARED[sharedKey]?.resources || []).length) {
             header = ensureGrants(header, ['GM_addStyle', 'GM_getResourceText']);
         }
     }
@@ -363,6 +405,48 @@ function injectUpdateDownload(header, m, versionStr, opts) {
 async function emitModule(m, versionStr) {
     ensureDir(m.out);
     const entry = m.src;
+
+    // ---- Plain library build path (no Tampermonkey header) ----
+    if (m.isLib) {
+        if (esbuild) {
+            const buildOpts = {
+                entryPoints: [entry],
+                bundle: true,
+                outfile: m.out,
+                sourcemap: opts.release ? false : 'inline',
+                minify: !!opts.release,
+                target: ['chrome110', 'edge110', 'firefox110'],
+                legalComments: 'none',
+                format: 'iife',
+                platform: 'browser',
+                splitting: false,
+                define: { __BUILD_DEV__: String(!opts.release) }
+            };
+            if (opts.watch) {
+                const ctx = await esbuild.context(buildOpts);
+                await ctx.watch();
+                console.log(`👀 Watching ${m.id} (${path.relative(ROOT, entry)}) → ${path.relative(ROOT, m.out)} `);
+                return;
+            } else {
+                await esbuild.build(buildOpts);
+                updateFileVersion(m.out, versionStr, opts.dry);
+                console.log(`📦 Emitted (lib) ${m.id}: ${path.relative(ROOT, m.out)} `);
+                return;
+            }
+        } else {
+            // fallback concat (no banner)
+            if (!fs.existsSync(entry)) {
+                console.error(`❌ Source file not found for ${m.id}: ${entry} `);
+                return;
+            }
+            const body = fs.readFileSync(entry, 'utf8');
+            if (!opts.dry) fs.writeFileSync(m.out, body, 'utf8');
+            updateFileVersion(m.out, versionStr, opts.dry);
+            console.log(`📄 Copied(no esbuild, lib) ${m.id}: ${path.relative(ROOT, m.out)} `);
+            return;
+        }
+
+    }
     let header = loadBannerForModule(m, versionStr, opts);
 
     // --- Inject/refresh @updateURL/@downloadURL ---
@@ -509,22 +593,28 @@ async function promptSelectModules(modules) {
 
     const updatedPerIdVersion = {}; // { QT10: 'x.y.z', ... }
 
-    // 1) bump versions & update files registered to each module
-    for (const id of opts.ids) {
-        const cur = pkg.tmVersions[id] || '0.0.0';
-        const next = bumpSemver(cur, opts.bump, opts.set);
-        updatedPerIdVersion[id] = next;
+    // 1) Determine ONE global version (lockstep) and apply to all selected ids
+    const curAll = (pkg.tmVersions && pkg.tmVersions.ALL) || '0.0.0';
+    const nextAll = bumpSemver(curAll, opts.bump, opts.set);
 
+    for (const id of opts.ids) {
         const files = (pkg.tmFiles[id] || []).map(p => path.resolve(path.dirname(PKG_PATH), p));
         if (!files.length) {
             console.warn(`⚠️  Module "${id}" has no files in package.json tmFiles`);
         }
         for (const fp of files) {
-            updateFileVersion(fp, next, opts.dry);
+            updateFileVersion(fp, nextAll, opts.dry);
         }
+        updatedPerIdVersion[id] = nextAll;
 
-        if (!opts.dry) pkg.tmVersions[id] = next;
-        console.log(`ℹ️  ${ id }: ${ cur } → ${ next } `);
+        if (!opts.dry) pkg.tmVersions[id] = nextAll;
+        console.log(`ℹ️  ${id}: ${(pkg.tmVersions[id] || '0.0.0')} → ${nextAll} `);
+    }
+
+    // Also bump the lockstep anchor
+    if (!opts.dry) {
+        pkg.tmVersions = pkg.tmVersions || {};
+        pkg.tmVersions.ALL = nextAll;
     }
 
     // 2) persist package.json

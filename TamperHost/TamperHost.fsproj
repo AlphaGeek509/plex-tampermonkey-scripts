@@ -67,6 +67,8 @@
 		<None Include="tm-scripts\src\quote-tracking\qt50\injectButton.js" />
 		<None Include="tm-scripts\src\quote-tracking\qt50\engine.js" />
 		<None Include="tm-scripts\src\quote-tracking\qt50\index.js" />
+		<None Include="tm-scripts\src\shared\lt-core.user.js" />
+		<None Include="tm-scripts\src\shared\lt-data-core.user.js" />
 		<None Include="tm-scripts\src\shared\lt-ui-hub.js" />
 		<None Include="tm-scripts\src\shared\keys.js" />
 		<None Include="tm-scripts\src\shared\ids.js" />
@@ -78,6 +80,9 @@
 	</ItemGroup>
 	<ItemGroup>
 	  <Compile Include="Program.fs" />
+	</ItemGroup>
+	<ItemGroup>
+	  <Content Include="tm-scripts\src\shared\theme.css" />
 	</ItemGroup>
 
 </Project>

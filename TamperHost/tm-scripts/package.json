@@ -14,12 +14,17 @@
     "bump:major": "node ../build-plus.js --major"
   },
   "tmVersions": {
-    "QT10": "3.6.183",
-    "QT20": "3.6.36",
-    "QT30": "3.6.48",
-    "QT35": "3.6.103",
-    "QT50": "2.0.75",
-    "ALL": "0.0.1"
+    "QT10": "3.7.7",
+    "QT20": "3.7.7",
+    "QT30": "3.7.7",
+    "QT35": "3.7.7",
+    "QT50": "3.7.7",
+    "LT_CORE": "3.7.7",
+    "LT_DATA_CORE": "3.7.7",
+    "LT_UI_HUB": "3.7.7",
+    "LT_PLEX_AUTH": "3.7.7",
+    "LT_PLEX_TM_UTILS": "3.7.7",
+    "ALL": "3.7.7"
   },
   "tmFiles": {
     "QT10": [
@@ -41,6 +46,26 @@
     "QT50": [
       "src/quote-tracking/validation/qtv.entry.js",
       "../wwwroot/qt50.user.js"
+    ],
+    "LT_CORE": [
+      "src/shared/lt-core.user.js",
+      "../wwwroot/lt-core.user.js"
+    ],
+    "LT_DATA_CORE": [
+      "src/shared/lt-data-core.user.js",
+      "../wwwroot/lt-data-core.user.js"
+    ],
+    "LT_UI_HUB": [
+      "src/shared/lt-ui-hub.js",
+      "../wwwroot/lt-ui-hub.js"
+    ],
+    "LT_PLEX_AUTH": [
+      "src/shared/lt-plex-auth.user.js",
+      "../wwwroot/lt-plex-auth.user.js"
+    ],
+    "LT_PLEX_TM_UTILS": [
+      "src/shared/lt-plex-tm-utils.user.js",
+      "../wwwroot/lt-plex-tm-utils.user.js"
     ]
   }
 }
