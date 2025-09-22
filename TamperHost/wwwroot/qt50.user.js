@@ -1,16 +1,16 @@
 // ==UserScript==
 // @name        QT50
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     3.7.8
+// @version     3.7.9
 // @description Production build
 // @match       https://lyntron.on.plex.com/SalesAndCRM*
 // @match       https://lyntron.on.plex.com/SalesAndCrm*
-// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.8/wwwroot/lt-plex-tm-utils.user.js?v=3.7.8
-// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.8/wwwroot/lt-plex-auth.user.js?v=3.7.8
-// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.8/wwwroot/lt-ui-hub.js?v=3.7.8
-// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.8/wwwroot/lt-data-core.user.js?v=3.7.8
-// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.8/wwwroot/lt-core.user.js?v=3.7.8
-// @resource     THEME_CSS https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.8/wwwroot/theme.css
+// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.9/wwwroot/lt-plex-tm-utils.user.js?v=3.7.9
+// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.9/wwwroot/lt-plex-auth.user.js?v=3.7.9
+// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.9/wwwroot/lt-ui-hub.js?v=3.7.9
+// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.9/wwwroot/lt-data-core.user.js?v=3.7.9
+// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.9/wwwroot/lt-core.user.js?v=3.7.9
+// @resource     THEME_CSS https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.9/wwwroot/theme.css
 // @grant       GM_registerMenuCommand
 // @grant       GM_getValue
 // @grant       GM_setValue
@@ -21,8 +21,8 @@
 // @noframes
 // @grant        GM_addStyle
 // @grant        GM_getResourceText
-// @updateURL   https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.8/wwwroot/qt50.user.js
-// @downloadURL https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.8/wwwroot/qt50.user.js
+// @updateURL   https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.9/wwwroot/qt50.user.js
+// @downloadURL https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.7.9/wwwroot/qt50.user.js
 // ==/UserScript==
 (()=>{var rt={wizardTargetPage:"Part Summary",settingsKey:"qt50_settings_v1",toastMs:3500},vt=typeof unsafeWindow<"u"&&unsafeWindow.ko?unsafeWindow.ko:window.ko,A=[/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i],ot=!!TMUtils.matchRoute?.(A),f={enabled:"qtv.enabled",autoManageLtPartNoOnQuote:"qtv.autoManageLtPartNoOnQuote",minUnitPrice:"qtv.minUnitPrice",maxUnitPrice:"qtv.maxUnitPrice"},V={[f.enabled]:!0,[f.autoManageLtPartNoOnQuote]:!0,[f.minUnitPrice]:0,[f.maxUnitPrice]:10},S=t=>{let n=GM_getValue(t,V[t]);return n===void 0?V[t]:n},N=(t,n)=>{GM_setValue(t,n),W()};function U(){return{enabled:S(f.enabled),autoManageLtPartNoOnQuote:S(f.autoManageLtPartNoOnQuote),minUnitPrice:S(f.minUnitPrice),maxUnitPrice:S(f.maxUnitPrice)}}function F(t){if(typeof t!="function")return()=>{};let n=()=>t(U());return window.addEventListener("LT:QTV:SettingsChanged",n),()=>window.removeEventListener("LT:QTV:SettingsChanged",n)}function W(){try{window.dispatchEvent(new CustomEvent("LT:QTV:SettingsChanged",{detail:U()}))}catch{}}GM_registerMenuCommand?.("\u2699\uFE0F Open QT Validation Settings",G);ot&&($(),TMUtils?.onUrlChange?.($),setTimeout($,500));async function $(){let n=TMUtils.matchRoute?.(A)&&(document.querySelector('.plex-wizard-page-list .plex-wizard-page.active, .plex-wizard-page-list .plex-wizard-page[aria-current="page"]')?.textContent||"").trim().toLowerCase()===rt.wizardTargetPage.toLowerCase(),e=await(async function(a={mount:"nav"}){for(let u=0;u<50;u++){let i=window.ensureLTHub||unsafeWindow?.ensureLTHub;if(typeof i=="function")try{let g=await i(a);if(g)return g}catch{}await new Promise(g=>setTimeout(g,100))}return null})();if(!e?.registerButton)return;let r="qt50-settings",o=e.list?.()?.includes(r);n&&!o?e.registerButton("right",{id:r,label:"Validation \u2699\uFE0E",title:"Open Quote Validation settings",weight:30,onClick:G}):!n&&o&&e.remove?.(r)}function G(){let t=document.createElement("div");t.id="lt-qtv-overlay",Object.assign(t.style,{position:"fixed",inset:0,background:"rgba(0,0,0,.35)",zIndex:100002});let n=document.createElement("div");Object.assign(n.style,{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",background:"#fff",padding:"18px",borderRadius:"12px",boxShadow:"0 10px 30px rgba(0,0,0,.30)",fontFamily:"system-ui, Segoe UI, sans-serif",width:"420px",maxWidth:"92vw"}),t.addEventListener("keydown",e=>{e.key==="Escape"&&t.remove()}),t.tabIndex=-1,t.addEventListener("click",e=>{e.target===t&&t.remove()}),n.addEventListener("click",e=>e.stopPropagation()),n.innerHTML=`
     <h3 style="margin:0 0 10px 0;">Quote Validation Settings</h3>
