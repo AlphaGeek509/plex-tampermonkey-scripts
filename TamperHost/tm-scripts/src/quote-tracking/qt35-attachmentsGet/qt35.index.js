@@ -144,90 +144,102 @@
 
     // Background promotion (per-tab draft -> per-quote) with gentle retries
     const __PROMOTE = { timer: null, tries: 0, max: 120, intervalMs: 250 };
-
-    function schedulePromoteDraftToQuote(quoteKey) {
-        if (__PROMOTE.timer) return;
-        __PROMOTE.timer = setInterval(async () => {
-            try {
-                const repoQ = await ensureRepoForQuote(quoteKey);
-                if (!QTF || !repoQ) { if (++__PROMOTE.tries >= __PROMOTE.max) stopPromote(); return; }
-
-                // Read the SAME per-tab draft scope QT10 writes to
-                const { repo: draftRepo } = QTF.use(getTabScopeId('QT'));
-                const draft = await (draftRepo.getHeader?.() || draftRepo.get());
-                if (draft && Object.keys(draft).length) {
-                    await repoQ.patchHeader({
-                        Quote_Key: Number(quoteKey),
-                        Customer_No: draft.Customer_No ?? null,
-                        Catalog_Key: draft.Catalog_Key ?? null,
-                        Catalog_Code: draft.Catalog_Code ?? null,
-                        Promoted_From: 'draft',
-                        Promoted_At: Date.now(),
-                        Quote_Header_Fetched_At: null,
-                        Updated_At: draft.Updated_At || Date.now(),
-                    });
-                    await draftRepo.clear?.();
-                    try { const { repo: legacy } = QTF.use('draft'); await legacy.clear?.(); } catch { }
-
-                }
-                stopPromote();
-            } catch {
-                // keep retrying
-            }
-        }, __PROMOTE.intervalMs);
+    function schedulePromoteDraftToQuote(qk) {
+        return lt?.core?.qt?.promoteDraftToQuote({ qk: Number(qk), strategy: 'retry' });
     }
 
+    //function schedulePromoteDraftToQuote(quoteKey) {
+    //    if (__PROMOTE.timer) return;
+    //    __PROMOTE.timer = setInterval(async () => {
+    //        try {
+    //            const repoQ = await ensureRepoForQuote(quoteKey);
+    //            if (!QTF || !repoQ) { if (++__PROMOTE.tries >= __PROMOTE.max) stopPromote(); return; }
+
+    //            // Read the SAME per-tab draft scope QT10 writes to
+    //            const { repo: draftRepo } = QTF.use(getTabScopeId('QT'));
+    //            const draft = await (draftRepo.getHeader?.() || draftRepo.get());
+    //            if (draft && Object.keys(draft).length) {
+    //                await repoQ.patchHeader({
+    //                    Quote_Key: Number(quoteKey),
+    //                    Customer_No: draft.Customer_No ?? null,
+    //                    Catalog_Key: draft.Catalog_Key ?? null,
+    //                    Catalog_Code: draft.Catalog_Code ?? null,
+    //                    Promoted_From: 'draft',
+    //                    Promoted_At: Date.now(),
+    //                    Quote_Header_Fetched_At: null,
+    //                    Updated_At: draft.Updated_At || Date.now(),
+    //                });
+    //                await draftRepo.clear?.();
+    //                try { const { repo: legacy } = QTF.use('draft'); await legacy.clear?.(); } catch { }
+
+    //            }
+    //            stopPromote();
+    //        } catch {
+    //            // keep retrying
+    //        }
+    //    }, __PROMOTE.intervalMs);
+    //}
+
     function stopPromote() {
-        clearInterval(__PROMOTE.timer);
-        __PROMOTE.timer = null;
-        __PROMOTE.tries = 0;
+        return lt?.core?.qt?.stopRetry?.();
+    }
+
+
+    //function stopPromote() {
+    //    clearInterval(__PROMOTE.timer);
+    //    __PROMOTE.timer = null;
+    //    __PROMOTE.tries = 0;
+    //}
+
+    async function mergeDraftIntoQuoteOnce(qk) {
+        return lt?.core?.qt?.promoteDraftToQuote({ qk: Number(qk), strategy: 'once' });
     }
 
 
     // ===== Merge QT10 draft → per-quote (once) =====
-    async function mergeDraftIntoQuoteOnce(qk) {
-        if (!qk || !Number.isFinite(qk) || qk <= 0) return;
+    //async function mergeDraftIntoQuoteOnce(qk) {
+    //    if (!qk || !Number.isFinite(qk) || qk <= 0) return;
 
-        if (!QTF) { schedulePromoteDraftToQuote(qk); return; }
+    //    if (!QTF) { schedulePromoteDraftToQuote(qk); return; }
 
-        // Read per-tab draft (same scope QT10 writes to)
-        const { repo: draftRepo } = QTF.use(getTabScopeId('QT'));
-        const draft = await draftRepo.getHeader?.() || await draftRepo.get(); // tolerate legacy
-        if (!draft) return;
+    //    // Read per-tab draft (same scope QT10 writes to)
+    //    const { repo: draftRepo } = QTF.use(getTabScopeId('QT'));
+    //    const draft = await draftRepo.getHeader?.() || await draftRepo.get(); // tolerate legacy
+    //    if (!draft) return;
 
-        await ensureRepoForQuote(qk);
-        if (!quoteRepo) return; // DC not ready yet
+    //    await ensureRepoForQuote(qk);
+    //    if (!quoteRepo) return; // DC not ready yet
 
-        const currentHeader = (await quoteRepo.getHeader()) || {};
-        const curCust = String(currentHeader.Customer_No ?? '');
-        const newCust = String(draft.Customer_No ?? '');
+    //    const currentHeader = (await quoteRepo.getHeader()) || {};
+    //    const curCust = String(currentHeader.Customer_No ?? '');
+    //    const newCust = String(draft.Customer_No ?? '');
 
-        const needsMerge =
-            (Number((await draftRepo.get())?.Updated_At || 0) > Number(currentHeader.Promoted_At || 0)) ||
-            (curCust !== newCust) ||
-            (currentHeader.Catalog_Key !== draft.Catalog_Key) ||
-            (currentHeader.Catalog_Code !== draft.Catalog_Code);
+    //    const needsMerge =
+    //        (Number((await draftRepo.get())?.Updated_At || 0) > Number(currentHeader.Promoted_At || 0)) ||
+    //        (curCust !== newCust) ||
+    //        (currentHeader.Catalog_Key !== draft.Catalog_Key) ||
+    //        (currentHeader.Catalog_Code !== draft.Catalog_Code);
 
-        if (!needsMerge) return;
+    //    if (!needsMerge) return;
 
-        await quoteRepo.patchHeader({
-            Quote_Key: Number(qk),
-            Customer_No: draft.Customer_No ?? null,
-            Catalog_Key: draft.Catalog_Key ?? null,
-            Catalog_Code: draft.Catalog_Code ?? null,
-            Promoted_From: 'draft',
-            Promoted_At: Date.now(),
-            // force re-hydration next time
-            Quote_Header_Fetched_At: null
-        });
+    //    await quoteRepo.patchHeader({
+    //        Quote_Key: Number(qk),
+    //        Customer_No: draft.Customer_No ?? null,
+    //        Catalog_Key: draft.Catalog_Key ?? null,
+    //        Catalog_Code: draft.Catalog_Code ?? null,
+    //        Promoted_From: 'draft',
+    //        Promoted_At: Date.now(),
+    //        // force re-hydration next time
+    //        Quote_Header_Fetched_At: null
+    //    });
 
-        // clear per-tab draft and legacy if present
-        await draftRepo.clear?.();
-        try { const { repo: legacy } = QTF.use('draft'); await legacy.clear?.(); } catch { }
+    //    // clear per-tab draft and legacy if present
+    //    await draftRepo.clear?.();
+    //    try { const { repo: legacy } = QTF.use('draft'); await legacy.clear?.(); } catch { }
 
 
-        dlog('Draft merged (flat repo header updated)', { qk });
-    }
+    //    dlog('Draft merged (flat repo header updated)', { qk });
+    //}
 
 
 

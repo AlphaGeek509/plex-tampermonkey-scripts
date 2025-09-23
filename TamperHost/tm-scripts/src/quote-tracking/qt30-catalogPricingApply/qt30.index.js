@@ -91,48 +91,52 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
         }
     }
 
+    async function mergeDraftIntoQuoteOnce(qk) {
+        return lt?.core?.qt?.promoteDraftToQuote({ qk: Number(qk), strategy: 'once' });
+    }
+
 
     // Draft → Quote promotion (single-shot), mirrors qt35
-    async function mergeDraftIntoQuoteOnce(qk) {
-        try {
-            if (!qk || !Number.isFinite(qk) || qk <= 0) return;
-            const QTF = await getQT();
-            const { repo: draftRepo } = QTF.use(window.getTabScopeId ? window.getTabScopeId("QT") : (window.__LT_QT_SCOPE_ID__ ||= Math.floor(Math.random() * 2147483647)));
-            const draft = (await draftRepo.getHeader?.()) || (await draftRepo.get?.());
-            if (!draft || !Object.keys(draft).length) return;
+    //async function mergeDraftIntoQuoteOnce(qk) {
+    //    try {
+    //        if (!qk || !Number.isFinite(qk) || qk <= 0) return;
+    //        const QTF = await getQT();
+    //        const { repo: draftRepo } = QTF.use(window.getTabScopeId ? window.getTabScopeId("QT") : (window.__LT_QT_SCOPE_ID__ ||= Math.floor(Math.random() * 2147483647)));
+    //        const draft = (await draftRepo.getHeader?.()) || (await draftRepo.get?.());
+    //        if (!draft || !Object.keys(draft).length) return;
 
-            await ensureRepoForQuote(qk);
-            const current = (await quoteRepo.getHeader?.()) || {};
-            const curCust = String(current.Customer_No ?? "");
-            const newCust = String(draft.Customer_No ?? "");
-            const needsMerge =
-                Number((await draftRepo.get())?.Updated_At || 0) > Number(current.Promoted_At || 0) ||
-                curCust !== newCust ||
-                current.Catalog_Key !== draft.Catalog_Key ||
-                current.Catalog_Code !== draft.Catalog_Code;
+    //        await ensureRepoForQuote(qk);
+    //        const current = (await quoteRepo.getHeader?.()) || {};
+    //        const curCust = String(current.Customer_No ?? "");
+    //        const newCust = String(draft.Customer_No ?? "");
+    //        const needsMerge =
+    //            Number((await draftRepo.get())?.Updated_At || 0) > Number(current.Promoted_At || 0) ||
+    //            curCust !== newCust ||
+    //            current.Catalog_Key !== draft.Catalog_Key ||
+    //            current.Catalog_Code !== draft.Catalog_Code;
 
-            if (!needsMerge) return;
+    //        if (!needsMerge) return;
 
-            await quoteRepo.patchHeader({
-                Quote_Key: Number(qk),
-                Customer_No: draft.Customer_No ?? null,
-                Catalog_Key: draft.Catalog_Key ?? null,
-                Catalog_Code: draft.Catalog_Code ?? null,
-                Promoted_From: "draft",
-                Promoted_At: Date.now(),
-                // Force hydration later if you add it to qt30
-                Quote_Header_Fetched_At: null
-            });
+    //        await quoteRepo.patchHeader({
+    //            Quote_Key: Number(qk),
+    //            Customer_No: draft.Customer_No ?? null,
+    //            Catalog_Key: draft.Catalog_Key ?? null,
+    //            Catalog_Code: draft.Catalog_Code ?? null,
+    //            Promoted_From: "draft",
+    //            Promoted_At: Date.now(),
+    //            // Force hydration later if you add it to qt30
+    //            Quote_Header_Fetched_At: null
+    //        });
 
-            await draftRepo.clear?.();
-            try {
-                const { repo: legacy } = QTF.use("draft");
-                await legacy.clear?.();
-            } catch { }
-        } catch (e) {
-            // silent: keep qt30 resilient
-        }
-    }
+    //        await draftRepo.clear?.();
+    //        try {
+    //            const { repo: legacy } = QTF.use("draft");
+    //            await legacy.clear?.();
+    //        } catch { }
+    //    } catch (e) {
+    //        // silent: keep qt30 resilient
+    //    }
+    //}
 
 
     // ---------- Settings (GM tolerant) ----------

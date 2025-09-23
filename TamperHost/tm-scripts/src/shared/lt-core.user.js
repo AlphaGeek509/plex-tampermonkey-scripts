@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         lt-core
 // @namespace    lt
-// @version      3.8.11
+// @version      3.8.12
 // @description  Shared core: auth + http + plex DS + hub (status/toast) + theme bridge + tiny utils
 // @run-at       document-start
 // @grant        none
@@ -316,6 +316,106 @@
     // Data (intentionally blank in core)
     // Do NOT define core.data here; lt-data-core / your repos augment it.
     // ---------------
+
+    // ---------------
+    // QT helpers (promotion + repos)
+    // ---------------
+    core.qt = core.qt || (() => {
+        const ROOT = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+
+        function getTabScopeId(ns = 'QT') {
+            try {
+                if (typeof ROOT.getTabScopeId === 'function') return ROOT.getTabScopeId(ns);
+            } catch { }
+            // fallback: stable per-tab random (one per page load)
+            const key = '__LT_QT_SCOPE_ID__';
+            if (!ROOT[key]) ROOT[key] = Math.floor(Math.random() * 2147483647);
+            return ROOT[key];
+        }
+
+        function getQTF() {
+            const make = ROOT.lt?.core?.data?.makeFlatScopedRepo;
+            return (typeof make === 'function') ? make({ ns: 'QT', entity: 'quote', legacyEntity: 'QuoteHeader' }) : null;
+        }
+
+        async function useDraftRepo() {
+            const QTF = getQTF();
+            if (!QTF) return null;
+            const { repo } = QTF.use(getTabScopeId('QT'));
+            return repo || null;
+        }
+
+        async function useQuoteRepo(qk) {
+            const QTF = getQTF();
+            if (!QTF || !qk || !Number.isFinite(qk) || qk <= 0) return null;
+            const { repo } = QTF.use(Number(qk));
+            return repo || null;
+        }
+
+        function needsMerge(current = {}, draft = {}) {
+            // Prefer numeric Updated_At if available
+            const curUpd = Number(current.Updated_At ?? 0);
+            const dUpd = Number(draft?.Updated_At ?? 0);
+            const curCust = String(current.Customer_No ?? '');
+            const newCust = String(draft?.Customer_No ?? '');
+            const keyChanged = String(current.Catalog_Key ?? '') !== String(draft?.Catalog_Key ?? '');
+            const codeChanged = String(current.Catalog_Code ?? '') !== String(draft?.Catalog_Code ?? '');
+            return (dUpd > curUpd) || keyChanged || codeChanged || (curCust !== newCust);
+        }
+
+        async function mergeOnce(qk) {
+            const draftRepo = await useDraftRepo();
+            if (!draftRepo) return 'no-dc';
+            const draft = (await draftRepo.getHeader?.()) || (await draftRepo.get?.());
+            if (!draft || !Object.keys(draft).length) return 'no-draft';
+
+            const quoteRepo = await useQuoteRepo(qk);
+            if (!quoteRepo) return 'no-quote';
+
+            const current = (await quoteRepo.getHeader?.()) || {};
+            if (!needsMerge(current, draft)) return 'noop';
+
+            await quoteRepo.patchHeader?.({
+                ...draft,
+                Quote_Key: Number(qk),
+                Quote_Header_Fetched_At: Date.now()
+            });
+
+            // clear draft + legacy if present
+            try { await draftRepo.clear?.(); } catch { }
+            try {
+                const QTF = getQTF();
+                if (QTF) { const { repo: legacy } = QTF.use('draft'); await legacy.clear?.(); }
+            } catch { }
+
+            return 'merged';
+        }
+
+        const RETRY = { timer: null, tries: 0, max: 20, ms: 250 };
+
+        function stopRetry() {
+            if (RETRY.timer) clearInterval(RETRY.timer);
+            RETRY.timer = null;
+            RETRY.tries = 0;
+        }
+
+        function promoteDraftToQuote({ qk, strategy = 'once' } = {}) {
+            if (strategy === 'retry') {
+                stopRetry();
+                RETRY.timer = setInterval(async () => {
+                    RETRY.tries++;
+                    const res = await mergeOnce(qk);
+                    if (res === 'merged' || RETRY.tries >= RETRY.max) stopRetry();
+                }, RETRY.ms);
+                return;
+            }
+            // default: once
+            return mergeOnce(qk);
+        }
+
+        return { promoteDraftToQuote, stopRetry, useDraftRepo, useQuoteRepo };
+    })();
+
 
     // Auto-apply THEME_CSS if provided (safe no-op otherwise)
     try { core.theme.apply(); } catch { }
