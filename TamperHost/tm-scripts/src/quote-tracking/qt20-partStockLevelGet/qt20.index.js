@@ -52,25 +52,8 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
         return rootEl && (KO?.dataFor?.(rootEl) || null);
     }
 
-    function getQuoteKeyDeterministic() {
-        try {
-            const grid = document.querySelector(CFG.GRID_SEL);
-            if (grid && KO?.dataFor) {
-                const gridVM = KO.dataFor(grid);
-                const raw0 = Array.isArray(gridVM?.datasource?.raw) ? gridVM.datasource.raw[0] : null;
-                const v = raw0 ? window.TMUtils?.getObsValue?.(raw0, 'QuoteKey') : null;
-                if (v != null) return Number(v);
-            }
-        } catch { }
-        try {
-            const rootEl = document.querySelector('.plex-wizard, .plex-page');
-            const rootVM = rootEl ? KO?.dataFor?.(rootEl) : null;
-            const v = rootVM && (window.TMUtils?.getObsValue?.(rootVM, 'QuoteKey') || window.TMUtils?.getObsValue?.(rootVM, 'Quote.QuoteKey'));
-            if (v != null) return Number(v);
-        } catch { }
-        const m = /[?&]QuoteKey=(\d+)/i.exec(location.search);
-        return m ? Number(m[1]) : null;
-    }
+    // Use centralized quote context
+    const QT_CTX = lt?.core?.qt?.getQuoteContext();
 
     // ===== Auth wrapper (prefers lt.core.auth.withFreshAuth; falls back to plain run)
     const withFreshAuth = (fn) => {
@@ -136,7 +119,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             await ensureWizardVM();
 
             // Resolve Quote Key (used for logging only now)
-            const qk = getQuoteKeyDeterministic();
+            const qk = (QT_CTX?.quoteKey);
             if (!qk || !Number.isFinite(qk) || qk <= 0) throw new Error('Quote Key not found');
 
             // Resolve KO Note field within the same modal
@@ -191,7 +174,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
 
             derr('handleClick:', err);
         } finally {
-            restore();
+            // no transient UI to restore here; keep idempotent
         }
     }
 
@@ -345,14 +328,14 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
         // Don't double-register
         if (hub.has?.(HUB_BTN_ID)) return;
 
-        hub.registerButton({
+        hub.registerButton('left', {
             id: HUB_BTN_ID,
             label: 'Stock',
             title: 'Fetch stock for current part',
-            section: 'left',
             weight: 110,
             onClick: () => handleClick(getActiveModalRoot())
         });
+
     }
 
     function removeHubButton() {

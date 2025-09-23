@@ -42,18 +42,19 @@
 
     function getTabScopeId(ns = 'QT') {
         try {
-            const k = `lt:${ns}:scopeId`;
-            let v = sessionStorage.getItem(k);
+            const NEW = `lt:${ns}:__scopeId`;
+            const OLD = `lt:${ns}:scopeId`; // legacy
+            let v = sessionStorage.getItem(NEW) || sessionStorage.getItem(OLD);
             if (!v) {
                 v = String(Math.floor(Math.random() * 2_147_483_647));
-                sessionStorage.setItem(k, v);
             }
+            try { sessionStorage.setItem(NEW, v); sessionStorage.removeItem(OLD); } catch { }
             return Number(v);
         } catch {
-            // Fallback if sessionStorage is blocked
             return Math.floor(Math.random() * 2_147_483_647);
         }
     }
+
 
     // ===== Data via lt.core.data (flat {header, lines}) =====
     const SCOPE_DRAFT = 'draft';
@@ -64,16 +65,25 @@
         ? lt.core.data.makeFlatScopedRepo({ ns: "QT", entity: "quote", legacyEntity: "QuoteHeader" })
         : null;
 
-
     let repoDraft = null;
     async function ensureDraftRepo() {
-        if (!QTF) return null;
         if (repoDraft) return repoDraft;
+
+        // Prefer the centralized, versioned path in lt-core
+        const coreRepo = await lt?.core?.qt?.useDraftRepo?.();
+        if (coreRepo) {
+            repoDraft = coreRepo;
+            return repoDraft;
+        }
+
+        // Fallback to local factory if lt-core is not ready yet
+        if (!QTF) return null;
         const { repo } = QTF.use(getTabScopeId("QT"));
         repoDraft = repo;
         await repoDraft.ensureFromLegacyIfMissing?.();
         return repoDraft;
     }
+
 
     // Safe delegating wrapper: use lt.core.auth.withFreshAuth when available,
     // otherwise just run the callback once (best-effort fallback).
@@ -201,10 +211,21 @@
     // ---- Best-effort persistence with retry (draft header) ----
     const __QT10_PERSIST = { queue: null, timer: null };
     async function persistDraftHeaderWithRetry(patch, maxTries = 120, intervalMs = 250) {
+        // Helper: ask lt-core to promote like qt30 does
+        const promoteNow = (mode /* 'once' | 'retry' */) => {
+            try {
+                const ctx = lt?.core?.qt?.getQuoteContext?.();
+                const qk = Number(ctx?.quoteKey || 0);
+                if (qk > 0) lt.core.qt.promoteDraftToQuote?.({ qk, strategy: mode });
+            } catch { /* non-fatal */ }
+        };
+
         try {
             const repo = await ensureDraftRepo(); // best-effort, may return null
             if (repo) {
                 await repo.patchHeader(patch);
+                // Mirror qt30 standard: single attempt first
+                promoteNow('once');
                 return true;
             }
         } catch (e) {
@@ -224,7 +245,7 @@
                     if (--triesLeft <= 0) {
                         clearInterval(__QT10_PERSIST.timer);
                         __QT10_PERSIST.timer = null;
-                        console.debug('QT10: gave up persisting draft after retries');
+                        console.warn('QT10: repo never became ready; gave up after retries');
                     }
                     return;
                 }
@@ -232,8 +253,12 @@
                 __QT10_PERSIST.queue = null;
                 clearInterval(__QT10_PERSIST.timer);
                 __QT10_PERSIST.timer = null;
+
                 await repoLater.patchHeader(payload);
                 console.debug('QT10: draft persisted after retry', payload);
+
+                // Promotion window where KO may still be binding -> ask lt-core to handle its own short retry
+                promoteNow('retry');
             } catch (err) {
                 console.warn('QT10: retry persist error', err);
             }
@@ -241,6 +266,7 @@
 
         return false;
     }
+
 
 
     // ===== SPA nav handling =====

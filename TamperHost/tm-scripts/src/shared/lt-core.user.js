@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         lt-core
 // @namespace    lt
-// @version      3.8.12
+// @version      3.8.37
 // @description  Shared core: auth + http + plex DS + hub (status/toast) + theme bridge + tiny utils
 // @run-at       document-start
 // @grant        none
@@ -311,26 +311,35 @@
             return fn();
         }
     };
-
     // ---------------
     // Data (intentionally blank in core)
     // Do NOT define core.data here; lt-data-core / your repos augment it.
     // ---------------
 
     // ---------------
-    // QT helpers (promotion + repos)
+    // QT helpers: repos + promotion + quote context + hub button
     // ---------------
     core.qt = core.qt || (() => {
         const ROOT = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
 
         function getTabScopeId(ns = 'QT') {
+            try { if (typeof ROOT.getTabScopeId === 'function') return ROOT.getTabScopeId(ns); } catch { }
             try {
-                if (typeof ROOT.getTabScopeId === 'function') return ROOT.getTabScopeId(ns);
-            } catch { }
-            // fallback: stable per-tab random (one per page load)
-            const key = '__LT_QT_SCOPE_ID__';
-            if (!ROOT[key]) ROOT[key] = Math.floor(Math.random() * 2147483647);
-            return ROOT[key];
+                const storage = ROOT.sessionStorage;
+                const K = `lt:${ns}:__scopeId`;
+                let v = storage.getItem(K);
+                if (!v) {
+                    v = String(Math.floor(Math.random() * 2147483647));
+                    storage.setItem(K, v);
+                }
+                const n = Number(v);
+                if (!Number.isFinite(n) || n <= 0) throw new Error('bad scope');
+                return n;
+            } catch {
+                const key = '__LT_QT_SCOPE_ID__';
+                if (!ROOT[key]) ROOT[key] = Math.floor(Math.random() * 2147483647);
+                return ROOT[key];
+            }
         }
 
         function getQTF() {
@@ -352,8 +361,8 @@
             return repo || null;
         }
 
+        // ---------- Promotion (A) ----------
         function needsMerge(current = {}, draft = {}) {
-            // Prefer numeric Updated_At if available
             const curUpd = Number(current.Updated_At ?? 0);
             const dUpd = Number(draft?.Updated_At ?? 0);
             const curCust = String(current.Customer_No ?? '');
@@ -366,7 +375,20 @@
         async function mergeOnce(qk) {
             const draftRepo = await useDraftRepo();
             if (!draftRepo) return 'no-dc';
-            const draft = (await draftRepo.getHeader?.()) || (await draftRepo.get?.());
+            let draft = (await draftRepo.getHeader?.()) || (await draftRepo.get?.());
+
+            // If empty, try legacy "draft" scope and migrate it forward
+            if (!draft || !Object.keys(draft).length) {
+                try {
+                    const { repo: legacy } = getQTF().use('draft');
+                    const legacyDraft = (await legacy.getHeader?.()) || (await legacy.get?.());
+                    if (legacyDraft && Object.keys(legacyDraft).length) {
+                        await draftRepo.patchHeader?.(legacyDraft);
+                        draft = legacyDraft;
+                    }
+                } catch { /* non-fatal */ }
+            }
+
             if (!draft || !Object.keys(draft).length) return 'no-draft';
 
             const quoteRepo = await useQuoteRepo(qk);
@@ -378,49 +400,220 @@
             await quoteRepo.patchHeader?.({
                 ...draft,
                 Quote_Key: Number(qk),
-                Quote_Header_Fetched_At: Date.now()
+                Quote_Header_Fetched_At: Date.now(),
+                Promoted_From: 'draft',
+                Promoted_At: Date.now()
             });
 
-            // clear draft + legacy if present
             try { await draftRepo.clear?.(); } catch { }
-            try {
-                const QTF = getQTF();
-                if (QTF) { const { repo: legacy } = QTF.use('draft'); await legacy.clear?.(); }
-            } catch { }
-
+            try { const { repo: legacy } = getQTF().use('draft'); await legacy.clear?.(); } catch { }
             return 'merged';
         }
 
         const RETRY = { timer: null, tries: 0, max: 20, ms: 250 };
-
-        function stopRetry() {
-            if (RETRY.timer) clearInterval(RETRY.timer);
-            RETRY.timer = null;
-            RETRY.tries = 0;
-        }
-
+        function stopRetry() { if (RETRY.timer) clearInterval(RETRY.timer); RETRY.timer = null; RETRY.tries = 0; }
         function promoteDraftToQuote({ qk, strategy = 'once' } = {}) {
             if (strategy === 'retry') {
                 stopRetry();
-                RETRY.timer = setInterval(async () => {
-                    RETRY.tries++;
-                    const res = await mergeOnce(qk);
-                    if (res === 'merged' || RETRY.tries >= RETRY.max) stopRetry();
-                }, RETRY.ms);
+                RETRY.timer = setInterval(async () => { RETRY.tries++; const res = await mergeOnce(qk); if (res === 'merged' || RETRY.tries >= RETRY.max) stopRetry(); }, RETRY.ms);
                 return;
             }
-            // default: once
             return mergeOnce(qk);
         }
 
-        return { promoteDraftToQuote, stopRetry, useDraftRepo, useQuoteRepo };
-    })();
+        // ---------- Quote Context (B) ----------
+        function getNumber(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
+        function fromUrl() { try { const u = new URL(location.href); return { quoteKey: getNumber(u.searchParams.get('QuoteKey') || u.searchParams.get('quoteKey')) }; } catch { return { quoteKey: 0 }; } }
+        function fromDom() {
+            const el = document.querySelector('[data-quote-key],#QuoteKey,[name="QuoteKey"]');
+            const qk = el ? getNumber(el.getAttribute('data-quote-key') ?? el.value) : 0;
+            const pn = (document.querySelector('.wizard-steps .active, .wizard .active, .plex-sidetabs .active')?.textContent
+                || document.querySelector('.page-title, .content-header h1, .plex-navbar-title')?.textContent
+                || document.querySelector('[aria-current="page"]')?.textContent || '').trim();
+            return { quoteKey: qk, pageName: pn };
+        }
+        function fromKo() {
+            try {
+                const koRoot = (window.ko && typeof window.ko.dataFor === 'function') ? window.ko.dataFor(document.body) : null;
+                const qk = getNumber(koRoot?.QuoteKey ?? koRoot?.quoteKey ?? koRoot?.Quote?.QuoteKey) || 0;
+                const pn = String(koRoot?.CurrentPageName ?? koRoot?.currentPageName ?? koRoot?.Wizard?.CurrentPageName ?? '').trim();
+                return { quoteKey: qk, pageName: pn };
+            } catch { return { quoteKey: 0, pageName: '' }; }
+        }
+        function coalesce() {
+            const a = fromKo(), b = fromDom(), c = fromUrl();
+            const quoteKey = a.quoteKey || b.quoteKey || c.quoteKey || 0;
+            const pageName = (a.pageName || b.pageName || document.title || '').replace(/\s+/g, ' ').trim();
+            const isOnPartSummary = (() => {
+                try {
+                    // DOM signal from Part Summary: IDs like "QuotePartSummaryForm_*"
+                    const hasPSForm =
+                        !!document.querySelector('#QuotePartSummaryForm,[id^="QuotePartSummaryForm_"]');
+                    if (hasPSForm) return true;
 
+                    // (Optional) active wizard step label equals "Part Summary"
+                    const active = document.querySelector('.plex-wizard-page-list .plex-wizard-page.active');
+                    if (active && active.textContent && active.textContent.trim().toLowerCase() === 'part summary')
+                        return true;
+                } catch { /* ignore */ }
+
+                // Fallbacks (URL/title heuristics)
+                return /part\s*summary/i.test(pageName) ||
+                    /part(?:%20|\s|-)?summary|summary(?:%20|\s|-)?part/i.test(location.href);
+            })();
+
+            return { quoteKey, pageName, isOnPartSummary };
+        }
+        function getQuoteContext() {
+            const { quoteKey, pageName, isOnPartSummary } = coalesce();
+            return { quoteKey, pageName, isOnPartSummary, hasQuoteKey: quoteKey > 0, isPage: (n) => new RegExp(String(n).replace(/\s+/g, '\\s*'), 'i').test(pageName) };
+        }
+
+        // ---------- Hub helpers (C) ----------
+        async function getHub(opts = { mount: 'nav' }) {
+            const R = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+            for (let i = 0; i < 50; i++) {
+                const ensure = (R.ensureLTHub || window.ensureLTHub);
+                if (typeof ensure === 'function') {
+                    try {
+                        await ensure(opts); // may return void
+                        const hubNow = (typeof ltUIHub !== 'undefined') ? ltUIHub : R.ltUIHub;
+                        if (hubNow) return hubNow;
+                    } catch { }
+                }
+                const hubNow = (typeof ltUIHub !== 'undefined') ? ltUIHub : R.ltUIHub;
+                if (hubNow) return hubNow;
+                await new Promise(r => setTimeout(r, 100));
+            }
+            return { __fallback: true }; // fallback sentinel
+        }
+
+        async function ensureHubButton({
+            id, label, title, side = 'left', weight = 120, onClick, showWhen, force = false, mount = 'nav'
+        } = {}) {
+            const hub = await getHub({ mount });
+            const usingUiHub = !!(hub && !hub.__fallback && typeof hub.registerButton === 'function');
+
+            const shouldShowNow = () => {
+                try { const ctx = getQuoteContext(); return !!(force || (typeof showWhen === 'function' ? showWhen(ctx) : true)); }
+                catch { return !!force; }
+            };
+
+            if (usingUiHub) {
+                function listIds() {
+                    try {
+                        const v = hub.list?.();
+                        if (!Array.isArray(v)) return [];
+                        // Support arrays of strings OR arrays of { id, ... }
+                        return v.map(x => (x && typeof x === 'object') ? x.id : x).filter(Boolean);
+                    } catch { return []; }
+                }
+
+                function isPresent() {
+                    try {
+                        if (typeof hub.has === 'function') return !!hub.has(id);
+                        return listIds().includes(id);
+                    } catch { return false; }
+                }
+
+                async function register() {
+                    const def = { id, label, title, weight, onClick };
+                    // Always prefer the 2-arg form; fall back to 1-arg
+                    try { hub.registerButton?.(side, def); } catch { }
+                    await 0;
+                    if (!isPresent()) { try { hub.registerButton?.({ ...def, section: side }); } catch { } }
+
+                    // If still not present, try the alternate form explicitly
+                    await 0; // yield
+                    if (!isPresent()) {
+                        try {
+                            hub.registerButton({ ...def, section: side });
+                        } catch { /* ignore */ }
+                    }
+                    await 0;
+                    if (!isPresent()) {
+                        try {
+                            hub.registerButton(side, def);
+                        } catch { /* ignore */ }
+                    }
+                    return isPresent();
+                }
+
+                function ensureReg() { if (isPresent()) return false; return register(); }
+                ensureReg();
+
+                async function reconcile() {
+                    try {
+                        const show = shouldShowNow();
+                        const present = isPresent();
+                        if (show) { if (!present) ensureReg(); return true; }
+                        if (present) hub.remove?.(id);
+                        return false;
+                    } catch { return false; }
+                }
+
+                ensureHubButton.__state = ensureHubButton.__state || {};
+                const state = ensureHubButton.__state[id] ||= { obs: null, offUrl: null };
+
+                await reconcile();
+                if (!state.obs) {
+                    const root = document.querySelector('.plex-wizard-page-list') || document.body;
+                    if (root && window.MutationObserver) {
+                        state.obs = new MutationObserver(() => { reconcile(); });
+                        state.obs.observe(root, { subtree: true, attributes: true, childList: true });
+                    }
+                }
+                if (!state.offUrl && window.TMUtils?.onUrlChange) {
+                    state.offUrl = window.TMUtils.onUrlChange(() => { reconcile(); });
+                }
+                return true;
+            }
+
+            // Fallback: synthesize a simple navbar button (only if lt-ui-hub not present)
+            const domId = `lt-navbtn-${id}`;
+            function navRight() {
+                return document.querySelector('#navBar .navbar-right') ||
+                    document.querySelector('.plex-navbar-container .navbar-right') ||
+                    document.querySelector('.navbar-right') ||
+                    document.getElementById('navBar') || document.body;
+            }
+            function ensureDom() {
+                const host = navRight(); if (!host) return null;
+                let btn = document.getElementById(domId);
+                if (!btn) {
+                    btn = document.createElement('button');
+                    btn.id = domId; btn.type = 'button'; btn.className = 'btn btn-primary';
+                    btn.title = title || ''; btn.textContent = label || id; btn.style.marginLeft = '8px';
+                    btn.addEventListener('click', (ev) => { try { onClick?.(ev); } catch { } });
+                    host.appendChild(btn);
+                }
+                return btn;
+            }
+            function removeDom() { const n = document.getElementById(domId); if (n) try { n.remove(); } catch { } }
+
+            async function reconcileDom() { const show = shouldShowNow(); if (show) ensureDom(); else removeDom(); }
+
+            ensureHubButton.__state = ensureHubButton.__state || {};
+            const state = ensureHubButton.__state[id] ||= { obs: null, offUrl: null };
+
+            await reconcileDom();
+            if (!state.obs) {
+                const root = document.querySelector('.plex-wizard-page-list') || document.body;
+                if (root && window.MutationObserver) {
+                    state.obs = new MutationObserver(() => { reconcileDom(); });
+                    state.obs.observe(root, { subtree: true, attributes: true, childList: true });
+                }
+            }
+            if (!state.offUrl && window.TMUtils?.onUrlChange) {
+                state.offUrl = window.TMUtils.onUrlChange(() => { reconcileDom(); });
+            }
+            return true;
+        }
+
+        return { promoteDraftToQuote, stopRetry, useDraftRepo, useQuoteRepo, getQuoteContext, getHub, ensureHubButton };
+    })();
 
     // Auto-apply THEME_CSS if provided (safe no-op otherwise)
     try { core.theme.apply(); } catch { }
-
-    // Tiny ready signal
-    try { console.debug?.('[lt-core] ready'); } catch { }
 
 })();
