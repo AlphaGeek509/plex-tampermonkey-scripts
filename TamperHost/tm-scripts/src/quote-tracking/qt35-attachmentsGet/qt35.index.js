@@ -259,14 +259,32 @@
         }
     }
 
+    // Listen for modal-close refresh requests from QT20
+    let __qt35_autoRefreshTimer = null;
+    function onAttachmentRefreshRequested(ev) {
+        try {
+            // Only refresh on Part Summary
+            const ctx = lt?.core?.qt?.getQuoteContext?.();
+            const onPartSummary = !!(ctx && (ctx.isOnPartSummary || CFG.SHOW_ON_PAGES_RE.test(ctx.pageName || '')));
+            if (!onPartSummary) return;
+
+            // Debounce rapid duplicate fires
+            clearTimeout(__qt35_autoRefreshTimer);
+            __qt35_autoRefreshTimer = setTimeout(() => { runOneRefresh(false); }, 200);
+        } catch { /* no-op */ }
+    }
 
     // ===== SPA wiring =====
+
     let booted = false; let offUrl = null;
     function wireNav(handler) { offUrl?.(); offUrl = window.TMUtils?.onUrlChange?.(handler); }
 
     async function init() {
         if (booted) return;
         booted = true;
+
+        // Auto-refresh when QT20’s modal closes
+        try { window.addEventListener('LT:AttachmentRefreshRequested', onAttachmentRefreshRequested, false); } catch { }
 
         await lt.core.qt.ensureHubButton({
             id: 'qt35-attachments-btn',
@@ -284,6 +302,7 @@
         offUrl?.();
         offUrl = null;
         stopPromote(); // ensure background timer is cleared
+        try { window.removeEventListener('LT:AttachmentRefreshRequested', onAttachmentRefreshRequested, false); } catch { }
         // Hub visibility is handled centrally via ensureHubButton()
     }
 

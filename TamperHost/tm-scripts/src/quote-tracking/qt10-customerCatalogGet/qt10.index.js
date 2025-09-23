@@ -25,65 +25,21 @@
     };
 
     // ===== Debug / Logger / DEV toast =====
-    const IS_TEST_ENV = /test\.on\.plex\.com$/i.test(location.hostname);
-    try { TMUtils.setDebug?.(IS_TEST_ENV); } catch { }
-    const L = TMUtils.getLogger?.(CFG.NAME);
-    const dlog = (...a) => { if (IS_TEST_ENV) L?.log?.(...a); };
-    const derror = (...a) => { if (IS_TEST_ENV) L?.error?.(...a); };
+    const derror = () => { };
 
     // ===== Route allowlist =====
     // avoid depending on TMUtils timing; use regex on pathname
     if (!CFG.ROUTES.some(rx => rx.test(location.pathname))) return;
 
-    window.__LT_HUB_MOUNT = "nav";
     await window.ensureLTHub?.({ mount: "nav" });
 
-    lt.core.hub.notify("Ready", "info", { sticky: true });
-
-    function getTabScopeId(ns = 'QT') {
-        try {
-            const NEW = `lt:${ns}:__scopeId`;
-            const OLD = `lt:${ns}:scopeId`; // legacy
-            let v = sessionStorage.getItem(NEW) || sessionStorage.getItem(OLD);
-            if (!v) {
-                v = String(Math.floor(Math.random() * 2_147_483_647));
-            }
-            try { sessionStorage.setItem(NEW, v); sessionStorage.removeItem(OLD); } catch { }
-            return Number(v);
-        } catch {
-            return Math.floor(Math.random() * 2_147_483_647);
-        }
-    }
-
-
-    // ===== Data via lt.core.data (flat {header, lines}) =====
-    const SCOPE_DRAFT = 'draft';
-    let QT = null;
-
     // Flat repo factory (no polling required now that lt-data-core installs at doc-start)
-    const QTF = lt.core?.data?.makeFlatScopedRepo
-        ? lt.core.data.makeFlatScopedRepo({ ns: "QT", entity: "quote", legacyEntity: "QuoteHeader" })
-        : null;
-
     let repoDraft = null;
     async function ensureDraftRepo() {
         if (repoDraft) return repoDraft;
-
-        // Prefer the centralized, versioned path in lt-core
-        const coreRepo = await lt?.core?.qt?.useDraftRepo?.();
-        if (coreRepo) {
-            repoDraft = coreRepo;
-            return repoDraft;
-        }
-
-        // Fallback to local factory if lt-core is not ready yet
-        if (!QTF) return null;
-        const { repo } = QTF.use(getTabScopeId("QT"));
-        repoDraft = repo;
-        await repoDraft.ensureFromLegacyIfMissing?.();
-        return repoDraft;
+        repoDraft = await lt?.core?.qt?.useDraftRepo?.();
+        return repoDraft || null;
     }
-
 
     // Safe delegating wrapper: use lt.core.auth.withFreshAuth when available,
     // otherwise just run the callback once (best-effort fallback).
@@ -121,9 +77,15 @@
             if (!(await ensureAuthOrToast())) return;
 
             const { viewModel } = await TMUtils.waitForModelAsync(CFG.ANCHOR, {
-                pollMs: 200, timeoutMs: 8000, logger: IS_TEST_ENV ? L : null
+                pollMs: 200, timeoutMs: 8000
             });
             if (!viewModel) return;
+
+            // Prime the per-tab draft repo so lt-core creates the scope id in sessionStorage
+            try {
+                const repo = await ensureDraftRepo();
+                await repo?.get(); // harmless read; triggers core to initialize storage if needed
+            } catch { }
 
             // Watch CustomerNo → look up catalog → write to DRAFT scope
             let lastCustomerNo = null;
@@ -133,7 +95,6 @@
                 initial: !CFG.GATE_USER_EDIT ? true : false,
                 fireOn: 'blur',
                 settleMs: 350,
-                logger: IS_TEST_ENV ? L : null,
                 onChange: async () => {
                     const customerNo = TMUtils.getObsValue(viewModel, 'CustomerNo', { first: true, trim: true });
                     if (!customerNo || customerNo === lastCustomerNo) return;
@@ -283,31 +244,29 @@
 
     // Expose helpers to the page context (so DevTools console can call them)
     const W = (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window);
-
-    W.QT10_debugDraft = async () => {
-        const repo = await ensureDraftRepo();
-        const snap = await repo?.get();
-        console.debug('QT10 draft →', snap);
-        return snap;
-    };
-
-    W.QT10_forceDraft = async (patch = {}) => {
-        const repo = await ensureDraftRepo();
-        if (!repo) { console.warn('QT10: repo not ready'); return null; }
-        await repo.patchHeader({
-            Customer_No: 'TEST',
-            Catalog_Key: 99999,
-            Catalog_Code: 'TestCatalog',
-            Updated_At: Date.now(),
-            ...patch
-        });
-        return await repo.get();
-    };
-
-    W.QT10_checkDC = () => !!(lt?.core?.data?.makeFlatScopedRepo);
-    W.QT10_dcStatus = () => {
-        const hasFactory = !!(lt?.core?.data?.makeFlatScopedRepo);
-        return { hasCore: hasFactory, hasFactory };
-    };
-
+    if (DEV) {
+        W.QT10_debugDraft = async () => {
+            const repo = await ensureDraftRepo();
+            const snap = await repo?.get();
+            console.debug('QT10 draft →', snap);
+            return snap;
+        };
+        W.QT10_forceDraft = async (patch = {}) => {
+            const repo = await ensureDraftRepo();
+            if (!repo) { console.warn('QT10: repo not ready'); return null; }
+            await repo.patchHeader({
+                Customer_No: 'TEST',
+                Catalog_Key: 99999,
+                Catalog_Code: 'TestCatalog',
+                Updated_At: Date.now(),
+                ...patch
+            });
+            return await repo.get();
+        };
+        W.QT10_checkDC = () => !!(lt?.core?.data?.makeFlatScopedRepo);
+        W.QT10_dcStatus = () => {
+            const hasFactory = !!(lt?.core?.data?.makeFlatScopedRepo);
+            return { hasCore: hasFactory, hasFactory };
+        };
+    }
 })();
