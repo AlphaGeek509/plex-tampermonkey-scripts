@@ -19,22 +19,40 @@ if (DEV && !ON_ROUTE) console.debug('QT50: wrong route, skipping bootstrap');
 
 /* global GM_getValue, GM_setValue, GM_registerMenuCommand, TMUtils, unsafeWindow */
 export const KEYS = {
+    enabled: 'qt50.enabled',
+    autoManageLtPartNoOnQuote: 'qt50.autoManageLtPartNoOnQuote',
+    minUnitPrice: 'qt50.minUnitPrice',
+    maxUnitPrice: 'qt50.maxUnitPrice',
+};
+
+const LEGACY_KEYS = {
     enabled: 'qtv.enabled',
     autoManageLtPartNoOnQuote: 'qtv.autoManageLtPartNoOnQuote',
     minUnitPrice: 'qtv.minUnitPrice',
     maxUnitPrice: 'qtv.maxUnitPrice',
 };
+
 const DEF = {
     [KEYS.enabled]: true,
     [KEYS.autoManageLtPartNoOnQuote]: true,
     [KEYS.minUnitPrice]: 0,
     [KEYS.maxUnitPrice]: 10,
 };
+function readOrLegacy(k) {
+    const v = GM_getValue(k);
+    if (v !== undefined) return v;
+    // one-time legacy read
+    const legacyKey = Object.values(LEGACY_KEYS).find(lk => lk.endsWith(k.split('.').pop()));
+    const lv = legacyKey ? GM_getValue(legacyKey) : undefined;
+    return (lv !== undefined) ? lv : undefined;
+}
+
 const getVal = k => {
-    const v = GM_getValue(k, DEF[k]);
+    const v = readOrLegacy(k);
     return (v === undefined ? DEF[k] : v);
 };
 const setVal = (k, v) => { GM_setValue(k, v); emitChanged(); };
+
 
 export function getSettings() {
     return {
@@ -66,8 +84,9 @@ if (ON_ROUTE) {
 async function ensureHubGear() {
     // only show gear on the Part Summary page
     const onWizard = TMUtils.matchRoute?.(ROUTES);
-    const onTarget = onWizard && (document.querySelector('.plex-wizard-page-list .plex-wizard-page.active, .plex-wizard-page-list .plex-wizard-page[aria-current="page"]')?.textContent || '')
-        .trim().toLowerCase() === CONFIG.wizardTargetPage.toLowerCase();
+    const active = document.querySelector('.plex-wizard-page-list .plex-wizard-page.active, .plex-wizard-page-list .plex-wizard-page[aria-current="page"]');
+    const name = (active?.textContent || '').trim().replace(/\s+/g, ' ');
+    const onTarget = onWizard && /^part\s*summary$/i.test(name);
 
     const hub = await (async function getHub(opts = { mount: 'nav' }) {
         for (let i = 0; i < 50; i++) {
@@ -96,37 +115,6 @@ async function ensureHubGear() {
         hub.remove?.(ID);
     }
 }
-
-
-function showOnlyOnPartSummary(li, targetName) {
-    const getActiveWizardPageName = () => {
-        // Prefer KO VM name on the active page
-        const activePage = document.querySelector('.plex-wizard-page.active, .plex-wizard-page[aria-current="page"]');
-        const vm = activePage ? KO?.dataFor?.(activePage) : null;
-        let name = vm ? (KO?.unwrap?.(vm.name) ?? (typeof vm.name === 'function' ? vm.name() : vm.name)) : '';
-        if (name && typeof name === 'string') return name.trim();
-
-        // Fallback: text in the wizard nav
-        const nav = document.querySelector('.plex-wizard-page-list .active, .plex-wizard-page-list [aria-current="page"]');
-        return (nav?.textContent || '').trim();
-    };
-
-    const update = () => {
-        const onTarget = getActiveWizardPageName() === targetName;
-        li.style.display = onTarget ? '' : 'none';
-    };
-
-    // Observe the wizard nav for page changes
-    const nav = document.querySelector('.plex-wizard-page-list');
-    if (nav && !li._qtvObserverAttached) {
-        li._qtvObserverAttached = true;
-        new MutationObserver(update).observe(nav, { childList: true, subtree: true, attributes: true, characterData: true });
-    }
-
-    update();
-}
-
-
 
 function showPanel() {
     const overlay = document.createElement('div');
@@ -186,7 +174,7 @@ function showPanel() {
       <label class="btn btn-default">Import <input id="qtv-import" type="file" accept="application/json" style="display:none;"></label>
       <span style="flex:1"></span>
       <button id="qtv-reset" class="btn btn-default" style="border-color:#f59e0b; color:#b45309;">Reset</button>
-      <button id="qtv-close" class="btn btn-primary" style="background:#2563eb; color:#fff; border:1px solid #1d4ed8;">Close</button>
+      <button id="qtv-close" class="btn btn-primary" style="background:#2563eb; color:#fff; border:1px solid #1d4ed8;">Save &amp; Close</button>
     </div>
   `;
 
@@ -208,7 +196,11 @@ function showPanel() {
     });
 
     // Buttons
-    panel.querySelector('#qtv-close')?.addEventListener('click', () => overlay.remove());
+    panel.querySelector('#qtv-close')?.addEventListener('click', () => {
+        overlay.remove();
+        TMUtils.toast?.('Validation settings saved.', 'success', 1600);
+    });
+
     panel.querySelector('#qtv-reset')?.addEventListener('click', () => {
         Object.keys(DEF).forEach(k => GM_setValue(k, DEF[k]));
         emitChanged(); overlay.remove();

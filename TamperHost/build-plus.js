@@ -131,7 +131,7 @@ const MODULES = [
         id: 'QT50',
         featureName: 'Quote Validation',
         bannerBase: 'validation',
-        src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'qt50', 'qtv.entry.js'),
+        src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'qt50-validation', 'qtv.entry.js'),
         out: path.join(ROOT, 'wwwroot', 'qt50.user.js')
     },
     // ---- shared CORE LIBS (no Tampermonkey banner; plain JS bundles) ----
@@ -250,7 +250,15 @@ function updateFileVersion(filePath, newVersion, dry = false) {
 
     const hadMarkers = changed || /@version\s+/.test(original) || /VERSION\s*=/.test(original);
     const base = path.basename(filePath);
-    console.log(`${dry ? '🧪 DRY' : '✅'} ${base} → ${newVersion}${changed ? '' : ' (no changes)'}`);
+    if (changed) {
+        console.log(`${dry ? '🧪 DRY' : '✅'} ${base} → ${newVersion}`);
+    } else {
+        // Quiet when nothing changed; show only if debugging is enabled
+        if (process.env.BUILD_PLUS_DEBUG === '1') {
+            console.debug?.(`${dry ? '🧪 DRY' : '✅'} ${base} → ${newVersion} (no changes)`);
+        }
+    }
+
     return { skipped: false, changed, hadMarkers };
 }
 
@@ -362,14 +370,14 @@ function getBannerVars(m, versionStr, envName, opts) {
     // Matches: DEV includes test + prod; PROD is prod-only
     const MATCHES = isProd
         ? [
-            '// @match       https://lyntron.on.plex.com/SalesAndCRM*',
-            '// @match       https://lyntron.on.plex.com/SalesAndCrm*'
+            '// @match       https://lyntron.on.plex.com/SalesAndCRM/QuoteWizard*',
+            '// @match       https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*'
         ]
         : [
-            '// @match       https://lyntron.on.plex.com/SalesAndCRM*',
-            '// @match       https://lyntron.on.plex.com/SalesAndCrm*',
-            '// @match       https://lyntron.test.on.plex.com/SalesAndCRM*',
-            '// @match       https://lyntron.test.on.plex.com/SalesAndCrm*'
+            '// @match       https://lyntron.on.plex.com/SalesAndCRM/QuoteWizard*',
+            '// @match       https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*',
+            '// @match       https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*',
+            '// @match       https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*'
         ];
 
     const cdnBase = (isProd

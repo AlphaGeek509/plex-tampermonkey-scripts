@@ -4,7 +4,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
     ? __BUILD_DEV__
     : !!(typeof globalThis !== 'undefined' && globalThis.__TM_DEV__);
 
-(() => {
+(async function () {
     // ---------- Config ----------
     const CONFIG = {
         DS_CatalogKeyByQuoteKey: 3156,
@@ -12,10 +12,14 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
         GRID_SEL: '.plex-grid',
         toastMs: 3500,
         settingsKey: 'qt30_settings_v1',
+        // Legacy text matcher (kept for fallback only)
         SHOW_ON_PAGES_RE: /^part\s*summary$/i,
+        // New: zero-based index of the Part Summary step in the wizard list
+        PART_SUMMARY_STEP_INDEX: 1, // 0=Quote, 1=Part Summary, 2=Notes (based on your HTML)
         FORCE_SHOW_BTN: false,
         defaults: { deleteZeroQtyRows: true, unitPriceDecimals: 3, enableHoverAffordance: true },
     };
+
 
     // ---------- Bootstrap ----------
     const IS_TEST = /test\.on\.plex\.com$/i.test(location.hostname);
@@ -51,7 +55,8 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
         if (!quoteRepo || lastScope !== qk) {
             const { repo } = (await getQT()).use(Number(qk));
             await repo.ensureFromLegacyIfMissing?.();
-            quoteRepo = repo; lastScope = qk;
+            quoteRepo = repo;
+            lastScope = qk;
         }
         return quoteRepo;
     }
@@ -78,89 +83,58 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
     // Hub button registration (qt35 pattern)
     const HUB_BTN_ID = 'qt30-apply-pricing';
 
-    async function getHub(opts = { mount: "nav" }) {
-        for (let i = 0; i < 50; i++) {
-            const ensure = (window.ensureLTHub || unsafeWindow?.ensureLTHub);
-            if (typeof ensure === 'function') {
-                try { const hub = await ensure(opts); if (hub) return hub; } catch { }
-            }
-            await new Promise(r => setTimeout(r, 100));
-        }
-        return null;
-    }
-
-    function getActiveWizardPageName() {
-        // Active LI renders the page name as a direct text node (qt35 logic)
-        const li = document.querySelector('.plex-wizard-page-list .plex-wizard-page.active');
-        if (!li) return '';
-        return (li.textContent || '').trim().replace(/\s+/g, ' ');
-    }
-    function isOnTargetWizardPage() {
-        return CONFIG.SHOW_ON_PAGES_RE.test(getActiveWizardPageName());
-    }
-
-
-    async function ensureHubButton() {
-        const hub = await getHub({ mount: "nav" });
-        if (!hub?.registerButton) return;
-
-        const already = hub.list?.()?.includes(HUB_BTN_ID);
-        if (already) return;
-
-        hub.registerButton('left', {
-            id: HUB_BTN_ID,
-            label: 'Apply Pricing',
-            title: 'Apply customer catalog pricing',
-            weight: 120,
-            onClick: () => runApplyPricing()
-        });
-    }
-
     // ===== SPA wiring (qt35 pattern) =====
     let booted = false; let offUrl = null;
 
     function wireNav(handler) { offUrl?.(); offUrl = window.TMUtils?.onUrlChange?.(handler); }
 
-    async function reconcileHubButtonVisibility() {
-        // Show only on target page (unless forced)
-        if (CONFIG.FORCE_SHOW_BTN || isOnTargetWizardPage()) {
-            await ensureHubButton();
-        } else {
-            const hub = await getHub();
-            hub?.remove?.(HUB_BTN_ID);
-        }
-    }
-
-    let pageObserver = null;
-    function startWizardPageObserver() {
-        const root = document.querySelector('.plex-wizard-page-list');
-        if (!root) return;
-        pageObserver = new MutationObserver((mut) => {
-            if (mut.some(m => m.type === 'attributes' || m.type === 'childList')) {
-                reconcileHubButtonVisibility();
-            }
-        });
-        pageObserver.observe(root, { subtree: true, attributes: true, attributeFilter: ['class'], childList: true });
-        window.addEventListener('hashchange', reconcileHubButtonVisibility);
-    }
-    function stopWizardPageObserver() {
-        try { window.removeEventListener('hashchange', reconcileHubButtonVisibility); } catch { }
-        try { pageObserver?.disconnect(); } catch { }
-        pageObserver = null;
-    }
-
     async function init() {
         if (booted) return;
         booted = true;
 
-        try { await getHub({ mount: "nav" }); } catch { }
-        await reconcileHubButtonVisibility();
-        startWizardPageObserver();
+        await lt.core.qt.ensureHubButton({
+            id: HUB_BTN_ID,
+            label: 'Apply Pricing',
+            title: 'Apply customer catalog pricing',
+            side: 'left',
+            weight: 120,
+            onClick: () => runApplyPricing(),
+            // Only show when the active wizard step <li> is the configured index.
+            // Completely ignores any "Part Summary" text elsewhere on the page.
+            showWhen: () => {
+                try {
+                    // Strongest signal: the Part Summary form/actions exist in DOM
+                    if (document.querySelector('#QuotePartSummaryForm,[id^="QuotePartSummaryForm_"]')) {
+                        return true;
+                    }
+                    // Secondary: active wizard step’s visible label is exactly "Part Summary"
+                    const active = document.querySelector('.plex-wizard-page-list .plex-wizard-page.active');
+                    return !!(active && active.textContent && active.textContent.trim().toLowerCase() === 'part summary');
+                } catch {
+                    return false;
+                }
+            },
+            mount: 'nav'
+        });
+
+        // Safety fuse (no top-level await): defer via promise
+        lt.core.qt.getHub({ mount: 'nav' }).then((hub) => {
+            const list = Array.isArray(hub?.list?.()) ? hub.list() : [];
+            const ids = list.map(x => (x && typeof x === 'object') ? x.id : x).filter(Boolean);
+            const present = (typeof hub?.has === 'function') ? !!hub.has(HUB_BTN_ID) : ids.includes(HUB_BTN_ID);
+
+            if (!present && typeof hub?.registerButton === 'function') {
+                const def = { id: HUB_BTN_ID, label: 'Apply Pricing', title: 'Apply customer catalog pricing', weight: 120, onClick: () => runApplyPricing() };
+                try { hub.registerButton('left', def); } catch { }
+
+            }
+        }).catch(() => { });
     }
+
+
     function teardown() {
         booted = false;
         offUrl?.(); offUrl = null;
-        stopWizardPageObserver();
     }
 
     // initialize for current route + wire route changes
@@ -174,20 +148,40 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             // auth
             try { if (!(await lt.core.auth.getKey())) { lt.core.hub.notify('Sign-in required', 'warn', { ms: 4000 }); task.error('No session'); return; } } catch { }
 
-            const qk = getQuoteKeyDeterministic();
+            const { quoteKey: qk } = getCtx() || {};
             if (!qk) { task.error('Quote_Key missing'); return; }
 
+            // Ensure we’re operating on the correct quote scope
             await ensureRepoForQuote(qk);
-            const header = await quoteRepo.getHeader?.() || {};
-            let catalogKey = TMUtils.getObsValue?.(header, ['Catalog_Key', 'CatalogKey'], { first: true }) ?? null;
 
-            if (!catalogKey) {
+            // 1) Ask lt-core to promote draft → quote (centralized path, one-shot first)
+            try {
+                // Prefer the single public entrypoint in lt-core
+                await lt.core.qt.promoteDraftToQuote?.({ qk, strategy: 'once' });
+            } catch { /* non-fatal; we’ll verify by reading header next */ }
+
+            // 2) Re-read live quote header after promotion
+            let header = await quoteRepo.getHeader?.() || {};
+            let catalogKey =
+                TMUtils.getObsValue?.(header, ['Catalog_Key', 'CatalogKey'], { first: true }) ?? null;
+
+            // 3) If KO was still binding (very fast click), try a short retry window via lt-core
+            if (catalogKey == null) {
+                try {
+                    await lt.core.qt.promoteDraftToQuote?.({ qk, strategy: 'retry' }); // short, internal retry
+                    header = await quoteRepo.getHeader?.() || {};
+                    catalogKey =
+                        TMUtils.getObsValue?.(header, ['Catalog_Key', 'CatalogKey'], { first: true }) ?? null;
+                } catch { /* still non-fatal; we’ll fall back to DS */ }
+            }
+
+            if (catalogKey == null) {
                 task.update('Fetching Catalog Key…');
                 const rows1 = await withFreshAuth(() => lt.core.plex.dsRows(CONFIG.DS_CatalogKeyByQuoteKey, { Quote_Key: qk }));
                 catalogKey = rows1?.[0]?.Catalog_Key || null;
                 if (catalogKey) await quoteRepo.patchHeader?.({ Quote_Key: Number(qk), Catalog_Key: Number(catalogKey) });
             }
-            if (!catalogKey) { task.error('No Catalog Key'); lt.core.hub.notify('No catalog found for this quote', 'warn', { ms: 4000 }); return; }
+            if (catalogKey == null) { task.error('No Catalog Key'); lt.core.hub.notify('No catalog found for this quote', 'warn', { ms: 4000 }); return; }
 
             // Collect parts from KO grid now (reuse top-level KO)
             const grid = document.querySelector(CONFIG.GRID_SEL);
@@ -281,38 +275,16 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             lt.core.hub.notify(`Apply failed: ${e?.message || e}`, 'error', { ms: 4000 });
         } finally {
             // reconcile presence if SPA navigation changed the page
-            try { await reconcileHubButtonVisibility(); } catch { }
+            try {
+                // handled by lt.core.qt.ensureHubButton() 
+            } catch { }
         }
     }
 
-
     // ---------- Helpers ----------
-    // Deterministic QuoteKey (qt35 pattern)
-    function getQuoteKeyDeterministic() {
-        try {
-            const grid = document.querySelector(CONFIG.GRID_SEL);
-            const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
-            if (grid && KO?.dataFor) {
-                const gridVM = KO.dataFor(grid);
-                const raw0 = Array.isArray(gridVM?.datasource?.raw) ? gridVM.datasource.raw[0] : null;
-                const v = raw0 ? TMUtils.getObsValue?.(raw0, ['QuoteKey', 'Quote_Key']) : null;
-                if (v != null) return Number(v);
-            }
-        } catch { }
-        try {
-            const rootEl = document.querySelector('.plex-wizard, .plex-page');
-            const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
-            const rootVM = rootEl ? KO?.dataFor?.(rootEl) : null;
-            const v = rootVM && (
-                TMUtils.getObsValue?.(rootVM, ['QuoteKey', 'Quote_Key']) ||
-                TMUtils.getObsValue?.(rootVM, ['Quote.QuoteKey', 'Quote.Quote_Key'])
-            );
+    // Always read fresh context (SPA can change QuoteKey/Page)
+    const getCtx = () => lt?.core?.qt?.getQuoteContext();
 
-            if (v != null) return Number(v);
-        } catch { }
-        const m = /[?&]QuoteKey=(\d+)/i.exec(location.search);
-        return m ? Number(m[1]) : null;
-    }
 
     function pickPrice(bps, qty) {
         if (!bps?.length) return null;

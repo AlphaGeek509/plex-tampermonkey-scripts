@@ -3,10 +3,10 @@
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
 // @version      3.6.2
 // @description  Displays read-only “Attachments: N” in the Quote Wizard action bar.
-// @match       https://lyntron.on.plex.com/SalesAndCRM*
-// @match       https://lyntron.on.plex.com/SalesAndCrm*
-// @match       https://lyntron.test.on.plex.com/SalesAndCRM*
-// @match       https://lyntron.test.on.plex.com/SalesAndCrm*
+// @match        https://lyntron.on.plex.com/SalesAndCRM/QuoteWizard*
+// @match        https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*
+// @match        https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*
+// @match        https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*
 __REQUIRES__
 __RESOURCES__
 // @grant        GM_registerMenuCommand

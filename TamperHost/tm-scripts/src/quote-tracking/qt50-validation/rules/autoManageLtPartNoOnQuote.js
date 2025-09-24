@@ -122,7 +122,6 @@ export default async function autoManageLtPartNoOnQuote(ctx, settings, utils) {
                 Quote_Key: String(vmQuoteKey ?? ''),
                 Part_Key: String(vmPartKey ?? ''),
                 Part_No: String(partNoForPost ?? ''),
-                Name: 'auto managed',
                 Update_Part: true
             };
 

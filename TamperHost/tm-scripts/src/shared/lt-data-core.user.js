@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         lt-data-core
 // @namespace    lt
-// @version      3.7.30
+// @version      3.8.100
 // @description  Core data: add makeFlatScopedRepo (flat {header,lines}) onto lt.core.data, waiting for DC to load
 // @match        https://*/SalesAndCRM/*
 // @grant        none
@@ -82,7 +82,7 @@
                 return h >>> 0;
             }
 
-            function makeFlatScopedRepo({ ns, entity = 'quote', schema = null, persist = 'session', ttlMs = null, legacyEntity = null } = {}) {
+            function makeFlatScopedRepo({ ns, entity = "quote", persist = "session", ttlMs = null, legacyEntity = null } = {}) {
                 function use(scopeKey) {
                     const key = (typeof scopeKey === 'string') ? hashScope(scopeKey) : Number(scopeKey);
                     if (!Number.isFinite(key) || key <= 0) throw new Error('Invalid scopeKey');
@@ -92,13 +92,13 @@
                     const repo = ctx.makeRepo(function FlatRepo() { });
                     return { ctx, repo };
                 }
-                return { use, FlatRepo: function FlatRepo() { }, opts: { ns, entity, schema, persist, ttlMs, legacyEntity } };
+                return { use, FlatRepo: function FlatRepo() { }, opts: { ns, entity, persist, ttlMs, legacyEntity } };
             }
 
             Object.defineProperty(DC, 'makeFlatScopedRepo', { value: makeFlatScopedRepo, configurable: true, writable: true });
         }
 
-        try { console.info?.('[lt-data-core] installed'); } catch { }
+        try {  } catch { }
         return true;
     }
 
