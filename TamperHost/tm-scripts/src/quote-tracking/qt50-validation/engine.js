@@ -6,7 +6,8 @@ export async function runValidation(TMUtils, settings) {
 
     const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
     const grid = document.querySelector('.plex-grid');
-    const gvm = grid ? KO?.dataFor?.(grid) : null;
+    const gvm = (grid && KO && typeof KO.dataFor === 'function') ? KO.dataFor(grid) : null;
+    if (!gvm) return { ok: true, issues: [] }; // nothing to validate yet
 
     const rows = (gvm?.datasource?.raw) || (gvm?.datasource?.data) || [];
     const groupsByQuotePart = new Map();

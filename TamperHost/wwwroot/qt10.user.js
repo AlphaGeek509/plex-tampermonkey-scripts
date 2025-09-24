@@ -1,17 +1,17 @@
 // ==UserScript==
 // @name        QT10_DEV
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     3.8.40
+// @version     3.8.70
 // @description DEV-only build; includes user-start gate
-// @match       https://lyntron.on.plex.com/SalesAndCRM*
-// @match       https://lyntron.on.plex.com/SalesAndCrm*
-// @match       https://lyntron.test.on.plex.com/SalesAndCRM*
-// @match       https://lyntron.test.on.plex.com/SalesAndCrm*
-// @require      http://localhost:5000/lt-plex-tm-utils.user.js?v=3.8.40-1758669609954
-// @require      http://localhost:5000/lt-plex-auth.user.js?v=3.8.40-1758669609954
-// @require      http://localhost:5000/lt-ui-hub.js?v=3.8.40-1758669609954
-// @require      http://localhost:5000/lt-data-core.user.js?v=3.8.40-1758669609954
-// @require      http://localhost:5000/lt-core.user.js?v=3.8.40-1758669609954
+// @match       https://lyntron.on.plex.com/SalesAndCRM/QuoteWizard*
+// @match       https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*
+// @match       https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*
+// @match       https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*
+// @require      http://localhost:5000/lt-plex-tm-utils.user.js?v=3.8.70-1758730211800
+// @require      http://localhost:5000/lt-plex-auth.user.js?v=3.8.70-1758730211800
+// @require      http://localhost:5000/lt-ui-hub.js?v=3.8.70-1758730211800
+// @require      http://localhost:5000/lt-data-core.user.js?v=3.8.70-1758730211800
+// @require      http://localhost:5000/lt-core.user.js?v=3.8.70-1758730211800
 // @resource     THEME_CSS http://localhost:5000/theme.css
 // @grant       GM_registerMenuCommand
 // @grant       GM_getValue

@@ -61,10 +61,6 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
         return quoteRepo;
     }
 
-    async function mergeDraftIntoQuoteOnce(qk) {
-        return lt?.core?.qt?.promoteDraftToQuote({ qk: Number(qk), strategy: 'once' });
-    }
-
     // ---------- Settings (GM tolerant) ----------
     const loadSettings = () => {
         try {
