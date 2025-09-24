@@ -78,6 +78,29 @@ async function getHub(opts = { mount: 'nav' }) {
 function showValidationModal(issues = []) {
     ensureValidationStyles();
 
+    // elements
+    const overlay = document.createElement('div');
+    overlay.id = 'qtv-modal-overlay';
+    // Inline fallback styles to beat any hostile stacking context
+    overlay.style.position = 'fixed';
+    overlay.style.inset = '0';
+    overlay.style.background = 'rgba(0,0,0,.38)';
+    overlay.style.zIndex = '2147483647'; // highest sane z
+
+    const modal = document.createElement('div');
+    modal.id = 'qtv-modal';
+    modal.style.position = 'absolute';
+    modal.style.top = '50%';
+    modal.style.left = '50%';
+    modal.style.transform = 'translate(-50%,-50%)';
+    modal.style.background = '#fff';
+    modal.style.width = 'min(960px, 94vw)';
+    modal.style.maxHeight = '80vh';
+    modal.style.overflow = 'hidden';
+    modal.style.borderRadius = '12px';
+    modal.style.boxShadow = '0 18px 40px rgba(0,0,0,.28)';
+    modal.style.fontFamily = 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+
     // build rows
     const rowsHtml = issues.map(iss => {
         const lvl = (iss.level || '').toLowerCase();
@@ -95,33 +118,30 @@ function showValidationModal(issues = []) {
         </tr>`
     }).join('');
 
-    const overlay = document.createElement('div');
-    overlay.id = 'qtv-modal-overlay';
-    const modal = document.createElement('div');
-    modal.id = 'qtv-modal';
     modal.innerHTML = `
   <div class="qtv-hd">
     <h3>Validation Details</h3>
     <div class="qtv-actions">
       <button class="btn btn-default" id="qtv-export-csv" title="Export visible issues to CSV">Export CSV</button>
-      <button class="btn btn-primary" id="qtv-close" style="background:#2563eb; color:#fff; border:1px solid #1d4ed8;">Close</button>
+      <button class="btn btn-primary" id="qtv-close" style="background:#2563eb; color:#fff; border:1px solid #1d4ed8;">Save &amp; Close</button>
     </div>
   </div>
   <div class="qtv-bd">
     <table aria-label="Validation Issues">
       <thead>
-  <tr>
-    <th>Sort&nbsp;Order</th>
-    <th>Part #</th>
-    <th>Rule</th>
-    <th>Level</th>
-    <th>Reason</th>
-  </tr>
-</thead>
+        <tr>
+          <th>Sort&nbsp;Order</th>
+          <th>Part #</th>
+          <th>Rule</th>
+          <th>Level</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
       <tbody>${rowsHtml || `<tr><td colspan="5" style="opacity:.7; padding:12px;">No issues.</td></tr>`}</tbody>
     </table>
   </div>
 `;
+
 
     // interactions
     modal.querySelector('#qtv-close')?.addEventListener('click', () => overlay.remove());
@@ -172,6 +192,9 @@ function showValidationModal(issues = []) {
 
     overlay.appendChild(modal);
     (document.body || document.documentElement).appendChild(overlay);
+    try { overlay.setAttribute('tabindex', '-1'); overlay.focus(); } catch { }
+    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') overlay.remove(); });
+
 }
 
 
@@ -193,46 +216,61 @@ export async function mountValidationButton(TMUtils) {
             const task = lt.core.hub.beginTask?.('Validating…', 'info') || { done() { }, error() { } };
 
             try {
-                // Clear old highlights
+                // Clear old highlights and ensure styles are present up-front
                 clearValidationHighlights();
+                ensureValidationStyles();
 
                 const res = await runValidation(TMUtils, settings);
                 const issues = Array.isArray(res?.issues) ? res.issues : [];
                 const count = issues.length;
-                const hasError = issues.some(i => String(i.level || '').toLowerCase() === 'error');
+
+                // Auto-highlight all error rows immediately (before modal)
+                try {
+                    for (const iss of issues) {
+                        const qpk = iss?.quotePartKey;
+                        if (!qpk) continue;
+                        const row = findGridRowByQuotePartKey(qpk);
+                        if (!row) continue;
+                        const base = 'qtv-row-fail';
+                        const cls = classForIssue(iss);
+                        row.classList.add(base);
+                        if (cls) row.classList.add(cls);
+                    }
+                } catch { /* non-fatal */ }
 
                 if (count === 0) {
                     lt.core.hub.notify?.('✅ Lines valid', 'success', { ms: 1800 });
+                    lt.core.hub.setStatus?.('✅ All clear', 'success', { sticky: false });
+                    setBadgeCount?.(0);
                     task.done?.('Valid');
                 } else {
+                    // Tally outcomes (handles missing level gracefully)
+                    const levels = issues.map(i => String(i?.level || '').toLowerCase());
+                    const hasError = levels.some(l => l === 'error' || l === 'fail' || l === 'critical')
+                        || issues.some(i => /price\.(?:maxunitprice|minunitprice)/i.test(String(i?.kind || '')));
+                    const hasWarn = !hasError && levels.some(l => l === 'warn' || l === 'warning');
+
                     const summary = buildIssuesSummary(issues);
 
-                    if (hasError) {
-                        lt.core.hub.notify?.(
-                            `❌ ${count} validation ${count === 1 ? 'issue' : 'issues'}`,
-                            'error',
-                            { ms: 6500 }
-                        );
-                        lt.core.hub.setStatus?.(
-                            `❌ ${count} issue${count === 1 ? '' : 's'} — ${summary}`,
-                            'error',
-                            { sticky: true }
-                        );
-                    } else {
-                        // Info/warn only (e.g., auto-manage posts)
-                        lt.core.hub.notify?.(
-                            `ℹ️ ${count} update${count === 1 ? '' : 's'} applied`,
-                            'info',
-                            { ms: 3500 }
-                        );
-                        lt.core.hub.setStatus?.(
-                            `ℹ️ ${count} update${count === 1 ? '' : 's'} — ${summary}`,
-                            'info',
-                            { sticky: true }
-                        );
-                    }
+                    // Guard to ensure UI problems never block the modal
+                    try {
+                        if (hasError) {
+                            lt.core.hub.notify?.(`\u274C ${count} validation ${count === 1 ? 'issue' : 'issues'}`, 'error', { ms: 6500 });
+                            lt.core.hub.setStatus?.(`\u274C ${count} issue${count === 1 ? '' : 's'} — ${summary}`, 'error', { sticky: true });
+                            setBadgeCount?.(count);
+                        } else if (hasWarn) {
+                            lt.core.hub.notify?.(`\u26A0\uFE0F ${count} validation ${count === 1 ? 'warning' : 'warnings'}`, 'warn', { ms: 5000 });
+                            lt.core.hub.setStatus?.(`\u26A0\uFE0F ${count} warning${count === 1 ? '' : 's'} — ${summary}`, 'warn', { sticky: true });
+                            setBadgeCount?.(count);
+                        } else {
+                            // Info-only updates (e.g., auto-manage posts with level=info)
+                            lt.core.hub.notify?.(`ℹ️ ${count} update${count === 1 ? '' : 's'} applied`, 'info', { ms: 3500 });
+                            lt.core.hub.setStatus?.(`ℹ️ ${count} update${count === 1 ? '' : 's'} — ${summary}`, 'info', { sticky: true });
+                            setBadgeCount?.(count);
+                        }
+                    } catch { /* never block the modal */ }
 
-                    // Always show details when we have any issues (info/warn/error)
+                    // Always show the details when count > 0
                     showValidationModal(issues);
 
                     // If autoManage actually changed Part_No (level=warning), refresh the grid (qt30 pattern)
@@ -255,11 +293,13 @@ export async function mountValidationButton(TMUtils) {
                         }
                     }
 
+                    task.done?.('Checked');
                 }
 
                 // cache last status for SPA redraws
                 TMUtils.state = TMUtils.state || {};
                 TMUtils.state.lastValidation = res;
+
             } catch (err) {
                 lt.core.hub.error?.(`Validation error: ${err?.message || err}`, 'error', { ms: 6000 });
                 task.error?.('Error');
@@ -300,7 +340,7 @@ function ensureValidationStyles() {
 .qtv-row-fail--price-minunit { background: rgba(219, 234, 254, .65) !important; }  /* blue-ish */
 
 /* Modal shell */
-#qtv-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.38); z-index:100003; }
+#qtv-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.38); z-index:2147483647; }
 #qtv-modal {
   position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
   background:#fff; width:min(960px, 94vw); max-height:80vh; overflow:hidden;
@@ -342,6 +382,10 @@ function ensureValidationStyles() {
     document.head.appendChild(style);
 }
 
+// insert above ensureRowKeyAttributes()
+function getObsVal(vm, prop) {
+    try { const v = vm?.[prop]; return (typeof v === 'function') ? v() : v; } catch { return undefined; }
+}
 
 /** Tag visible grid rows with data-quote-part-key by reading KO context */
 function ensureRowKeyAttributes() {
@@ -355,12 +399,16 @@ function ensureRowKeyAttributes() {
         if (r.hasAttribute('data-quote-part-key')) { tagged++; continue; }
         try {
             const ctx = KO?.contextFor?.(r);
-            const vm = ctx?.$data ?? ctx?.$root ?? null;
-            const qpk = TMUtils.getObsValue?.(vm, 'QuotePartKey');
+            const rowVM = ctx?.$data ?? ctx?.$root ?? null;
+            const qpk = (typeof TMUtils?.getObsValue === 'function')
+                ? TMUtils.getObsValue(rowVM, 'QuotePartKey')
+                : getObsVal(rowVM, 'QuotePartKey');
+
             if (qpk != null && qpk !== '' && Number(qpk) > 0) {
                 r.setAttribute('data-quote-part-key', String(qpk));
                 tagged++;
             }
+
         } catch { /* ignore per-row failures */ }
     }
     return tagged;
@@ -398,8 +446,16 @@ function findGridRowByQuotePartKey(qpk) {
     return null;
 }
 
+function classForIssue(iss) {
+    const kind = String(iss?.kind || '').toLowerCase();
+    if (kind.includes('price.maxunitprice')) return 'qtv-row-fail--price-maxunit';
+    if (kind.includes('price.minunitprice')) return 'qtv-row-fail--price-minunit';
+    return '';
+}
 
 const DEV = (typeof __BUILD_DEV__ !== 'undefined') ? __BUILD_DEV__ : true;
+
+
 if (DEV) {
     (unsafeWindow || window).QTV_DEBUG = (unsafeWindow || window).QTV_DEBUG || {};
     (unsafeWindow || window).QTV_DEBUG.tagStats = () => {

@@ -236,6 +236,11 @@
             const api = {
                 _shadow: root,
                 registerButton(side = 'left', def) {
+                    // Normalize signature: allow registerButton(def) OR registerButton(side, def)
+                    if (typeof side === 'object' && !def) {
+                        def = side;
+                        side = def?.section || 'left';
+                    }
                     const target = (side === 'right') ? right : (side === 'center' ? center : left);
                     let el = def?.el;
                     if (!el) {

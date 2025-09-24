@@ -15,12 +15,6 @@
         return (typeof impl === 'function') ? impl(fn) : fn();
     };
 
-
-    // Flat repo factory (no polling required now that lt-data-core installs at doc-start)
-    const QTF = lt.core?.data?.makeFlatScopedRepo
-        ? lt.core.data.makeFlatScopedRepo({ ns: "QT", entity: "quote", legacyEntity: "QuoteHeader" })
-        : null;
-
     (async () => {
         // ensureLTDock is provided by @require’d lt-ui-dock.js
         const dock = await window.ensureLTDock?.();
@@ -40,28 +34,8 @@
     const FORCE_SHOW_BTN = false; // set to true during testing
     if (!ROUTES.some(rx => rx.test(location.pathname))) return;
 
-    // Mount hub into the NAV bar like QT10
-    // NOTE: Do not await at top-level. init() performs the awaited mount.
-    ROOT.__LT_HUB_MOUNT = "nav";
-
     const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
     const raf = () => new Promise(r => requestAnimationFrame(r));
-
-    // Robust hub getter that tolerates late-loading lt-ui-hub
-    async function getHub(opts = { mount: "nav" }) {
-        for (let i = 0; i < 50; i++) { // ~5s total
-            const ensure = (ROOT.ensureLTHub || window.ensureLTHub);
-            if (typeof ensure === 'function') {
-                try {
-                    const hub = await ensure(opts);
-                    if (hub) return hub;
-                } catch { /* keep retrying */ }
-            }
-            await new Promise(r => setTimeout(r, 100));
-        }
-        return null;
-    }
-
 
     const CFG = {
         ACTION_BAR_SEL: '#QuoteWizardSharedActionBar',
@@ -75,160 +49,64 @@
         TIMEOUT_MS: 12000
     };
 
-    function getTabScopeId(ns = 'QT') {
-        try {
-            const k = `lt:${ns}:scopeId`;
-            let v = sessionStorage.getItem(k);
-            if (!v) {
-                v = String(Math.floor(Math.random() * 2147483647));
-                sessionStorage.setItem(k, v);
-            }
-            return Number(v);
-        } catch {
-            return Math.floor(Math.random() * 2147483647);
-        }
-    }
-
-    function getActiveWizardPageName() {
-        // Active LI renders the page name as a direct text node
-        const li = document.querySelector('.plex-wizard-page-list .plex-wizard-page.active');
-        if (!li) return '';
-        return (li.textContent || '').trim().replace(/\s+/g, ' ');
-    }
-
-    function isOnTargetWizardPage() {
-        return CFG.SHOW_ON_PAGES_RE.test(getActiveWizardPageName());
-    }
-
-
     async function ensureWizardVM() {
         const anchor = document.querySelector(CFG.GRID_SEL) ? CFG.GRID_SEL : CFG.ACTION_BAR_SEL;
         const { viewModel } = await (window.TMUtils?.waitForModelAsync(anchor, { pollMs: CFG.POLL_MS, timeoutMs: CFG.TIMEOUT_MS, requireKo: true }) ?? { viewModel: null });
         return viewModel;
     }
 
-    function getQuoteKeyDeterministic() {
-        try {
-            const grid = document.querySelector(CFG.GRID_SEL);
-            if (grid && KO?.dataFor) {
-                const gridVM = KO.dataFor(grid);
-                const raw0 = Array.isArray(gridVM?.datasource?.raw) ? gridVM.datasource.raw[0] : null;
-                const v = raw0 ? window.TMUtils?.getObsValue?.(raw0, 'QuoteKey') : null;
-                if (v != null) return Number(v);
-            }
-        } catch { }
-        try {
-            const rootEl = document.querySelector('.plex-wizard, .plex-page');
-            const rootVM = rootEl ? KO?.dataFor?.(rootEl) : null;
-            const v = rootVM && (window.TMUtils?.getObsValue?.(rootVM, 'QuoteKey') || window.TMUtils?.getObsValue?.(rootVM, 'Quote.QuoteKey'));
-            if (v != null) return Number(v);
-        } catch { }
-        const m = /[?&]QuoteKey=(\d+)/i.exec(location.search);
-        return m ? Number(m[1]) : null;
-    }
-
     let quoteRepo = null, lastScope = null;
     let __QT__ = null;
 
     async function ensureRepoForQuote(quoteKey) {
-        if (!QTF) return null;
-        const { repo } = QTF.use(Number(quoteKey));
-        quoteRepo = repo;                 // <-- bind the module-level handle
-        lastScope = Number(quoteKey);     // <-- track scope we’re bound to
-        await repo.ensureFromLegacyIfMissing?.();
-        return repo;
+        try {
+            const repo = await lt?.core?.qt?.useQuoteRepo?.(Number(quoteKey));
+            quoteRepo = repo;
+            lastScope = Number(quoteKey);
+            return repo;
+        } catch {
+            return null;
+        }
     }
 
-
+    // --- BOUNDED CONTEXT WARM-UP (no infinite polling) ---
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    async function ensureRepoReady(qk, attempts = 6, delayMs = 250) {
+        // Try a few short times to allow DC/Repo to come up after modal close/promote
+        for (let i = 0; i < attempts; i++) {
+            await ensureRepoForQuote(qk);
+            if (quoteRepo) return quoteRepo;
+            await sleep(delayMs);
+        }
+        return null;
+    }
 
 
     // Background promotion (per-tab draft -> per-quote) with gentle retries
-    const __PROMOTE = { timer: null, tries: 0, max: 120, intervalMs: 250 };
-
-    function schedulePromoteDraftToQuote(quoteKey) {
-        if (__PROMOTE.timer) return;
-        __PROMOTE.timer = setInterval(async () => {
-            try {
-                const repoQ = await ensureRepoForQuote(quoteKey);
-                if (!QTF || !repoQ) { if (++__PROMOTE.tries >= __PROMOTE.max) stopPromote(); return; }
-
-                // Read the SAME per-tab draft scope QT10 writes to
-                const { repo: draftRepo } = QTF.use(getTabScopeId('QT'));
-                const draft = await (draftRepo.getHeader?.() || draftRepo.get());
-                if (draft && Object.keys(draft).length) {
-                    await repoQ.patchHeader({
-                        Quote_Key: Number(quoteKey),
-                        Customer_No: draft.Customer_No ?? null,
-                        Catalog_Key: draft.Catalog_Key ?? null,
-                        Catalog_Code: draft.Catalog_Code ?? null,
-                        Promoted_From: 'draft',
-                        Promoted_At: Date.now(),
-                        Quote_Header_Fetched_At: null,
-                        Updated_At: draft.Updated_At || Date.now(),
-                    });
-                    await draftRepo.clear?.();
-                    try { const { repo: legacy } = QTF.use('draft'); await legacy.clear?.(); } catch { }
-
-                }
-                stopPromote();
-            } catch {
-                // keep retrying
-            }
-        }, __PROMOTE.intervalMs);
-    }
-
     function stopPromote() {
-        clearInterval(__PROMOTE.timer);
-        __PROMOTE.timer = null;
-        __PROMOTE.tries = 0;
+        return lt?.core?.qt?.stopRetry?.();
     }
 
+    // Promote the tab-scope draft into the per-quote repo only if a real draft exists.
+    // Also guard so we don't even attempt more than once per quote in this tab.
+    function __guardKeyForPromote(qk) { return `qt35:promoted:${Number(qk) || 0}`; }
 
-    // ===== Merge QT10 draft → per-quote (once) =====
-    async function mergeDraftIntoQuoteOnce(qk) {
-        if (!qk || !Number.isFinite(qk) || qk <= 0) return;
+    async function promoteDraftIfPresentOnce(qk) {
+        const key = __guardKeyForPromote(qk);
+        try { if (sessionStorage.getItem(key) === '1') return 'guarded'; } catch { /* ignore */ }
 
-        if (!QTF) { schedulePromoteDraftToQuote(qk); return; }
+        // Only call into core if a draft actually exists
+        const draftRepo = await lt?.core?.qt?.useDraftRepo?.();
+        const draft = draftRepo && ((await draftRepo.getHeader?.()) || (await draftRepo.get?.()));
+        const hasDraft = !!(draft && Object.keys(draft).length);
+        if (!hasDraft) return 'no-draft';
 
-        // Read per-tab draft (same scope QT10 writes to)
-        const { repo: draftRepo } = QTF.use(getTabScopeId('QT'));
-        const draft = await draftRepo.getHeader?.() || await draftRepo.get(); // tolerate legacy
-        if (!draft) return;
+        const res = await lt?.core?.qt?.promoteDraftToQuote?.({ qk: Number(qk), strategy: 'once' }) || 'noop';
 
-        await ensureRepoForQuote(qk);
-        if (!quoteRepo) return; // DC not ready yet
-
-        const currentHeader = (await quoteRepo.getHeader()) || {};
-        const curCust = String(currentHeader.Customer_No ?? '');
-        const newCust = String(draft.Customer_No ?? '');
-
-        const needsMerge =
-            (Number((await draftRepo.get())?.Updated_At || 0) > Number(currentHeader.Promoted_At || 0)) ||
-            (curCust !== newCust) ||
-            (currentHeader.Catalog_Key !== draft.Catalog_Key) ||
-            (currentHeader.Catalog_Code !== draft.Catalog_Code);
-
-        if (!needsMerge) return;
-
-        await quoteRepo.patchHeader({
-            Quote_Key: Number(qk),
-            Customer_No: draft.Customer_No ?? null,
-            Catalog_Key: draft.Catalog_Key ?? null,
-            Catalog_Code: draft.Catalog_Code ?? null,
-            Promoted_From: 'draft',
-            Promoted_At: Date.now(),
-            // force re-hydration next time
-            Quote_Header_Fetched_At: null
-        });
-
-        // clear per-tab draft and legacy if present
-        await draftRepo.clear?.();
-        try { const { repo: legacy } = QTF.use('draft'); await legacy.clear?.(); } catch { }
-
-
-        dlog('Draft merged (flat repo header updated)', { qk });
+        // Core clears the draft on 'merged'; either way, we avoid re-attempts for this tab/quote
+        try { sessionStorage.setItem(key, '1'); } catch { /* ignore */ }
+        return res;
     }
-
 
 
     // ===== Data sources =====
@@ -250,52 +128,13 @@
             Quote_No: row?.Quote_No ?? null
         };
     }
-    async function hydratePartSummaryOnce(qk) {
-        await ensureRepoForQuote(qk);
-        if (!quoteRepo) return;
-        const headerSnap = (await quoteRepo.getHeader()) || {};
-        if (headerSnap.Quote_Header_Fetched_At) return;
-
-        const plex = (typeof getPlexFacade === "function" ? await getPlexFacade() : ROOT.lt?.core?.plex);
-        if (!plex?.dsRows) return;
-        const rows = await withFreshAuth(() => plex.dsRows(CFG.DS_QUOTE_HEADER_GET, { Quote_Key: String(qk) }));
-
-        const first = (Array.isArray(rows) && rows.length) ? quoteHeaderGet(rows[0]) : null;
-        if (!first) return;
-
-        await quoteRepo.patchHeader({ Quote_Key: qk, ...first, Quote_Header_Fetched_At: Date.now() });
-    }
 
     // ===== Hub button =====
     const HUB_BTN_ID = 'qt35-attachments-btn';
 
-    async function ensureHubButton() {
-        const hub = await getHub({ mount: "nav" });
-        if (!hub) { dlog('ensureHubButton: hub not available'); return; }
-        if (typeof hub.registerButton !== 'function') { dlog('ensureHubButton: hub.registerButton missing'); return; }
-
-        const list = hub.list?.();
-        const already = Array.isArray(list) && list.includes(HUB_BTN_ID);
-        if (already) {
-            // Button exists; nothing to do here
-            return;
-        }
-
-        dlog('ensureHubButton: registering…', { id: HUB_BTN_ID });
-        hub.registerButton('left', {
-            id: HUB_BTN_ID,
-            label: 'Attachments 0',
-            title: 'Refresh attachments (manual)',
-            weight: 120,
-            onClick: () => runOneRefresh(true)
-        });
-        try { window.__HUB = hub; dlog('ensureHubButton: hub.list()', hub.list?.()); } catch { }
-        dlog('ensureHubButton: registered');
-    }
-
     async function setBadgeCount(n) {
         const count = Number(n ?? 0);
-        const hub = await getHub({ mount: "nav" });
+        const hub = await lt.core.qt.getHub({ mount: "nav" });
         if (!hub?.registerButton) return;
 
         // If hub supports updateButton, use it; otherwise minimal churn
@@ -330,7 +169,20 @@
 
     let refreshInFlight = false;
     async function runOneRefresh(manual = false) {
-        await ensureHubButton(); // guarantees the button is present
+        await lt.core.qt.ensureHubButton({
+            id: HUB_BTN_ID,
+            label: 'Attachments 0',
+            title: 'Refresh attachments (manual)',
+            side: 'left',
+            weight: 120,
+            onClick: () => runOneRefresh(true),
+            showWhen: (ctx) =>
+                (typeof FORCE_SHOW_BTN !== 'undefined' && FORCE_SHOW_BTN) ||
+                CFG.SHOW_ON_PAGES_RE.test(ctx.pageName) ||
+                ctx.isOnPartSummary,
+            mount: 'nav'
+        });
+
         if (refreshInFlight) return;
         refreshInFlight = true;
         const t = lt.core.hub.beginTask("Fetching Attachments…", "info");
@@ -338,7 +190,9 @@
 
         try {
             await ensureWizardVM();
-            const qk = getQuoteKeyDeterministic();
+            const ctx = lt?.core?.qt?.getQuoteContext?.();
+            const qk = Number(ctx?.quoteKey);
+
             if (!qk || !Number.isFinite(qk) || qk <= 0) {
                 setBadgeCount(0);
                 t.error(`⚠️ Quote Key not found`, 4000);
@@ -354,12 +208,15 @@
                 } catch { }
             }
 
-            // Promote & clear draft BEFORE per-quote updates
-            await mergeDraftIntoQuoteOnce(qk);
+            // Promote only if a real draft exists; otherwise skip fast
+            await promoteDraftIfPresentOnce(qk);
 
-            // If DC isn't ready yet, resolve the task so the pill doesn’t spin forever
+            // After promotion, (re)ensure the per-quote repo with bounded retries
+            await ensureRepoReady(qk, 6, 250);
+
             if (!quoteRepo) {
-                t.error('Data context not ready yet', 2000);
+                // No endless spinner; fail fast, user can click again or it will work next fire
+                t.error('Data context warming — try again in a moment', 2500);
                 return;
             }
 
@@ -394,97 +251,54 @@
         }
     }
 
+    // Listen for modal-close refresh requests from QT20
+    let __qt35_autoRefreshTimer = null;
+    function onAttachmentRefreshRequested(ev) {
+        try {
+            // Only refresh on Part Summary
+            const ctx = lt?.core?.qt?.getQuoteContext?.();
+            const onPartSummary = !!(ctx && (ctx.isOnPartSummary || CFG.SHOW_ON_PAGES_RE.test(ctx.pageName || '')));
+            if (!onPartSummary) return;
+
+            // Debounce rapid duplicate fires
+            clearTimeout(__qt35_autoRefreshTimer);
+            __qt35_autoRefreshTimer = setTimeout(() => { runOneRefresh(false); }, 350);
+        } catch { /* no-op */ }
+    }
 
     // ===== SPA wiring =====
+
     let booted = false; let offUrl = null;
     function wireNav(handler) { offUrl?.(); offUrl = window.TMUtils?.onUrlChange?.(handler); }
 
     async function init() {
         if (booted) return;
         booted = true;
-        await raf();
 
-        try { await getHub({ mount: "nav" }); } catch { }
-        await ensureHubButton();
-        try { await getHub(); } catch { }
+        // Auto-refresh when QT20’s modal closes
+        try { window.addEventListener('LT:AttachmentRefreshRequested', onAttachmentRefreshRequested, false); } catch { }
 
-        startWizardPageObserver();
-        await reconcileHubButtonVisibility();
-
-        const show = isOnTargetWizardPage();
-
-        if (show) {
-            await ensureWizardVM();
-
-            const qk = getQuoteKeyDeterministic();
-            schedulePromoteDraftToQuote(qk);
-
-            if (qk && Number.isFinite(qk) && qk > 0) {
-                quoteRepo = await ensureRepoForQuote(qk);
-                await mergeDraftIntoQuoteOnce(qk);
-                await runOneRefresh(false);
-                try { await hydratePartSummaryOnce(qk); } catch (e) { console.error('QT35 hydrate failed', e); }
-            } else {
-                // Ensure the hub button exists with zero when we can’t detect a quote yet
-                setBadgeCount(0);
-            }
-        } else {
-            // Not on a target page
-            if (FORCE_SHOW_BTN) {
-                await ensureHubButton();
-                setBadgeCount(0);
-            } else {
-                setBadgeCount(0);
-                try {
-                    const hub = await getHub();
-                    hub?.remove?.(HUB_BTN_ID);
-                } catch { /* noop */ }
-            }
-        }
-
-        dlog('initialized');
+        await lt.core.qt.ensureHubButton({
+            id: 'qt35-attachments-btn',
+            label: 'Attachments 0',
+            title: 'Refresh attachments (manual)',
+            side: 'left',
+            weight: 120,
+            onClick: () => runOneRefresh(true),
+            showWhen: (ctx) => (typeof FORCE_SHOW_BTN !== 'undefined' && FORCE_SHOW_BTN) || CFG.SHOW_ON_PAGES_RE.test(ctx.pageName) || ctx.isOnPartSummary,
+            mount: 'nav'
+        });
     }
     function teardown() {
         booted = false;
         offUrl?.();
         offUrl = null;
-        stopWizardPageObserver();
         stopPromote(); // ensure background timer is cleared
+        try { window.removeEventListener('LT:AttachmentRefreshRequested', onAttachmentRefreshRequested, false); } catch { }
+        // Hub visibility is handled centrally via ensureHubButton()
     }
 
     init();
 
-    let pageObserver = null;
-
-    function startWizardPageObserver() {
-        const root = document.querySelector('.plex-wizard-page-list');
-        if (!root) return;
-        pageObserver = new MutationObserver((mut) => {
-            if (mut.some(m => m.type === 'attributes' || m.type === 'childList')) {
-                reconcileHubButtonVisibility();
-            }
-        });
-        pageObserver.observe(root, { subtree: true, attributes: true, attributeFilter: ['class'], childList: true });
-        window.addEventListener('hashchange', reconcileHubButtonVisibility);
-    }
-
-    async function reconcileHubButtonVisibility() {
-        const pageName = getActiveWizardPageName();
-        dlog('reconcileHubButtonVisibility:', { pageName });
-        if (FORCE_SHOW_BTN || isOnTargetWizardPage()) {
-            await ensureHubButton();
-        } else {
-            const hub = await getHub();
-            dlog('reconcileHubButtonVisibility: removing button (off target page)');
-            hub?.remove?.(HUB_BTN_ID);
-        }
-    }
-    function stopWizardPageObserver() {
-        try { window.removeEventListener('hashchange', reconcileHubButtonVisibility); } catch { }
-        try { pageObserver?.disconnect(); } catch { }
-        pageObserver = null;
-    }
-
     wireNav(() => { if (ROUTES.some(rx => rx.test(location.pathname))) init(); else teardown(); });
-
 })();

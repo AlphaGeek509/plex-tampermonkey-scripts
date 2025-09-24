@@ -14,17 +14,17 @@
     "bump:major": "node ../build-plus.js --major"
   },
   "tmVersions": {
-    "QT10": "3.8.11",
-    "QT20": "3.8.11",
-    "QT30": "3.8.11",
-    "QT35": "3.8.11",
-    "QT50": "3.8.11",
-    "LT_CORE": "3.8.11",
-    "LT_DATA_CORE": "3.8.11",
-    "LT_UI_HUB": "3.8.11",
-    "LT_PLEX_AUTH": "3.8.11",
-    "LT_PLEX_TM_UTILS": "3.8.11",
-    "ALL": "3.8.11"
+    "QT10": "3.8.70",
+    "QT20": "3.8.70",
+    "QT30": "3.8.70",
+    "QT35": "3.8.70",
+    "QT50": "3.8.70",
+    "LT_CORE": "3.8.70",
+    "LT_DATA_CORE": "3.8.70",
+    "LT_UI_HUB": "3.8.70",
+    "LT_PLEX_AUTH": "3.8.70",
+    "LT_PLEX_TM_UTILS": "3.8.70",
+    "ALL": "3.8.70"
   },
   "tmFiles": {
     "QT10": [
@@ -44,7 +44,7 @@
       "../wwwroot/qt35.user.js"
     ],
     "QT50": [
-      "src/quote-tracking/validation/qtv.entry.js",
+      "src/quote-tracking/qt50-validation/qtv.entry.js",
       "../wwwroot/qt50.user.js"
     ],
     "LT_CORE": [
