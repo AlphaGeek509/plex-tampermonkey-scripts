@@ -15,12 +15,6 @@
         return (typeof impl === 'function') ? impl(fn) : fn();
     };
 
-
-    // Flat repo factory (no polling required now that lt-data-core installs at doc-start)
-    const QTF = lt.core?.data?.makeFlatScopedRepo
-        ? lt.core.data.makeFlatScopedRepo({ ns: "QT", entity: "quote", legacyEntity: "QuoteHeader" })
-        : null;
-
     (async () => {
         // ensureLTDock is provided by @require’d lt-ui-dock.js
         const dock = await window.ensureLTDock?.();
@@ -40,10 +34,6 @@
     const FORCE_SHOW_BTN = false; // set to true during testing
     if (!ROUTES.some(rx => rx.test(location.pathname))) return;
 
-    // Mount hub into the NAV bar like QT10
-    // NOTE: Do not await at top-level. init() performs the awaited mount.
-    ROOT.__LT_HUB_MOUNT = "nav";
-
     const KO = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : window.ko);
     const raf = () => new Promise(r => requestAnimationFrame(r));
 
@@ -59,46 +49,27 @@
         TIMEOUT_MS: 12000
     };
 
-    function getTabScopeId(ns = 'QT') {
-        try {
-            const k = `lt:${ns}:scopeId`;
-            let v = sessionStorage.getItem(k);
-            if (!v) {
-                v = String(Math.floor(Math.random() * 2147483647));
-                sessionStorage.setItem(k, v);
-            }
-            return Number(v);
-        } catch {
-            return Math.floor(Math.random() * 2147483647);
-        }
-    }
-
     async function ensureWizardVM() {
         const anchor = document.querySelector(CFG.GRID_SEL) ? CFG.GRID_SEL : CFG.ACTION_BAR_SEL;
         const { viewModel } = await (window.TMUtils?.waitForModelAsync(anchor, { pollMs: CFG.POLL_MS, timeoutMs: CFG.TIMEOUT_MS, requireKo: true }) ?? { viewModel: null });
         return viewModel;
     }
 
-    const QT_CTX = lt?.core?.qt?.getQuoteContext();
-
     let quoteRepo = null, lastScope = null;
     let __QT__ = null;
 
     async function ensureRepoForQuote(quoteKey) {
-        if (!QTF) return null;
-        const { repo } = QTF.use(Number(quoteKey));
-        quoteRepo = repo;                 // <-- bind the module-level handle
-        lastScope = Number(quoteKey);     // <-- track scope we’re bound to
-        await repo.ensureFromLegacyIfMissing?.();
-        return repo;
+        try {
+            const { repo } = await lt?.core?.qt?.useQuoteRepo?.(Number(quoteKey));
+            quoteRepo = repo;
+            lastScope = Number(quoteKey);
+            return repo;
+        } catch {
+            return null;
+        }
     }
 
     // Background promotion (per-tab draft -> per-quote) with gentle retries
-    const __PROMOTE = { timer: null, tries: 0, max: 120, intervalMs: 250 };
-    function schedulePromoteDraftToQuote(qk) {
-        return lt?.core?.qt?.promoteDraftToQuote({ qk: Number(qk), strategy: 'retry' });
-    }
-
     function stopPromote() {
         return lt?.core?.qt?.stopRetry?.();
     }
@@ -125,21 +96,6 @@
             Customer_No: row?.Customer_No ?? null,
             Quote_No: row?.Quote_No ?? null
         };
-    }
-    async function hydratePartSummaryOnce(qk) {
-        await ensureRepoForQuote(qk);
-        if (!quoteRepo) return;
-        const headerSnap = (await quoteRepo.getHeader()) || {};
-        if (headerSnap.Quote_Header_Fetched_At) return;
-
-        const plex = (typeof getPlexFacade === "function" ? await getPlexFacade() : ROOT.lt?.core?.plex);
-        if (!plex?.dsRows) return;
-        const rows = await withFreshAuth(() => plex.dsRows(CFG.DS_QUOTE_HEADER_GET, { Quote_Key: String(qk) }));
-
-        const first = (Array.isArray(rows) && rows.length) ? quoteHeaderGet(rows[0]) : null;
-        if (!first) return;
-
-        await quoteRepo.patchHeader({ Quote_Key: qk, ...first, Quote_Header_Fetched_At: Date.now() });
     }
 
     // ===== Hub button =====
@@ -203,7 +159,9 @@
 
         try {
             await ensureWizardVM();
-            const qk = (QT_CTX?.quoteKey);
+            const ctx = lt?.core?.qt?.getQuoteContext?.();
+            const qk = Number(ctx?.quoteKey);
+
             if (!qk || !Number.isFinite(qk) || qk <= 0) {
                 setBadgeCount(0);
                 t.error(`⚠️ Quote Key not found`, 4000);

@@ -28,14 +28,13 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
     const CFG = {
         ACTIONS_UL_SEL: '.plex-dialog-has-buttons .plex-actions-wrapper ul.plex-actions',
         MODAL_TITLE: 'Quote Part Detail',
-        NOTE_SEL: 'textarea[name="NoteNew"]',
+        // Primary KO anchor is the form container; fallbacks retained for older layouts
+        ANCHOR_SEL: '.plex-form-content, .plex-dialog-content, [data-bind], input[name="PartNo"], input[name="PartNoNew"], input[name="ItemNo"], input[name="Part_Number"], input[name="Item_Number"]',
         DS_STOCK: 172,
         ACTION_BAR_SEL: '#QuoteWizardSharedActionBar',
         GRID_SEL: '.plex-grid',
         POLL_MS: 200,
-        TIMEOUT_MS: 12000,
-        SETTINGS_KEY: 'qt20_settings_v2',
-        DEFAULTS: { includeBreakdown: true, includeTimestamp: true }
+        TIMEOUT_MS: 12000
     };
 
     // ===== KO/Wizard helpers
@@ -52,28 +51,28 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
         return rootEl && (KO?.dataFor?.(rootEl) || null);
     }
 
-    // Use centralized quote context
-    const QT_CTX = lt?.core?.qt?.getQuoteContext();
+    function getModalVM(modalEl) {
+        try {
+            const pick = sel => modalEl?.querySelector(sel);
+            const anchor =
+                pick('.plex-form-content') ||
+                pick('.plex-dialog-content') ||
+                pick('[data-bind]') ||
+                modalEl;
+
+            const ctx = KO?.contextFor?.(anchor) || KO?.contextFor?.(modalEl) || null;
+            const vm = ctx?.$data || ctx?.$root?.data || null;
+
+            // Some dialogs wrap the actual record on vm.data or vm.model
+            return (vm && (vm.data || vm.model)) ? (vm.data || vm.model) : vm;
+        } catch { return null; }
+    }
 
     // ===== Auth wrapper (prefers lt.core.auth.withFreshAuth; falls back to plain run)
     const withFreshAuth = (fn) => {
         const impl = lt?.core?.auth?.withFreshAuth;
         return (typeof impl === 'function') ? impl(fn) : fn();
     };
-
-
-    // ===== Settings (GM)
-    function loadSettings() {
-        try {
-            const raw = GM_getValue(CFG.SETTINGS_KEY, null);
-            if (!raw) return { ...CFG.DEFAULTS };
-            const obj = (typeof raw === 'string') ? JSON.parse(raw) : raw;
-            return { ...CFG.DEFAULTS, ...obj };
-        } catch { return { ...CFG.DEFAULTS }; }
-    }
-    function saveSettings(next) {
-        try { GM_setValue(CFG.SETTINGS_KEY, JSON.stringify(next)); } catch { }
-    }
 
     // ===== Stock helpers
     function splitBaseAndPack(partNo) {
@@ -116,24 +115,23 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
     async function handleClick(modalEl) {
         const task = lt.core.hub.beginTask('Fetching stock…', 'info');
         try {
-            await ensureWizardVM();
+            const rootVM = await ensureWizardVM();
 
-            // Resolve Quote Key (used for logging only now)
-            const qk = (QT_CTX?.quoteKey);
-            if (!qk || !Number.isFinite(qk) || qk <= 0) throw new Error('Quote Key not found');
+            // Resolve Quote Key …
+            let qk = Number(lt?.core?.qt?.getQuoteContext?.()?.quoteKey || 0);
+            if (!Number.isFinite(qk) || qk <= 0) {
+                const m = /[?&]QuoteKey=(\d+)/i.exec(location.search);
+                qk = m ? Number(m[1]) : 0;
+            }
+            if (!Number.isFinite(qk) || qk <= 0) throw new Error('Quote Key not found');
 
-            // Resolve KO Note field within the same modal
-            const ta = modalEl.querySelector(CFG.NOTE_SEL) || document.querySelector(CFG.NOTE_SEL);
-            if (!ta) throw new Error('NoteNew textarea not found');
+            // Prefer the modal VM anchored at .plex-form-content
+            const vmModal = getModalVM(modalEl);
+            const partNo = readPartFromAny(modalEl, vmModal ?? rootVM);
 
-            const ctxKO = KO?.contextFor?.(ta);
-            const vm = ctxKO?.$root?.data;
-            if (!vm) throw new Error('Knockout context not found');
-
-            // Read part and normalize to base
-            const partNo = readPartFromVM(vm);
             if (!partNo) throw new Error('PartNo not available');
             const basePart = toBasePart(partNo);
+
 
             // DS call with 419 retry
             const plex = (typeof getPlexFacade === 'function') ? await getPlexFacade() : window.lt?.core?.plex ?? window.TMUtils;
@@ -141,33 +139,35 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
                 plex.dsRows(CFG.DS_STOCK, { Part_No: basePart, Shippable: 'TRUE', Container_Status: 'OK' })
             );
 
-            const { sum, breakdown } = summarizeStockNormalized(rows || [], basePart);
+            const { sum } = summarizeStockNormalized(rows || [], basePart);
 
-            const S = loadSettings();
             const parts = [`STK: ${formatInt(sum)} pcs`];
-            if (S.includeBreakdown && breakdown.length) {
-                const bk = breakdown.map(({ loc, qty }) => `${loc} ${formatInt(qty)}`).join(', ');
-                parts.push(`(${bk})`);
-            }
-            if (S.includeTimestamp) parts.push(`@${formatTimestamp(new Date())}`);
-            const stamp = parts.join(' ');
 
             // Append to NoteNew (clean previous stamp if present)
-            const current = window.TMUtils?.getObsValue?.(vm, 'NoteNew', { trim: true }) || '';
+            const current = window.TMUtils?.getObsValue?.(vmModal, 'NoteNew', { trim: true }) || '';
             const baseNote = (/^(null|undefined)$/i.test(current) ? '' : current);
+            // 2) remove any prior stamp variants (old STK w/ breakdown/timestamp OR prior "Stock: N pcs")
             const cleaned = baseNote.replace(
-                /(?:^|\s)STK:\s*\d[\d,]*(?:\s*pcs)?(?:\s*\([^()]*\))?(?:\s*@\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})?/gi,
+                /(?:^|\s)(?:STK:\s*\d[\d,]*(?:\s*pcs)?(?:\s*\([^()]*\))?(?:\s*@\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})?|Stock:\s*\d[\d,]*\s*pcs)\s*/gi,
                 ''
             ).trim();
-            const newNote = cleaned ? `${cleaned} ${stamp}` : stamp;
-            const setOk = window.TMUtils?.setObsValue?.(vm, 'NoteNew', newNote);
-            if (!setOk && ta) { ta.value = newNote; ta.dispatchEvent(new Event('input', { bubbles: true })); }
 
-            task.success('Stock updated', 1500);
-            lt.core.hub.notify('Stock results copied to Note', 'success', { ms: 2500, toast: true });
+            // 3) build minimal stamp and append
+            const stamp = `Stock: ${formatInt(sum)} pcs`;
+            const nextNote = cleaned ? `${cleaned} ${stamp}` : stamp;
 
-            dlog('QT20 success', { qk, partNo, basePart, sum, breakdown });
+            // 4) write back via KO; fallback to direct textarea
+            let setOk = window.TMUtils?.setObsValue?.(vmModal, 'NoteNew', nextNote);
+            if (!setOk) {
+                const ta = modalEl?.querySelector('textarea[name="NoteNew"]');
+                if (ta) { ta.value = nextNote; ta.dispatchEvent(new Event('input', { bubbles: true })); setOk = true; }
+            }
 
+            // No breakdown, no stamp — just a simple toast
+            task.success('Stock retrieved', 1200);
+            lt.core.hub.notify(`Stock: ${formatInt(sum)} pcs`, 'success', { ms: 2500, toast: true });
+
+            dlog('QT20 success', { qk, partNo, basePart, sum });
         } catch (err) {
             task.error('Failed');
             lt.core.hub.notify(`Stock check failed: ${err?.message || err}`, 'error', { ms: 4000, toast: true });
@@ -178,14 +178,37 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
         }
     }
 
-    function readPartFromVM(vm) {
-        const keys = ['PartNo', 'ItemNo', 'Part_Number', 'Item_Number', 'Part', 'Item'];
-        for (const k of keys) {
-            const v = window.TMUtils?.getObsValue?.(vm, k, { first: true, trim: true });
-            if (v) return v;
+    // Prefer KO via TMUtils.getObsValue; works with VM or DOM node (resolves KO context).
+    function readPartFromAny(modalEl, vmCandidate) {
+        const paths = [
+            // direct
+            'PartNo', 'ItemNo', 'Part_Number', 'Item_Number', 'Part', 'Item',
+            'PartNoNew', 'PartNoOld',
+            // nested common
+            'QuotePart.PartNo', 'QuotePart.Part_Number',
+            'SelectedRow.PartNo', 'Row.PartNo', 'Model.PartNo',
+            // when vm is wrapper objects
+            'data.PartNo', 'data.ItemNo', 'model.PartNo', 'model.ItemNo'
+        ];
+        const TMU = window.TMUtils;
+
+        // 1) modal VM preferred
+        if (vmCandidate) {
+            const vVM = TMU?.getObsValue?.(vmCandidate, paths, { first: true, trim: true, allowPlex: true });
+            if (vVM) return vVM;
         }
+        // 2) modal element KO context
+        const vModal = TMU?.getObsValue?.(modalEl, paths, { first: true, trim: true, allowPlex: true });
+        if (vModal) return vModal;
+        // 3) DOM inputs (last resort)
+        try {
+            const el = modalEl?.querySelector('input[name="PartNo"],input[name="Part_Number"],input[name="ItemNo"],input[name="Item_Number"]');
+            const raw = (el?.value ?? '').trim();
+            if (raw) return raw;
+        } catch { }
         return '';
     }
+
 
     // ===== Modal wiring (idempotent per modal)
     function onNodeRemoved(node, cb) {
@@ -203,7 +226,8 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
         try {
             const modal = ul.closest('.plex-dialog');
             const title = modal?.querySelector('.plex-dialog-title')?.textContent?.trim();
-            const looksRight = title === CFG.MODAL_TITLE || modal?.querySelector(CFG.NOTE_SEL);
+            // options removed: match by title only
+            const looksRight = title === CFG.MODAL_TITLE;
             if (!looksRight) return;
 
             if (ul.dataset.qt20Injected) return;
@@ -215,7 +239,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             const btn = document.createElement('a');
             btn.href = 'javascript:void(0)';
             btn.textContent = 'LT Get Stock Levels';
-            btn.title = 'Append normalized stock summary to Note';
+            btn.title = 'Show total stock (no stamp)';
             btn.setAttribute('aria-label', 'Get stock levels');
             btn.setAttribute('role', 'button');
             Object.assign(btn.style, { cursor: 'pointer', transition: 'filter .15s, text-decoration-color .15s' });
@@ -229,64 +253,6 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             });
             liMain.appendChild(btn);
             ul.appendChild(liMain);
-
-            // Settings gear
-            const liGear = document.createElement('li');
-            const gear = document.createElement('a');
-            gear.href = 'javascript:void(0)';
-            gear.textContent = '⚙️';
-            gear.title = 'QT20 Settings (breakdown / timestamp)';
-            gear.setAttribute('aria-label', 'QT20 Settings');
-            Object.assign(gear.style, { marginLeft: '8px', fontSize: '16px', lineHeight: '1', cursor: 'pointer', transition: 'transform .15s, filter .15s' });
-
-            const panel = document.createElement('div');
-            panel.className = 'qt20-settings';
-            Object.assign(panel.style, {
-                position: 'absolute', top: '40px', right: '16px',
-                minWidth: '220px', padding: '10px 12px',
-                border: '1px solid #ccc', borderRadius: '8px',
-                background: '#fff', boxShadow: '0 6px 20px rgba(0,0,0,0.15)',
-                zIndex: '9999', display: 'none'
-            });
-
-            const S0 = loadSettings();
-            panel.innerHTML = `
-        <div style="font-weight:600; margin-bottom:8px;">QT20 Settings</div>
-        <label style="display:flex; gap:8px; align-items:center; margin:6px 0;">
-          <input type="checkbox" id="qt20-breakdown" ${S0.includeBreakdown ? 'checked' : ''}>
-          <span>Include breakdown</span>
-        </label>
-        <label style="display:flex; gap:8px; align-items:center; margin:6px 0;">
-          <input type="checkbox" id="qt20-timestamp" ${S0.includeTimestamp ? 'checked' : ''}>
-          <span>Include timestamp</span>
-        </label>
-        <div style="margin-top:10px; display:flex; gap:8px; justify-content:flex-end;">
-          <button type="button" id="qt20-close" style="padding:4px 8px;">Close</button>
-        </div>
-      `;
-
-            function openPanel() { panel.style.display = 'block'; document.addEventListener('mousedown', outsideClose, true); document.addEventListener('keydown', escClose, true); }
-            function closePanel() { panel.style.display = 'none'; document.removeEventListener('mousedown', outsideClose, true); document.removeEventListener('keydown', escClose, true); }
-            function outsideClose(e) { if (!panel.contains(e.target) && e.target !== gear) closePanel(); }
-            function escClose(e) { if (e.key === 'Escape') closePanel(); }
-
-            gear.addEventListener('click', (e) => { e.preventDefault(); panel.style.display === 'none' ? openPanel() : closePanel(); });
-            gear.addEventListener('mouseenter', () => { gear.style.filter = 'brightness(1.08)'; gear.style.transform = 'rotate(15deg)'; });
-            gear.addEventListener('mouseleave', () => { gear.style.filter = ''; gear.style.transform = ''; });
-            gear.addEventListener('focus', () => { gear.style.outline = '2px solid #4a90e2'; gear.style.outlineOffset = '2px'; });
-            gear.addEventListener('blur', () => { gear.style.outline = ''; gear.style.outlineOffset = ''; });
-
-            panel.querySelector('#qt20-close')?.addEventListener('click', closePanel);
-            panel.querySelector('#qt20-breakdown')?.addEventListener('change', (ev) => {
-                const cur = loadSettings(); saveSettings({ ...cur, includeBreakdown: !!ev.target.checked });
-            });
-            panel.querySelector('#qt20-timestamp')?.addEventListener('change', (ev) => {
-                const cur = loadSettings(); saveSettings({ ...cur, includeTimestamp: !!ev.target.checked });
-            });
-
-            liGear.appendChild(gear);
-            ul.appendChild(liGear);
-            (modal.querySelector('.plex-dialog-content') || modal).appendChild(panel);
 
             // Let other modules refresh if they care (no-op here)
             onNodeRemoved(modal, () => {
