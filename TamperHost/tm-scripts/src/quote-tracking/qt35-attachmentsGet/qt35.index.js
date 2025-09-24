@@ -60,7 +60,7 @@
 
     async function ensureRepoForQuote(quoteKey) {
         try {
-            const { repo } = await lt?.core?.qt?.useQuoteRepo?.(Number(quoteKey));
+            const repo = await lt?.core?.qt?.useQuoteRepo?.(Number(quoteKey));
             quoteRepo = repo;
             lastScope = Number(quoteKey);
             return repo;
@@ -69,14 +69,45 @@
         }
     }
 
+    // --- BOUNDED CONTEXT WARM-UP (no infinite polling) ---
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    async function ensureRepoReady(qk, attempts = 6, delayMs = 250) {
+        // Try a few short times to allow DC/Repo to come up after modal close/promote
+        for (let i = 0; i < attempts; i++) {
+            await ensureRepoForQuote(qk);
+            if (quoteRepo) return quoteRepo;
+            await sleep(delayMs);
+        }
+        return null;
+    }
+
+
     // Background promotion (per-tab draft -> per-quote) with gentle retries
     function stopPromote() {
         return lt?.core?.qt?.stopRetry?.();
     }
 
-    async function mergeDraftIntoQuoteOnce(qk) {
-        return lt?.core?.qt?.promoteDraftToQuote({ qk: Number(qk), strategy: 'once' });
+    // Promote the tab-scope draft into the per-quote repo only if a real draft exists.
+    // Also guard so we don't even attempt more than once per quote in this tab.
+    function __guardKeyForPromote(qk) { return `qt35:promoted:${Number(qk) || 0}`; }
+
+    async function promoteDraftIfPresentOnce(qk) {
+        const key = __guardKeyForPromote(qk);
+        try { if (sessionStorage.getItem(key) === '1') return 'guarded'; } catch { /* ignore */ }
+
+        // Only call into core if a draft actually exists
+        const draftRepo = await lt?.core?.qt?.useDraftRepo?.();
+        const draft = draftRepo && ((await draftRepo.getHeader?.()) || (await draftRepo.get?.()));
+        const hasDraft = !!(draft && Object.keys(draft).length);
+        if (!hasDraft) return 'no-draft';
+
+        const res = await lt?.core?.qt?.promoteDraftToQuote?.({ qk: Number(qk), strategy: 'once' }) || 'noop';
+
+        // Core clears the draft on 'merged'; either way, we avoid re-attempts for this tab/quote
+        try { sessionStorage.setItem(key, '1'); } catch { /* ignore */ }
+        return res;
     }
+
 
     // ===== Data sources =====
     async function fetchAttachmentCount(quoteKey) {
@@ -177,12 +208,15 @@
                 } catch { }
             }
 
-            // Promote & clear draft BEFORE per-quote updates
-            await mergeDraftIntoQuoteOnce(qk);
+            // Promote only if a real draft exists; otherwise skip fast
+            await promoteDraftIfPresentOnce(qk);
 
-            // If DC isn't ready yet, resolve the task so the pill doesn’t spin forever
+            // After promotion, (re)ensure the per-quote repo with bounded retries
+            await ensureRepoReady(qk, 6, 250);
+
             if (!quoteRepo) {
-                t.error('Data context not ready yet', 2000);
+                // No endless spinner; fail fast, user can click again or it will work next fire
+                t.error('Data context warming — try again in a moment', 2500);
                 return;
             }
 
@@ -228,7 +262,7 @@
 
             // Debounce rapid duplicate fires
             clearTimeout(__qt35_autoRefreshTimer);
-            __qt35_autoRefreshTimer = setTimeout(() => { runOneRefresh(false); }, 200);
+            __qt35_autoRefreshTimer = setTimeout(() => { runOneRefresh(false); }, 350);
         } catch { /* no-op */ }
     }
 
