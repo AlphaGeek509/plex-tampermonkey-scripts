@@ -1,17 +1,17 @@
 // ==UserScript==
 // @name        QT20_DEV
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     3.8.127
+// @version     3.8.130
 // @description DEV-only build; includes user-start gate
 // @match       https://lyntron.on.plex.com/SalesAndCRM/QuoteWizard*
 // @match       https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*
-// @require      http://localhost:5000/lt-plex-tm-utils.user.js?v=3.8.127-1758913575298
-// @require      http://localhost:5000/lt-plex-auth.user.js?v=3.8.127-1758913575298
-// @require      http://localhost:5000/lt-ui-hub.js?v=3.8.127-1758913575298
-// @require      http://localhost:5000/lt-data-core.user.js?v=3.8.127-1758913575298
-// @require      http://localhost:5000/lt-core.user.js?v=3.8.127-1758913575298
+// @require      http://localhost:5000/lt-plex-tm-utils.user.js?v=3.8.130-1758921588174
+// @require      http://localhost:5000/lt-plex-auth.user.js?v=3.8.130-1758921588174
+// @require      http://localhost:5000/lt-ui-hub.js?v=3.8.130-1758921588174
+// @require      http://localhost:5000/lt-data-core.user.js?v=3.8.130-1758921588174
+// @require      http://localhost:5000/lt-core.user.js?v=3.8.130-1758921588174
 // @resource     THEME_CSS http://localhost:5000/theme.css
 // @grant       GM_registerMenuCommand
 // @grant       GM_getValue

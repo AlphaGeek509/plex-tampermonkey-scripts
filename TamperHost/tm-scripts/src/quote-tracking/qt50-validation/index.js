@@ -23,6 +23,7 @@ export const KEYS = {
     autoManageLtPartNoOnQuote: 'qt50.autoManageLtPartNoOnQuote',
     minUnitPrice: 'qt50.minUnitPrice',
     maxUnitPrice: 'qt50.maxUnitPrice',
+    leadtimeZeroWeeks: 'qt50.leadtimeZeroWeeks',
 };
 
 const LEGACY_KEYS = {
@@ -30,6 +31,7 @@ const LEGACY_KEYS = {
     autoManageLtPartNoOnQuote: 'qtv.autoManageLtPartNoOnQuote',
     minUnitPrice: 'qtv.minUnitPrice',
     maxUnitPrice: 'qtv.maxUnitPrice',
+    leadtimeZeroWeeks: 'qt50.leadtimeZeroWeeks',
 };
 
 const DEF = {
@@ -37,7 +39,9 @@ const DEF = {
     [KEYS.autoManageLtPartNoOnQuote]: true,
     [KEYS.minUnitPrice]: 0,
     [KEYS.maxUnitPrice]: 10,
+    [KEYS.leadtimeZeroWeeks]: true,
 };
+
 function readOrLegacy(k) {
     const v = GM_getValue(k);
     if (v !== undefined) return v;
@@ -53,15 +57,16 @@ const getVal = k => {
 };
 const setVal = (k, v) => { GM_setValue(k, v); emitChanged(); };
 
-
 export function getSettings() {
     return {
         enabled: getVal(KEYS.enabled),
         autoManageLtPartNoOnQuote: getVal(KEYS.autoManageLtPartNoOnQuote),
         minUnitPrice: getVal(KEYS.minUnitPrice),
-        maxUnitPrice: getVal(KEYS.maxUnitPrice)
+        maxUnitPrice: getVal(KEYS.maxUnitPrice),
+        leadtimeZeroWeeks: getVal(KEYS.leadtimeZeroWeeks),
     };
 }
+
 export function onSettingsChange(fn) {
     if (typeof fn !== 'function') return () => { };
     const h = () => fn(getSettings());
@@ -164,6 +169,11 @@ function showPanel() {
       Auto-manage omitted Lyn-Tron Part No.
     </label>
 
+    <label style="display:block; margin:8px 0;">
+      <input type="checkbox" id="qtv-leadtimeZeroWeeks">
+      Alert when Leadtime is 0 weeks
+    </label>
+
     <div style="display:flex; gap:10px; margin:8px 0;">
       <label style="flex:1;">Min Unit Price
         <input type="number" step="0.01" id="qtv-min" placeholder="(none)"
@@ -189,13 +199,16 @@ function showPanel() {
     // Initialize control states
     panel.querySelector('#qtv-enabled').checked = getVal(KEYS.enabled);
     panel.querySelector('#qtv-autoManageLtPartNoOnQuote').checked = getVal(KEYS.autoManageLtPartNoOnQuote);
+    panel.querySelector('#qtv-leadtimeZeroWeeks').checked = getVal(KEYS.leadtimeZeroWeeks);
     setNumberOrBlank(panel.querySelector('#qtv-min'), getVal(KEYS.minUnitPrice));
     setNumberOrBlank(panel.querySelector('#qtv-max'), getVal(KEYS.maxUnitPrice));
 
     // Change handlers
     panel.querySelector('#qtv-enabled')?.addEventListener('change', e => setVal(KEYS.enabled, !!e.target.checked));
     panel.querySelector('#qtv-autoManageLtPartNoOnQuote')?.addEventListener('change', e => setVal(KEYS.autoManageLtPartNoOnQuote, !!e.target.checked));
-
+    panel.querySelector('#qtv-leadtimeZeroWeeks')?.addEventListener('change', e =>
+        setVal(KEYS.leadtimeZeroWeeks, !!e.target.checked)
+    );
     panel.querySelector('#qtv-min')?.addEventListener('change', e => {
         const v = parseNumberOrNull(e.target.value); setVal(KEYS.minUnitPrice, v); setNumberOrBlank(e.target, v);
     });
