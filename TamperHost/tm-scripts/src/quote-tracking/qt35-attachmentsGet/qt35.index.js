@@ -138,8 +138,9 @@
         if (!hub?.registerButton) return;
 
         // If hub supports updateButton, use it; otherwise minimal churn
+        const label = `Attachments (${count})`;
         if (typeof hub.updateButton === 'function') {
-            hub.updateButton(HUB_BTN_ID, { label: `Attachments ${count}` });
+            hub.updateButton(HUB_BTN_ID, { label });
             return;
         }
 
@@ -149,7 +150,7 @@
         if (!already) {
             hub.registerButton('left', {
                 id: HUB_BTN_ID,
-                label: `Attachments ${count}`,
+                label,
                 title: 'Refresh attachments (manual)',
                 weight: 120,
                 onClick: () => runOneRefresh(true)
@@ -171,7 +172,7 @@
     async function runOneRefresh(manual = false) {
         await lt.core.qt.ensureHubButton({
             id: HUB_BTN_ID,
-            label: 'Attachments 0',
+            label: 'Attachments (0)',
             title: 'Refresh attachments (manual)',
             side: 'left',
             weight: 120,
@@ -226,12 +227,12 @@
 
             // Always resolve the task
             const ok = count > 0;
-            t.success(ok ? `✅ ${count} attachment(s)` : '⚠️ No attachments', 2000);
+            t.success(ok ? `✅ ${count} attachment(s)` : 'No attachments', 2000);
 
             // Optional toast when user clicked manually
             if (manual) {
                 lt.core.hub.notify(
-                    ok ? `✅ ${count} attachment(s)` : '⚠️ No attachments',
+                    ok ? `✅ ${count} attachment(s)` : 'No attachments',
                     ok ? 'success' : 'warn',
                     { timeout: 2000, toast: true }
                 );
@@ -280,7 +281,7 @@
 
         await lt.core.qt.ensureHubButton({
             id: 'qt35-attachments-btn',
-            label: 'Attachments 0',
+            label: 'Attachments (0)',
             title: 'Refresh attachments (manual)',
             side: 'left',
             weight: 120,

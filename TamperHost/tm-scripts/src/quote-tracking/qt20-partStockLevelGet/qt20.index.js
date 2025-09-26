@@ -237,7 +237,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
 
             // Main action (themed anchor inside LI to match Plex action bar sizing)
             const liMain = document.createElement('li');
-            liMain.className = 'lt-action';
+            liMain.className = 'lt-action lt-action--brand';
             const btn = document.createElement('a');
             btn.href = 'javascript:void(0)';
             btn.id = 'qt20-stock-li-btn';

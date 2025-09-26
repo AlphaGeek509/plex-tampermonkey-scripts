@@ -427,21 +427,44 @@
     font-weight: 900;
 }
 
-/* Plex action bar: make our <li><a.lt-btn> fit like native actions */
-.plex-actions-wrapper ul.plex-actions > li.lt-action > .lt-btn,
-.plex-actions-wrapper ul.plex-actions > li.lt-action > a.lt-btn,
-.plex-actions-wrapper ul.plex-actions > li.lt-action > button.lt-btn {
+/* Brand style for our <li> wrapper so it matches Monroe red */
+/* Make the LI itself carry the Monroe red border with stronger specificity */
+.plex-actions-wrapper ul.plex-actions > li.lt-action.lt-action--brand {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    padding: 6px 10px;
-    line-height: 1.25;
+    border: 1px solid var(--brand-600) !important; /* override Plex blue */
     border-radius: 8px;
-    vertical-align: middle;
-    text-decoration: none;
+    background: transparent;
+    box-shadow: 0 1px 0 rgba(0,0,0,.04);
 }
 
+    /* Hover fills lightly with brand tint */
+    .plex-actions-wrapper ul.plex-actions > li.lt-action.lt-action--brand:hover {
+        background: color-mix(in srgb, var(--brand-600) 12%, transparent);
+    }
+
+    /* Make the inner ghost anchor look seamless inside the red li */
+    /* Neutralize Plex's anchor button styling so the LI border shows red */
+    .plex-actions-wrapper ul.plex-actions > li.lt-action.lt-action--brand > a.lt-btn {
+        border: 1px solid transparent !important; /* kill blue border */
+        background: transparent !important;
+        box-shadow: none !important;
+        color: var(--brand-600) !important;
+        padding: 6px 10px;
+        line-height: 1.25;
+        border-radius: 8px; /* match li radius */
+        text-decoration: none;
+    }
+
+    /* Strong, accessible focus using brand */
+    .plex-actions-wrapper ul.plex-actions > li.lt-action.lt-action--brand:has(> a.lt-btn:focus-visible) {
+        outline: 2px solid color-mix(in srgb, var(--brand-600) 40%, black);
+        outline-offset: 2px;
+    }
+
+/* Spacing between actions (keeps native feel) */
 .plex-actions-wrapper ul.plex-actions > li.lt-action {
     margin-left: 8px;
 }
+
 
