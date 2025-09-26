@@ -49,6 +49,16 @@
         TIMEOUT_MS: 12000
     };
 
+    // --- Active wizard page helpers ---
+    function getActiveWizardPageName() {
+        const li = document.querySelector('.plex-wizard-page-list .plex-wizard-page.active, .plex-wizard-page-list .plex-wizard-page[aria-current="page"]');
+        return (li?.textContent || '').trim().replace(/\s+/g, ' ');
+    }
+    function isOnPartSummary() {
+        return CFG.SHOW_ON_PAGES_RE.test(getActiveWizardPageName());
+    }
+
+
     async function ensureWizardVM() {
         const anchor = document.querySelector(CFG.GRID_SEL) ? CFG.GRID_SEL : CFG.ACTION_BAR_SEL;
         const { viewModel } = await (window.TMUtils?.waitForModelAsync(anchor, { pollMs: CFG.POLL_MS, timeoutMs: CFG.TIMEOUT_MS, requireKo: true }) ?? { viewModel: null });
@@ -160,7 +170,7 @@
             hub.remove?.(HUB_BTN_ID);
             hub.registerButton('left', {
                 id: HUB_BTN_ID,
-                label: `Attachments ${count}`,
+                label: `Attachments (${count})`,
                 title: 'Refresh attachments (manual)',
                 weight: 120,
                 onClick: () => runOneRefresh(true)
@@ -227,12 +237,12 @@
 
             // Always resolve the task
             const ok = count > 0;
-            t.success(ok ? `✅ ${count} attachment(s)` : 'No attachments', 2000);
+            t.success(ok ? `${count} attachment(s)` : 'No attachments', 2000);
 
             // Optional toast when user clicked manually
             if (manual) {
                 lt.core.hub.notify(
-                    ok ? `✅ ${count} attachment(s)` : 'No attachments',
+                    ok ? `${count} attachment(s)` : 'No attachments',
                     ok ? 'success' : 'warn',
                     { timeout: 2000, toast: true }
                 );
@@ -241,9 +251,9 @@
 
         } catch (err) {
             derr('refresh failed', err);
-            t.error(`❌ Attachments refresh failed: ${err?.message || err}`, 4000);
+            t.error(`Attachments refresh failed: ${err?.message || err}`, 4000);
             lt.core.hub.notify(
-                `❌ Attachments refresh failed: ${err?.message || err}`,
+                `Attachments refresh failed: ${err?.message || err}`,
                 'error',
                 { timeout: 4000, toast: true }
             );
@@ -272,7 +282,32 @@
     let booted = false; let offUrl = null;
     function wireNav(handler) { offUrl?.(); offUrl = window.TMUtils?.onUrlChange?.(handler); }
 
+    // Track whether we were previously on Part Summary to detect transitions
+    let wasOnPartSummary = false;
+    let __qt35_pageActivateTimer = null;
+    let __qt35_navObserver = null;
+
+    function scheduleRefreshOnActive(delay = 250) {
+        clearTimeout(__qt35_pageActivateTimer);
+        __qt35_pageActivateTimer = setTimeout(() => {
+            try {
+                // Only refresh if we truly are on Part Summary
+                if (isOnPartSummary()) runOneRefresh(false);
+            } catch { /* no-op */ }
+        }, delay);
+    }
+
+    function onWizardPageMutation() {
+        const nowOn = isOnPartSummary();
+        if (nowOn && !wasOnPartSummary) {
+            // Page just became active -> refresh attachments
+            scheduleRefreshOnActive(250);
+        }
+        wasOnPartSummary = nowOn;
+    }
+
     async function init() {
+
         if (booted) return;
         booted = true;
 
@@ -289,6 +324,22 @@
             showWhen: (ctx) => (typeof FORCE_SHOW_BTN !== 'undefined' && FORCE_SHOW_BTN) || CFG.SHOW_ON_PAGES_RE.test(ctx.pageName) || ctx.isOnPartSummary,
             mount: 'nav'
         });
+
+        // Observe wizard page changes to detect when Part Summary becomes active
+        try {
+            const nav = document.querySelector('.plex-wizard-page-list');
+            if (nav && !__qt35_navObserver) {
+                __qt35_navObserver = new MutationObserver(onWizardPageMutation);
+                __qt35_navObserver.observe(nav, { subtree: true, attributes: true, childList: true });
+            }
+        } catch { /* ignore */ }
+
+        // Also react to hash changes (some SPA routes use hash navigation)
+        try { window.addEventListener('hashchange', onWizardPageMutation); } catch { /* ignore */ }
+
+        // Seed prior state & trigger initial refresh if we already landed on the target page
+        wasOnPartSummary = isOnPartSummary();
+        if (wasOnPartSummary) scheduleRefreshOnActive(150);
     }
     function teardown() {
         booted = false;
@@ -296,6 +347,14 @@
         offUrl = null;
         stopPromote(); // ensure background timer is cleared
         try { window.removeEventListener('LT:AttachmentRefreshRequested', onAttachmentRefreshRequested, false); } catch { }
+
+        // Disconnect page activation observers/listeners
+        try { window.removeEventListener('hashchange', onWizardPageMutation); } catch { }
+        try { __qt35_navObserver?.disconnect?.(); } catch { }
+        __qt35_navObserver = null;
+        clearTimeout(__qt35_pageActivateTimer);
+        __qt35_pageActivateTimer = null;
+
         // Hub visibility is handled centrally via ensureHubButton()
     }
 

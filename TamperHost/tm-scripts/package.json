@@ -14,19 +14,24 @@
     "bump:major": "node ../build-plus.js --major"
   },
   "tmVersions": {
-    "QT10": "3.8.130",
-    "QT20": "3.8.130",
-    "QT30": "3.8.130",
-    "QT35": "3.8.130",
-    "QT50": "3.8.130",
-    "LT_CORE": "3.8.130",
-    "LT_DATA_CORE": "3.8.130",
-    "LT_UI_HUB": "3.8.130",
-    "LT_PLEX_AUTH": "3.8.130",
-    "LT_PLEX_TM_UTILS": "3.8.130",
-    "ALL": "3.8.130"
+    "QT05": "3.8.136",
+    "QT10": "3.8.136",
+    "QT20": "3.8.136",
+    "QT30": "3.8.136",
+    "QT35": "3.8.136",
+    "QT50": "3.8.136",
+    "LT_CORE": "3.8.136",
+    "LT_DATA_CORE": "3.8.136",
+    "LT_UI_HUB": "3.8.136",
+    "LT_PLEX_AUTH": "3.8.136",
+    "LT_PLEX_TM_UTILS": "3.8.136",
+    "ALL": "3.8.136"
   },
   "tmFiles": {
+    "QT05": [
+      "src/quote-tracking/qt05-customerContactAdd/qt05.index.js",
+      "../wwwroot/qt05.user.js"
+    ],
     "QT10": [
       "src/quote-tracking/qt10-customerCatalogGet/qt10.index.js",
       "../wwwroot/qt10.user.js"

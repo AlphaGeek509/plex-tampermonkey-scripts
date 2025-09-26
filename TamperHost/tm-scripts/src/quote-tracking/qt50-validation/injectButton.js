@@ -262,8 +262,8 @@ export async function mountValidationButton(TMUtils) {
                 } catch { /* non-fatal */ }
 
                 if (count === 0) {
-                    lt.core.hub.notify?.('✅ Lines valid', 'success', { ms: 1800 });
-                    lt.core.hub.setStatus?.('✅ All clear', 'success', { sticky: false });
+                    lt.core.hub.notify?.('Lines valid', 'success', { ms: 1800 });
+                    lt.core.hub.setStatus?.('All clear', 'success', { sticky: false });
                     setBadgeCount?.(0);
                     task.done?.('Valid');
                 } else {
@@ -287,8 +287,8 @@ export async function mountValidationButton(TMUtils) {
                             setBadgeCount?.(count);
                         } else {
                             // Info-only updates (e.g., auto-manage posts with level=info)
-                            lt.core.hub.notify?.(`ℹ️ ${count} update${count === 1 ? '' : 's'} applied`, 'info', { ms: 3500 });
-                            lt.core.hub.setStatus?.(`ℹ️ ${count} update${count === 1 ? '' : 's'} — ${summary}`, 'info', { sticky: true });
+                            lt.core.hub.notify?.(`${count} update${count === 1 ? '' : 's'} applied`, 'info', { ms: 3500 });
+                            lt.core.hub.setStatus?.(`${count} update${count === 1 ? '' : 's'} — ${summary}`, 'info', { sticky: true });
                             setBadgeCount?.(count);
                         }
                     } catch { /* never block the modal */ }
