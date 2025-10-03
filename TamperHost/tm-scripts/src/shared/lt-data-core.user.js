@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         lt-data-core
 // @namespace    lt
-// @version      3.9.1
+// @version      3.9.23
 // @description  Core data: add makeFlatScopedRepo (flat {header,lines}) onto lt.core.data, waiting for DC to load
 // @match        https://*/SalesAndCRM/*
 // @grant        none

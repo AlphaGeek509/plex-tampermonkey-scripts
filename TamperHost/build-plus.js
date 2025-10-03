@@ -102,44 +102,64 @@ const MODULES = [
     {
         id: 'QT05',
         featureName: 'Customer Contact Add',
-        bannerBase: 'qt10-customerContactAdd',
+        //bannerBase: 'qt10-customerContactAdd',
         src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'qt05-customerContactAdd', 'qt05.index.js'),
-        out: path.join(ROOT, 'wwwroot', 'qt05.user.js')
+        out: path.join(ROOT, 'wwwroot', 'qt05.user.js'),
+        desc: 'Adds a Hub Bar “New Contact” button on Quote that opens Plex’s Contact form in a new tab. Resolves CustomerNo via KO with DOM fallbacks and guards via SPA-safe observers.',
+        // Optional overrides (omit if you want defaults)
+        matches: ['https://lyntron.on.plex.com/SalesAndCRM/QuoteWizard*', 'https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*', 'https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*', 'https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*' ],
+        grants: ['GM_registerMenuCommand', 'GM_getValue', 'GM_setValue', 'GM_xmlhttpRequest', 'unsafeWindow'],
+        connect: ['*.plex.com', 'cdn.jsdelivr.net']
     },
     {
         id: 'QT10',
         featureName: 'Customer Catalog Get',
-        bannerBase: 'qt10-customerCatalogGet',
         src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'qt10-customerCatalogGet', 'qt10.index.js'),
-        out: path.join(ROOT, 'wwwroot', 'qt10.user.js')
+        out: path.join(ROOT, 'wwwroot', 'qt10.user.js'),
+        desc: 'Watches CustomerNo, fetches Catalog Key/Code (DS 319/22696), and stores them in the DRAFT repo. Supports draft→quote promote and small DEV seams for debugging.',
+        matches: ['https://lyntron.on.plex.com/SalesAndCRM/QuoteWizard*', 'https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*', 'https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*', 'https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*'],
+        grants: ['GM_registerMenuCommand', 'GM_getValue', 'GM_setValue', 'GM_xmlhttpRequest', 'unsafeWindow'],
+        connect: ['*.plex.com', 'cdn.jsdelivr.net']
     },
     {
         id: 'QT20',
         featureName: 'Part Stock Level Get',
-        bannerBase: 'PartStockLevelGet',
         src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'qt20-partStockLevelGet', 'qt20.index.js'),
-        out: path.join(ROOT, 'wwwroot', 'qt20.user.js')
+        out: path.join(ROOT, 'wwwroot', 'qt20.user.js'),
+        desc: 'Adds “Get Stock Levels” on Quote Part Detail and Hub; queries DS 172, normalizes to pieces, and toasts totals. Optionally stamps NoteNew with “Stock: N pcs”.',
+        matches: ['https://lyntron.on.plex.com/SalesAndCRM/QuoteWizard*', 'https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*', 'https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*', 'https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*'],
+        grants: ['GM_registerMenuCommand', 'GM_getValue', 'GM_setValue', 'GM_xmlhttpRequest', 'unsafeWindow'],
+        connect: ['*.plex.com', 'cdn.jsdelivr.net']
     },
     {
         id: 'QT30',
         featureName: 'Part Catalog Pricing Get',
-        bannerBase: 'qt30-catalogPricing',
         src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'qt30-catalogPricingApply', 'qt30.index.js'),
-        out: path.join(ROOT, 'wwwroot', 'qt30.user.js')
+        out: path.join(ROOT, 'wwwroot', 'qt30.user.js'),
+        desc: 'Applies customer catalog breakpoints (DS 4809) using Catalog Key (repo/DS 3156), removes zero-qty rows, and sets RvCustomizedUnitPrice with rounding. Refreshes via KO or wizard nav.',
+        matches: ['https://lyntron.on.plex.com/SalesAndCRM/QuoteWizard*', 'https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*', 'https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*', 'https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*'],
+        grants: ['GM_registerMenuCommand', 'GM_getValue', 'GM_setValue', 'GM_xmlhttpRequest', 'unsafeWindow'],
+        connect: ['*.plex.com', 'cdn.jsdelivr.net']
     },
     {
         id: 'QT35',
         featureName: 'Quote Attachments Get',
-        bannerBase: 'qt35-attachments',
         src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'qt35-attachmentsGet', 'qt35.index.js'),
-        out: path.join(ROOT, 'wwwroot', 'qt35.user.js')
+        out: path.join(ROOT, 'wwwroot', 'qt35.user.js'),
+        desc: 'Adds Attachments badge/button (and Dock) and promotes draft→quote once if needed. Counts attachments via DS 11713 (group 11) and auto-refreshes on Part Summary activation and QT20 modal close.',
+        matches: ['https://lyntron.on.plex.com/SalesAndCRM/QuoteWizard*', 'https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*', 'https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*', 'https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*'],
+        grants: ['GM_registerMenuCommand', 'GM_getValue', 'GM_setValue', 'GM_xmlhttpRequest', 'unsafeWindow'],
+        connect: ['*.plex.com', 'cdn.jsdelivr.net']
     },
     {
         id: 'QT50',
         featureName: 'Quote Validation',
-        bannerBase: 'validation',
         src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'qt50-validation', 'qtv.entry.js'),
-        out: path.join(ROOT, 'wwwroot', 'qt50.user.js')
+        out: path.join(ROOT, 'wwwroot', 'qt50.user.js'),
+        desc: 'Runs rule-based checks on quote lines for lead time, unit price limits, and part number management. Adds a Hub Bar “Validate Lines” button with settings, a details modal, and CSV export. Highlights issues directly in the grid with optional auto-fixes.',
+        matches: ['https://lyntron.on.plex.com/SalesAndCRM/QuoteWizard*', 'https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*', 'https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*', 'https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*'],
+        grants: ['GM_registerMenuCommand', 'GM_getValue', 'GM_setValue', 'GM_xmlhttpRequest', 'unsafeWindow'],
+        connect: ['*.plex.com', 'cdn.jsdelivr.net']
     },
     // ---- shared CORE LIBS (no Tampermonkey banner; plain JS bundles) ----
     {
@@ -190,8 +210,6 @@ const MODULES = [
 // Global default CDN for ALL modules; {VER} is replaced with the release version.
 const CDN_BASE = process.env.CDN_BASE || 'https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v{VER}/TamperHost/wwwroot';
 
-
-
 const SHARED = {
     dev: {
         requires: [
@@ -228,13 +246,10 @@ function bumpSemver(ver, mode, setStr) {
     else if (mode === 'minor') { min++; pat = 0; }
     else /* patch/default */ { pat++; }
     return `${maj}.${min}.${pat}`;
-}
-
-function ensureDir(p) {
+}function ensureDir(p) {
     const dir = path.dirname(p);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
-
 function updateFileVersion(filePath, newVersion, dry = false) {
     if (!fs.existsSync(filePath)) {
         console.warn(`⚠️  Skip missing ${filePath}`);
@@ -268,21 +283,16 @@ function updateFileVersion(filePath, newVersion, dry = false) {
 
     return { skipped: false, changed, hadMarkers };
 }
-
-
 function resolveModuleById(id) {
     return MODULES.find(m => m.id.toLowerCase() === id.toLowerCase());
 }
-
-
-
 function ensureGrants(header, grants) {
     if (!Array.isArray(grants) || grants.length === 0) return header;
     const hasGrant = (g) => new RegExp(`^\\s*//\\s*@grant\\s+${g}\\b`, 'm').test(header);
     let out = header;
     for (const g of grants) {
         if (!hasGrant(g)) {
-            out = out.replace(/(\/\/\s*==\/UserScript==)/, `// @grant        ${g}\n$1`);
+            out = out.replace(/(\/\/\s*==\/UserScript==)/, `// @grant       ${g}\n$1`);
         }
     }
     return out;
@@ -350,13 +360,28 @@ function loadBannerForModule(m, versionStr, opts) {
     // Expand __REQUIRES__/__RESOURCES__ (uses your existing SHARED maps)
     if (header.includes('__REQUIRES__') || header.includes('__RESOURCES__')) {
         const sharedKey = opts.release ? 'release' : 'dev';
-        const reqLines = (SHARED[sharedKey]?.requires || []).map(u => `// @require      ${u}`).join('\n');
-        const resLines = (SHARED[sharedKey]?.resources || []).map(([name, url]) => `// @resource     ${name} ${url}`).join('\n');
+        const reqLines = (SHARED[sharedKey]?.requires || []).map(u => `// @require     ${u}`).join('\n');
+        const resLines = (SHARED[sharedKey]?.resources || []).map(([name, url]) => `// @resource    ${name} ${url}`).join('\n');
         header = header.replace(/__REQUIRES__/g, reqLines || '');
         header = header.replace(/__RESOURCES__/g, resLines || '');
         if ((SHARED[sharedKey]?.resources || []).length) {
             header = ensureGrants(header, ['GM_addStyle', 'GM_getResourceText']);
         }
+    }
+
+    // Optional per-module metadata injections
+    if (Array.isArray(m.grants) && m.grants.length) {
+        header = ensureGrants(header, m.grants);
+    }
+    if (Array.isArray(m.connect) && m.connect.length) {
+        const connectLines = m.connect.map(d => `// @connect     ${d}`).join('\n') + '\n';
+        header = header.replace(/(\/\/\s*@run-at[^\n]*\n)/, `${connectLines}$1`);
+    }
+    if (m.icons?.icon32) {
+        header = header.replace(/(\/\/\s*@version[^\n]*\n)/, `$1// @icon        ${m.icons.icon32}\n`);
+    }
+    if (m.icons?.icon64) {
+        header = header.replace(/(\/\/\s*@version[^\n]*\n)/, `$1// @icon64      ${m.icons.icon64}\n`);
     }
 
     // Replace any {VER} token in CDN base
@@ -372,22 +397,22 @@ function getBannerVars(m, versionStr, envName, opts) {
     const isProd = !!opts.release;
     const baseName = m.id; // e.g., 'QT10', 'QT20', 'QT50', etc.
     const NAME = isProd ? baseName : `${baseName}_DEV`;
-    const DESC = isProd ? 'Production build' : 'DEV-only build; includes user-start gate';
 
-    // Matches: DEV includes test + prod; PROD is prod-only
-    const MATCHES = isProd
-        ? [
-            '// @match       https://lyntron.on.plex.com/SalesAndCRM/QuoteWizard*',
-            '// @match       https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*',
-            '// @match       https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*',
-            '// @match       https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*'
-        ]
-        : [
-            '// @match       https://lyntron.on.plex.com/SalesAndCRM/QuoteWizard*',
-            '// @match       https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*',
-            '// @match       https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*',
-            '// @match       https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*'
-        ];
+    // Description comes from module metadata; add a small DEV suffix.
+    const baseDesc = m.desc || 'Lyn-Tron module';
+    const DESC = isProd ? baseDesc : `${baseDesc} (DEV build)`;
+
+    // Require per-module matches to avoid hard-coded app paths
+    if (!Array.isArray(m.matches) || m.matches.length === 0) {
+        throw new Error(`Module ${m.id} is missing 'matches' in MODULES metadata`);
+    }
+    // Normalize: allow bare URLs/globs or pre-prefixed lines
+    const MATCHES = m.matches.map(s => {
+        const t = String(s).trim();
+        if (t.startsWith('// @match')) return t;
+        if (t.startsWith('@match')) return `// ${t}`;
+        return `// @match       ${t}`;
+    });
 
     const cdnBase = (isProd
         ? (process.env.CDN_BASE || 'https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v{VER}/TamperHost/wwwroot')
@@ -445,8 +470,6 @@ function injectUpdateDownload(header, m, versionStr, opts) {
     }
     return header;
 }
-
-
 async function emitModule(m, versionStr) {
     ensureDir(m.out);
     const entry = m.src;
