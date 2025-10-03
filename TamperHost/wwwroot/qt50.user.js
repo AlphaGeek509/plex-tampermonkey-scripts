@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        QT50
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     4.0.1
+// @version     4.0.2
 // @description Runs rule-based checks on quote lines for lead time, unit price limits, and part number management. Adds a Hub Bar “Validate Lines” button with settings, a details modal, and CSV export. Highlights issues directly in the grid with optional auto-fixes.
 // @author      Jeff Nichols (OneMonroe | Lyn-Tron)
 // @license     MIT
@@ -11,12 +11,12 @@
 // @match       https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v4.0.1/TamperHost/wwwroot/lt-plex-tm-utils.user.js?v=4.0.1
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v4.0.1/TamperHost/wwwroot/lt-plex-auth.user.js?v=4.0.1
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v4.0.1/TamperHost/wwwroot/lt-ui-hub.js?v=4.0.1
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v4.0.1/TamperHost/wwwroot/lt-data-core.user.js?v=4.0.1
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v4.0.1/TamperHost/wwwroot/lt-core.user.js?v=4.0.1
-// @resource    THEME_CSS https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v4.0.1/TamperHost/wwwroot/theme.css
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v4.0.2/TamperHost/wwwroot/lt-plex-tm-utils.user.js?v=4.0.2
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v4.0.2/TamperHost/wwwroot/lt-plex-auth.user.js?v=4.0.2
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v4.0.2/TamperHost/wwwroot/lt-ui-hub.js?v=4.0.2
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v4.0.2/TamperHost/wwwroot/lt-core.user.js?v=4.0.2
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v4.0.2/TamperHost/wwwroot/lt-data-core.user.js?v=4.0.2
+// @resource    THEME_CSS https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v4.0.2/TamperHost/wwwroot/theme.css
 // @grant       GM_registerMenuCommand
 // @grant       GM_getValue
 // @grant       GM_setValue
@@ -28,8 +28,8 @@
 // @noframes
 // @grant       GM_addStyle
 // @grant       GM_getResourceText
-// @updateURL   https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@latest/TamperHost/wwwroot/qt50.user.js
-// @downloadURL https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@latest/TamperHost/wwwroot/qt50.user.js
+// @updateURL   https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v4.0.2/TamperHost/wwwroot/qt50.user.js
+// @downloadURL https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v4.0.2/TamperHost/wwwroot/qt50.user.js
 // ==/UserScript==
 
 (()=>{var Pt=typeof unsafeWindow<"u"&&unsafeWindow.ko?unsafeWindow.ko:window.ko,A=[/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i],ot=!!TMUtils.matchRoute?.(A),h={enabled:"qt50.enabled",autoManageLtPartNoOnQuote:"qt50.autoManageLtPartNoOnQuote",minUnitPrice:"qt50.minUnitPrice",maxUnitPrice:"qt50.maxUnitPrice",leadtimeZeroWeeks:"qt50.leadtimeZeroWeeks"},at={enabled:"qtv.enabled",autoManageLtPartNoOnQuote:"qtv.autoManageLtPartNoOnQuote",minUnitPrice:"qtv.minUnitPrice",maxUnitPrice:"qtv.maxUnitPrice",leadtimeZeroWeeks:"qt50.leadtimeZeroWeeks"},W={[h.enabled]:!0,[h.autoManageLtPartNoOnQuote]:!0,[h.minUnitPrice]:0,[h.maxUnitPrice]:10,[h.leadtimeZeroWeeks]:!0};function it(r){let t=GM_getValue(r);if(t!==void 0)return t;let e=Object.values(at).find(a=>a.endsWith(r.split(".").pop())),o=e?GM_getValue(e):void 0;return o!==void 0?o:void 0}var q=r=>{let t=it(r);return t===void 0?W[r]:t},N=(r,t)=>{GM_setValue(r,t),j()};function S(){return{enabled:q(h.enabled),autoManageLtPartNoOnQuote:q(h.autoManageLtPartNoOnQuote),minUnitPrice:q(h.minUnitPrice),maxUnitPrice:q(h.maxUnitPrice),leadtimeZeroWeeks:q(h.leadtimeZeroWeeks)}}function G(r){if(typeof r!="function")return()=>{};let t=()=>r(S());return window.addEventListener("LT:QTV:SettingsChanged",t),()=>window.removeEventListener("LT:QTV:SettingsChanged",t)}function j(){try{window.dispatchEvent(new CustomEvent("LT:QTV:SettingsChanged",{detail:S()}))}catch{}}GM_registerMenuCommand?.("\u2699\uFE0F Open QT Validation Settings",z);ot&&($(),TMUtils?.onUrlChange?.($),setTimeout($,500));async function $(){let r=TMUtils.matchRoute?.(A),e=(document.querySelector('.plex-wizard-page-list .plex-wizard-page.active, .plex-wizard-page-list .plex-wizard-page[aria-current="page"]')?.textContent||"").trim().replace(/\s+/g," "),o=!0,a=await(async function(n={mount:"nav"}){for(let u=0;u<50;u++){let g=window.ensureLTHub||unsafeWindow?.ensureLTHub;if(typeof g=="function")try{let c=await g(n);if(c)return c}catch{}await new Promise(c=>setTimeout(c,100))}return null})();if(!a?.registerButton)return;let d="qt50-settings",i=a.list?.()?.includes(d);o&&!i?a.registerButton("right",{id:d,label:"Validation \u2699\uFE0E",title:"Open Quote Validation settings",weight:30,onClick:z}):!o&&i&&a.remove?.(d)}function z(){let r=document.createElement("div");r.id="lt-qtv-overlay",Object.assign(r.style,{position:"fixed",inset:0,background:"var(--lt-overlay, rgba(0,0,0,.36))",zIndex:100002});let t=document.createElement("div");t.id="lt-qtv-panel",t.className="lt-card lt-modal",Object.assign(t.style,{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:"520px",maxWidth:"min(92vw, 560px)"}),r.addEventListener("keydown",e=>{e.key==="Escape"&&r.remove()}),r.tabIndex=-1,r.addEventListener("click",e=>{e.target===r&&r.remove()}),t.addEventListener("click",e=>e.stopPropagation()),t.innerHTML=`
