@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         lt-core
 // @namespace    lt
-// @version      3.8.136
+// @version      3.8.138
 // @description  Shared core: auth + http + plex DS + hub (status/toast) + theme bridge + tiny utils
 // @run-at       document-start
 // @grant        none
@@ -147,14 +147,14 @@
                 return api;
             };
 
-            api.notify = (_level, text, { ms = 2500 } = {}) => {
+            api.notify = (_level, text, { ms = 5000 } = {}) => {
                 const el = ensurePill();
                 el.textContent = text || '';
                 setTimeout(() => { try { el.remove(); } catch { } }, Math.max(500, ms | 0));
                 return api;
             };
 
-            api.toast = (msg, ms = 3000) => api.notify('info', msg, { ms });
+            api.toast = (msg, ms = 5000) => api.notify('info', msg, { ms });
 
             return api;
         })();
@@ -242,12 +242,12 @@
 
             notify(text, tone = 'info', opts = {}) {
                 // lt-ui-hub signature: notify(kind, text, {ms, sticky, toast})
-                const ms = opts?.timeout ?? opts?.ms ?? 2500;
+                const ms = opts?.timeout ?? opts?.ms ?? 5000;
                 delegateOrQueue('notify', tone, text, { ms, sticky: !!opts?.sticky, toast: !!opts?.toast });
                 if (!mounted && typeof ROOT.ensureLTHub !== 'function') fallback.notify(text, tone, opts);
                 return this;
             },
-            toast(msg, timeout = 3000) {
+            toast(msg, timeout = 5000) {
                 delegateOrQueue('notify', 'info', msg, { ms: timeout, toast: true });
                 if (!mounted && typeof ROOT.ensureLTHub !== 'function') fallback.toast(msg, timeout);
                 return this;
@@ -262,8 +262,8 @@
                 this.setStatus(label, tone, { sticky: true });
                 const ctl = {
                     update: (txt, t = tone) => { this.setStatus(txt, t, { sticky: true }); return ctl; },
-                    success: (msg = 'Done', ms = 2500) => { this.setStatus('', 'info', { sticky: false }); this.notify(msg, 'success', { timeout: ms }); return ctl; },
-                    error: (msg = 'Failed') => { this.setStatus('', 'info', { sticky: false }); this.notify(msg, 'error', { timeout: 3500 }); return ctl; },
+                    success: (msg = 'Done', ms = 5000) => { this.setStatus('', 'info', { sticky: false }); this.notify(msg, 'success', { timeout: ms }); return ctl; },
+                    error: (msg = 'Failed') => { this.setStatus('', 'info', { sticky: false }); this.notify(msg, 'error', { timeout: 5000 }); return ctl; },
                     clear: () => { this.setStatus('', 'info', { sticky: false }); return ctl; },
                     done: (msg, ms) => ctl.success(msg, ms)
                 };

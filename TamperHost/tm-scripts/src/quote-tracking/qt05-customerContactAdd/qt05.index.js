@@ -28,19 +28,19 @@
     await (window.ensureLTHub?.({ mount: 'nav' }));
 
     // ===== Helpers =====
-    function onQuotePage(ctx) {
-        // 1) Hub context (most reliable when available)
-        if (typeof ctx?.isPage === 'function' && ctx.isPage('Quote')) return true;
+    //function onQuotePage(ctx) {
+    //    // 1) Hub context (most reliable when available)
+    //    if (typeof ctx?.isPage === 'function' && ctx.isPage('Quote')) return true;
 
-        // 2) Active wizard tab text (tolerant of whitespace/case)
-        const tabName = String(ctx?.pageName || getActiveWizardPageName())
-            .trim()
-            .replace(/\s+/g, ' ');
-        if (/^quote$/i.test(tabName)) return true;
+    //    // 2) Active wizard tab text (tolerant of whitespace/case)
+    //    const tabName = String(ctx?.pageName || getActiveWizardPageName())
+    //        .trim()
+    //        .replace(/\s+/g, ' ');
+    //    if (/^quote$/i.test(tabName)) return true;
 
-        // 3) DOM: the CustomerNo anchor is visible only when Quote content is active
-        return isQuoteAnchorVisible();
-    }
+    //    // 3) DOM: the CustomerNo anchor is visible only when Quote content is active
+    //    return isQuoteAnchorVisible();
+    //}
 
     function getActiveWizardPageName() {
         const li = document.querySelector(
@@ -93,15 +93,15 @@
         try {
             const customerNo = await resolveCustomerNo();
             if (!customerNo) {
-                lt?.core?.hub?.notify?.('Customer No not found on the page.', 'warn', { ms: 4000 });
+                lt?.core?.hub?.notify?.('Customer No not found on the page.', 'warn');
                 task.error?.('No Customer No');
                 return;
             }
             const url = makeContactUrl(customerNo);
             window.open(url, '_blank', 'noopener,noreferrer');
-            lt?.core?.hub?.notify?.('Contact form opened...', 'success', { ms: 4000 });
+            lt?.core?.hub?.notify?.('Contact form opened...', 'success');
         } catch (err) {
-            lt?.core?.hub?.error?.(`Open failed: ${err?.message || err}`, 'error', { ms: 5000 });
+            lt?.core?.hub?.error?.(`Open failed: ${err?.message || err}`, 'error');
             task.error?.('Error');
         }
     }
@@ -114,7 +114,7 @@
         side: 'left',
         weight: CFG.BTN_WEIGHT,
         onClick,
-        showWhen: (ctx) => onQuotePage(ctx),
+        showWhen: () => true,
         mount: 'nav'
     });
 
@@ -127,7 +127,7 @@
             side: 'left',
             weight: CFG.BTN_WEIGHT,
             onClick,
-            showWhen: (ctx) => onQuotePage(ctx),
+            showWhen: () => true,
             mount: 'nav'
         });
     }

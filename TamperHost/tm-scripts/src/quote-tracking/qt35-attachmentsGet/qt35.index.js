@@ -187,10 +187,11 @@
             side: 'left',
             weight: 120,
             onClick: () => runOneRefresh(true),
-            showWhen: (ctx) =>
-                (typeof FORCE_SHOW_BTN !== 'undefined' && FORCE_SHOW_BTN) ||
-                CFG.SHOW_ON_PAGES_RE.test(ctx.pageName) ||
-                ctx.isOnPartSummary,
+            showWhen: () => true,
+            //showWhen: (ctx) =>
+            //    (typeof FORCE_SHOW_BTN !== 'undefined' && FORCE_SHOW_BTN) ||
+            //    CFG.SHOW_ON_PAGES_RE.test(ctx.pageName) ||
+            //    ctx.isOnPartSummary,
             mount: 'nav'
         });
 
@@ -206,7 +207,7 @@
 
             if (!qk || !Number.isFinite(qk) || qk <= 0) {
                 setBadgeCount(0);
-                t.error(`⚠️ Quote Key not found`, 4000);
+                t.error(`⚠️ Quote Key not found`, 5000);
                 return;
             }
 
@@ -227,7 +228,7 @@
 
             if (!quoteRepo) {
                 // No endless spinner; fail fast, user can click again or it will work next fire
-                t.error('Data context warming — try again in a moment', 2500);
+                t.error('Data context warming — try again in a moment', 500);
                 return;
             }
 
@@ -237,25 +238,25 @@
 
             // Always resolve the task
             const ok = count > 0;
-            t.success(ok ? `${count} attachment(s)` : 'No attachments', 2000);
+            t.success(ok ? `${count} attachment(s)` : 'No attachments', 5000);
 
             // Optional toast when user clicked manually
             if (manual) {
                 lt.core.hub.notify(
                     ok ? `${count} attachment(s)` : 'No attachments',
                     ok ? 'success' : 'warn',
-                    { timeout: 2000, toast: true }
+                    { toast: true }
                 );
             }
             dlog('refresh', { qk, count });
 
         } catch (err) {
             derr('refresh failed', err);
-            t.error(`Attachments refresh failed: ${err?.message || err}`, 4000);
+            t.error(`Attachments refresh failed: ${err?.message || err}`, 5000);
             lt.core.hub.notify(
                 `Attachments refresh failed: ${err?.message || err}`,
                 'error',
-                { timeout: 4000, toast: true }
+                { toast: true }
             );
         } finally {
             refreshInFlight = false;

@@ -166,12 +166,12 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
 
             // No breakdown, no stamp — just a simple toast
             task.success('Stock retrieved', 1200);
-            lt.core.hub.notify(`Stock: ${formatInt(sum)} pcs`, 'success', { ms: 2500, toast: true });
+            lt.core.hub.notify(`Stock: ${formatInt(sum)} pcs`, 'success', { toast: true });
 
             dlog('QT20 success', { qk, partNo, basePart, sum });
         } catch (err) {
             task.error('Failed');
-            lt.core.hub.notify(`Stock check failed: ${err?.message || err}`, 'error', { ms: 4000, toast: true });
+            lt.core.hub.notify(`Stock check failed: ${err?.message || err}`, 'error', { toast: true });
 
             derr('handleClick:', err);
         } finally {

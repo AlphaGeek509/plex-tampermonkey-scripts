@@ -262,7 +262,7 @@ export async function mountValidationButton(TMUtils) {
                 } catch { /* non-fatal */ }
 
                 if (count === 0) {
-                    lt.core.hub.notify?.('Lines valid', 'success', { ms: 1800 });
+                    lt.core.hub.notify?.('Lines valid', 'success');
                     lt.core.hub.setStatus?.('All clear', 'success', { sticky: false });
                     setBadgeCount?.(0);
                     task.done?.('Valid');
@@ -278,16 +278,16 @@ export async function mountValidationButton(TMUtils) {
                     // Guard to ensure UI problems never block the modal
                     try {
                         if (hasError) {
-                            lt.core.hub.notify?.(`\u274C ${count} validation ${count === 1 ? 'issue' : 'issues'}`, 'error', { ms: 6500 });
+                            lt.core.hub.notify?.(`\u274C ${count} validation ${count === 1 ? 'issue' : 'issues'}`, 'error');
                             lt.core.hub.setStatus?.(`\u274C ${count} issue${count === 1 ? '' : 's'} — ${summary}`, 'error', { sticky: true });
                             setBadgeCount?.(count);
                         } else if (hasWarn) {
-                            lt.core.hub.notify?.(`\u26A0\uFE0F ${count} validation ${count === 1 ? 'warning' : 'warnings'}`, 'warn', { ms: 5000 });
+                            lt.core.hub.notify?.(`\u26A0\uFE0F ${count} validation ${count === 1 ? 'warning' : 'warnings'}`, 'warn');
                             lt.core.hub.setStatus?.(`\u26A0\uFE0F ${count} warning${count === 1 ? '' : 's'} — ${summary}`, 'warn', { sticky: true });
                             setBadgeCount?.(count);
                         } else {
                             // Info-only updates (e.g., auto-manage posts with level=info)
-                            lt.core.hub.notify?.(`${count} update${count === 1 ? '' : 's'} applied`, 'info', { ms: 3500 });
+                            lt.core.hub.notify?.(`${count} update${count === 1 ? '' : 's'} applied`, 'info');
                             lt.core.hub.setStatus?.(`${count} update${count === 1 ? '' : 's'} — ${summary}`, 'info', { sticky: true });
                             setBadgeCount?.(count);
                         }
@@ -308,11 +308,10 @@ export async function mountValidationButton(TMUtils) {
                             const mode = await refreshQuoteGrid();
                             lt.core?.hub?.notify?.(
                                 mode ? `Grid refreshed (${mode})` : 'Grid refresh attempted (reload may be needed)',
-                                mode ? 'success' : 'info',
-                                { ms: 2500 }
+                                mode ? 'success' : 'info'
                             );
                         } catch {
-                            lt.core?.hub?.notify?.('Grid refresh failed', 'warn', { ms: 3000 });
+                            lt.core?.hub?.notify?.('Grid refresh failed', 'warn');
                         }
                     }
 

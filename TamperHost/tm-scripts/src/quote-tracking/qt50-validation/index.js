@@ -91,7 +91,8 @@ async function ensureHubGear() {
     const onWizard = TMUtils.matchRoute?.(ROUTES);
     const active = document.querySelector('.plex-wizard-page-list .plex-wizard-page.active, .plex-wizard-page-list .plex-wizard-page[aria-current="page"]');
     const name = (active?.textContent || '').trim().replace(/\s+/g, ' ');
-    const onTarget = onWizard && /^part\s*summary$/i.test(name);
+    const onTarget = true;
+    //const onTarget = onWizard && /^part\s*summary$/i.test(name);
 
     const hub = await (async function getHub(opts = { mount: 'nav' }) {
         for (let i = 0; i < 50; i++) {
