@@ -101,19 +101,20 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             onClick: () => runApplyPricing(),
             // Only show when the active wizard step <li> is the configured index.
             // Completely ignores any "Part Summary" text elsewhere on the page.
-            showWhen: () => {
-                try {
-                    // Strongest signal: the Part Summary form/actions exist in DOM
-                    if (document.querySelector('#QuotePartSummaryForm,[id^="QuotePartSummaryForm_"]')) {
-                        return true;
-                    }
-                    // Secondary: active wizard step’s visible label is exactly "Part Summary"
-                    const active = document.querySelector('.plex-wizard-page-list .plex-wizard-page.active');
-                    return !!(active && active.textContent && active.textContent.trim().toLowerCase() === 'part summary');
-                } catch {
-                    return false;
-                }
-            },
+            showWhen: () => true,
+            //{
+            //    try {
+            //        // Strongest signal: the Part Summary form/actions exist in DOM
+            //        if (document.querySelector('#QuotePartSummaryForm,[id^="QuotePartSummaryForm_"]')) {
+            //            return true;
+            //        }
+            //        // Secondary: active wizard step’s visible label is exactly "Part Summary"
+            //        const active = document.querySelector('.plex-wizard-page-list .plex-wizard-page.active');
+            //        return !!(active && active.textContent && active.textContent.trim().toLowerCase() === 'part summary');
+            //    } catch {
+            //        return false;
+            //    }
+            //},
             mount: 'nav'
         });
 
@@ -146,7 +147,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
         const task = lt.core.hub.beginTask('Applying catalog pricing…', 'info');
         try {
             // auth
-            try { if (!(await lt.core.auth.getKey())) { lt.core.hub.notify('Sign-in required', 'warn', { ms: 4000 }); task.error('No session'); return; } } catch { }
+            try { if (!(await lt.core.auth.getKey())) { lt.core.hub.notify('Sign-in required', 'warn'); task.error('No session'); return; } } catch { }
 
             const { quoteKey: qk } = getCtx() || {};
             if (!qk) { task.error('Quote_Key missing'); return; }
@@ -181,7 +182,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
                 catalogKey = rows1?.[0]?.Catalog_Key || null;
                 if (catalogKey) await quoteRepo.patchHeader?.({ Quote_Key: Number(qk), Catalog_Key: Number(catalogKey) });
             }
-            if (catalogKey == null) { task.error('No Catalog Key'); lt.core.hub.notify('No catalog found for this quote', 'warn', { ms: 4000 }); return; }
+            if (catalogKey == null) { task.error('No Catalog Key'); lt.core.hub.notify('No catalog found for this quote', 'warn'); return; }
 
             // Collect parts from KO grid now (reuse top-level KO)
             const grid = document.querySelector(CONFIG.GRID_SEL);
@@ -190,7 +191,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
                 ? KO.dataFor(grid).datasource.raw : [];
 
             const partNos = [...new Set(raw.map(r => TMUtils.getObsValue?.(r, "PartNo", { first: true, trim: true })).filter(Boolean))];
-            if (!partNos.length) { task.error('No PartNo values'); lt.core.hub.notify('No PartNo values found', 'warn', { ms: 4000 }); return; }
+            if (!partNos.length) { task.error('No PartNo values'); lt.core.hub.notify('No PartNo values found', 'warn'); return; }
 
             task.update(`Loading ${partNos.length} part(s)…`);
             const now = new Date();
@@ -237,14 +238,14 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
                                 { headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' } }
                             ));
 
-                            lt.core.hub.notify(`Deleted row[${i}]`, 'success', { ms: 2500 });
+                            lt.core.hub.notify(`Deleted row[${i}]`, 'success');
 
                         } catch (e) {
                             err('QT30 delete error', e);
-                            lt.core.hub.notify(`Delete failed row[${i}]`, 'error', { ms: 3000 });
+                            lt.core.hub.notify(`Delete failed row[${i}]`, 'error');
                         }
                     } else {
-                        lt.core.hub.notify(`Skip delete row[${i}] — missing keys`, 'warn', { ms: 2500 });
+                        lt.core.hub.notify(`Skip delete row[${i}] — missing keys`, 'warn');
                     }
 
                     continue;
@@ -266,13 +267,12 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             task.success('Pricing applied');
             lt.core.hub.notify(
                 mode ? 'Pricing applied and grid refreshed' : 'Pricing applied (reload may be needed)',
-                'success',
-                { ms: 3000 }
+                'success'
             );
 
         } catch (e) {
             task.error('Failed');
-            lt.core.hub.notify(`Apply failed: ${e?.message || e}`, 'error', { ms: 4000 });
+            lt.core.hub.notify(`Apply failed: ${e?.message || e}`, 'error');
         } finally {
             // reconcile presence if SPA navigation changed the page
             try {

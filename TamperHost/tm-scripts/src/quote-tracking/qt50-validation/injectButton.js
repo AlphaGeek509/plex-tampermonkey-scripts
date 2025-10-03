@@ -81,53 +81,76 @@ function showValidationModal(issues = []) {
     // elements
     const overlay = document.createElement('div');
     overlay.id = 'qtv-modal-overlay';
-    // Inline fallback styles to beat any hostile stacking context
-    overlay.style.position = 'fixed';
-    overlay.style.inset = '0';
-    overlay.style.background = 'rgba(0,0,0,.38)';
-    overlay.style.zIndex = '2147483647'; // highest sane z
+    Object.assign(overlay.style, {
+        position: 'fixed',
+        inset: 0,
+        background: 'var(--lt-overlay, rgba(0,0,0,.36))',
+        zIndex: 100002
+    });
 
     const modal = document.createElement('div');
     modal.id = 'qtv-modal';
-    modal.style.position = 'absolute';
-    modal.style.top = '50%';
-    modal.style.left = '50%';
-    modal.style.transform = 'translate(-50%,-50%)';
-    modal.style.background = '#fff';
-    modal.style.width = 'min(960px, 94vw)';
-    modal.style.maxHeight = '80vh';
-    modal.style.overflow = 'hidden';
-    modal.style.borderRadius = '12px';
-    modal.style.boxShadow = '0 18px 40px rgba(0,0,0,.28)';
-    modal.style.fontFamily = 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+    modal.className = 'lt-card';
+    Object.assign(modal.style, {
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%,-50%)',
+        width: 'min(900px, 92vw)'
+    });
 
-    // build rows
-    const rowsHtml = issues.map(iss => {
+    // build rows (Plex-like: sort + suppress repeating Sort/Part/Rule display)
+    const sorted = [...issues].sort((a, b) => {
+        const soA = (a.sortOrder ?? Number.POSITIVE_INFINITY);
+        const soB = (b.sortOrder ?? Number.POSITIVE_INFINITY);
+        if (soA !== soB) return soA - soB;
+        const pnA = String(a.partNo ?? '');
+        const pnB = String(b.partNo ?? '');
+        if (pnA !== pnB) return pnA.localeCompare(pnB);
+        const rlA = String(a.ruleLabel ?? a.kind ?? '');
+        const rlB = String(b.ruleLabel ?? b.kind ?? '');
+        return rlA.localeCompare(rlB);
+    });
+
+    let prevSort = null, prevPart = null, prevRule = null;
+    const rowsHtml = sorted.map(iss => {
         const lvl = (iss.level || '').toLowerCase();
-        const lvlPill = `<span class="qtv-pill" style="border-color:${lvl === 'error' ? '#fca5a5' : '#cbd5e1'}; color:${lvl === 'error' ? '#b91c1c' : '#334155'}">${lvl || 'info'}</span>`;
+        const lvlClass = (lvl === 'error') ? 'qtv-pill--error' : (lvl === 'warn' || lvl === 'warning') ? 'qtv-pill--warn' : 'qtv-pill--info';
+        const lvlPill = `<span class="qtv-pill ${lvlClass}">${lvl || 'info'}</span>`;
         const reason = iss.message || '(no message)';
-        const rule = iss.ruleLabel || iss.kind || 'Validation';
+        const rule = String(iss.ruleLabel || iss.kind || 'Validation');
+
+        // Suppress repeats in visual table cells
+        const showSort = (iss.sortOrder !== prevSort) ? (iss.sortOrder ?? '') : '';
+        const showPart = (showSort !== '' || (iss.partNo !== prevPart)) ? (iss.partNo ?? '') : '';
+        const sameGroupAsPrev = (showSort === '' && showPart === '');
+        const showRule = (!sameGroupAsPrev || rule !== prevRule) ? rule : '';
+
+        prevSort = iss.sortOrder;
+        prevPart = iss.partNo;
+        prevRule = rule;
 
         return `
-        <tr data-qpk="${iss.quotePartKey ?? ''}" data-rule="${String(iss.kind || '')}">
-          <td>${iss.sortOrder ?? ''}</td>
-          <td>${iss.partNo ?? ''}</td>
-          <td>${rule}</td>
-          <td>${lvlPill}</td>
-          <td>${reason}</td>
-        </tr>`
+  <tr data-qpk="${iss.quotePartKey ?? ''}" data-rule="${String(iss.kind || '')}">
+    <td>${showSort}</td>
+    <td>${showPart}</td>
+    <td>${showRule}</td>
+    <td>${lvlPill}</td>
+    <td>${reason}</td>
+  </tr>`;
     }).join('');
 
+
     modal.innerHTML = `
-  <div class="qtv-hd">
-    <h3>Validation Details</h3>
-    <div class="qtv-actions">
-      <button class="btn btn-default" id="qtv-export-csv" title="Export visible issues to CSV">Export CSV</button>
-      <button class="btn btn-primary" id="qtv-close" style="background:#2563eb; color:#fff; border:1px solid #1d4ed8;">Save &amp; Close</button>
+  <div class="qtv-hd lt-card__header">
+    <h3 class="lt-card__title">Validation Details</h3>
+    <div class="qtv-actions lt-card__spacer">
+      <button class="lt-btn lt-btn--ghost" id="qtv-export-csv" title="Export visible issues to CSV">Export CSV</button>
+      <button class="lt-btn lt-btn--primary" id="qtv-close">Close</button>
     </div>
   </div>
-  <div class="qtv-bd">
-    <table aria-label="Validation Issues">
+  <div class="qtv-bd lt-card__body">
+    <table class="lt-table" aria-label="Validation Issues">
       <thead>
         <tr>
           <th>Sort&nbsp;Order</th>
@@ -239,8 +262,8 @@ export async function mountValidationButton(TMUtils) {
                 } catch { /* non-fatal */ }
 
                 if (count === 0) {
-                    lt.core.hub.notify?.('✅ Lines valid', 'success', { ms: 1800 });
-                    lt.core.hub.setStatus?.('✅ All clear', 'success', { sticky: false });
+                    lt.core.hub.notify?.('Lines valid', 'success');
+                    lt.core.hub.setStatus?.('All clear', 'success', { sticky: false });
                     setBadgeCount?.(0);
                     task.done?.('Valid');
                 } else {
@@ -255,17 +278,17 @@ export async function mountValidationButton(TMUtils) {
                     // Guard to ensure UI problems never block the modal
                     try {
                         if (hasError) {
-                            lt.core.hub.notify?.(`\u274C ${count} validation ${count === 1 ? 'issue' : 'issues'}`, 'error', { ms: 6500 });
+                            lt.core.hub.notify?.(`\u274C ${count} validation ${count === 1 ? 'issue' : 'issues'}`, 'error');
                             lt.core.hub.setStatus?.(`\u274C ${count} issue${count === 1 ? '' : 's'} — ${summary}`, 'error', { sticky: true });
                             setBadgeCount?.(count);
                         } else if (hasWarn) {
-                            lt.core.hub.notify?.(`\u26A0\uFE0F ${count} validation ${count === 1 ? 'warning' : 'warnings'}`, 'warn', { ms: 5000 });
+                            lt.core.hub.notify?.(`\u26A0\uFE0F ${count} validation ${count === 1 ? 'warning' : 'warnings'}`, 'warn');
                             lt.core.hub.setStatus?.(`\u26A0\uFE0F ${count} warning${count === 1 ? '' : 's'} — ${summary}`, 'warn', { sticky: true });
                             setBadgeCount?.(count);
                         } else {
                             // Info-only updates (e.g., auto-manage posts with level=info)
-                            lt.core.hub.notify?.(`ℹ️ ${count} update${count === 1 ? '' : 's'} applied`, 'info', { ms: 3500 });
-                            lt.core.hub.setStatus?.(`ℹ️ ${count} update${count === 1 ? '' : 's'} — ${summary}`, 'info', { sticky: true });
+                            lt.core.hub.notify?.(`${count} update${count === 1 ? '' : 's'} applied`, 'info');
+                            lt.core.hub.setStatus?.(`${count} update${count === 1 ? '' : 's'} — ${summary}`, 'info', { sticky: true });
                             setBadgeCount?.(count);
                         }
                     } catch { /* never block the modal */ }
@@ -285,11 +308,10 @@ export async function mountValidationButton(TMUtils) {
                             const mode = await refreshQuoteGrid();
                             lt.core?.hub?.notify?.(
                                 mode ? `Grid refreshed (${mode})` : 'Grid refresh attempted (reload may be needed)',
-                                mode ? 'success' : 'info',
-                                { ms: 2500 }
+                                mode ? 'success' : 'info'
                             );
                         } catch {
-                            lt.core?.hub?.notify?.('Grid refresh failed', 'warn', { ms: 3000 });
+                            lt.core?.hub?.notify?.('Grid refresh failed', 'warn');
                         }
                     }
 
@@ -331,56 +353,71 @@ function refreshLabel(btn) {
 }
 
 function ensureValidationStyles() {
+    // If the global theme provides .qtv-* styles, do nothing.
+    const hasThemeQtv = (() => {
+        try {
+            const test = document.createElement('div');
+            test.className = 'qtv-pill';
+            document.body.appendChild(test);
+            const cs = getComputedStyle(test);
+            const ok = !!cs && (cs.borderRadius || '').includes('999px');
+            test.remove();
+            return ok;
+        } catch { return false; }
+    })();
+
+    if (hasThemeQtv) return;
+
+    // Fallback shim (kept tiny): highlight only; modal/table styles will still be set inline.
     if (document.getElementById('qtv-styles')) return;
     const style = document.createElement('style');
     style.id = 'qtv-styles';
     style.textContent = `
-.qtv-row-fail { outline: 2px solid rgba(220, 38, 38, .85) !important; outline-offset: -2px; }
-.qtv-row-fail--price-maxunit { background: rgba(254, 226, 226, .65) !important; }  /* red-ish */
-.qtv-row-fail--price-minunit { background: rgba(219, 234, 254, .65) !important; }  /* blue-ish */
-
-/* Modal shell */
-#qtv-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.38); z-index:2147483647; }
+/* Minimal scaffolding when theme.css isn't ready */
+#qtv-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.36); z-index: 100002; }
 #qtv-modal {
-  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-  background:#fff; width:min(960px, 94vw); max-height:80vh; overflow:hidden;
-  border-radius:12px; box-shadow:0 18px 40px rgba(0,0,0,.28);
-  font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  /* Local Monroe palette (independent of page tokens) */
+  --brand-600: #8b0b04;
+  --brand-700: #5c0a0a;
+  --ok: #28a745;
+  --warn: #ffc107;
+  --err: #dc3545;
+
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: min(900px,92vw);
 }
 
-/* Header */
-#qtv-modal .qtv-hd {
-  display:flex; align-items:center; gap:12px;
-  padding:14px 16px; border-bottom:1px solid #eaeaea;
-  background: linear-gradient(180deg, #fbfbfb 0%, #f7f7f7 100%);
-}
-#qtv-modal .qtv-hd h3 { margin:0; font-size:16px; font-weight:600; color:#0f172a; }
-#qtv-modal .qtv-actions { margin-left:auto; display:flex; gap:8px; }
-#qtv-modal .qtv-actions .btn { border-radius:8px; line-height:1.3; padding:6px 10px; }
+.lt-card { background: #fff; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.30); overflow: hidden; }
+.lt-card__header { display:flex; align-items:center; justify-content:space-between; padding: 12px 16px; border-bottom: 1px solid rgba(0,0,0,.08); }
+.lt-card__title { margin: 0; font: 600 16px/1.2 system-ui, Segoe UI, sans-serif; }
+.lt-card__spacer { margin-left: auto; }
+.lt-card__body { padding: 12px 16px; max-height: min(70vh,680px); overflow: auto; }
 
-/* Body */
-#qtv-modal .qtv-bd { padding:10px 14px 14px; overflow:auto; max-height:calc(80vh - 56px); }
+.lt-btn { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid #d1d5db; border-radius:8px; background:#f9fafb; cursor:pointer; }
+.lt-btn--primary { background: var(--brand-600); border-color: color-mix(in srgb, var(--brand-600) 70%, black); color:#fff; }
+.lt-btn--primary:hover { background: var(--brand-700); }
+.lt-btn--ghost { background:transparent; color: var(--brand-600); border-color: var(--brand-600); }
+.lt-btn--ghost:hover { background: color-mix(in srgb, var(--brand-600) 12%, transparent); }
 
-/* Table */
-#qtv-modal table { width:100%; border-collapse:separate; border-spacing:0; font-size:13px; }
-#qtv-modal thead th {
-  position: sticky; top: 0; z-index: 1;
-  background:#fff; border-bottom:1px solid #eaeaea; padding:8px 10px; text-align:left; color:#475569;
-}
-#qtv-modal tbody td { padding:8px 10px; border-bottom:1px solid #f1f5f9; }
-#qtv-modal tbody tr:nth-child(odd) { background:#fcfdff; }
-#qtv-modal tbody tr:hover { background:#f1f5f9; cursor:pointer; }
-#qtv-modal td:nth-child(1) { width:100px; }           /* Sort Order */
-#qtv-modal td:nth-child(2) { width:220px; }           /* Part #    */
-#qtv-modal td:last-child { word-break: break-word; }  /* Reason    */
+.lt-table { width:100%; border-collapse: separate; border-spacing: 0; font: 400 13px/1.35 system-ui, Segoe UI, sans-serif; }
+.lt-table th { text-align:left; padding:8px 10px; background:#f3f4f6; border-bottom:1px solid #e5e7eb; position:sticky; top:0; }
+.lt-table td { padding:8px 10px; border-bottom:1px solid #f1f5f9; }
+.lt-table tbody tr:hover { background:#f8fafc; }
 
-/* Pills */
-#qtv-modal .qtv-pill { display:inline-block; padding:2px 8px; border:1px solid #e2e8f0; border-radius:999px; font-size:12px; }
+.qtv-pill { display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:999px; font-weight:600; font-size:12px; border:1px solid transparent; }
+.qtv-pill--error { background:#dc2626; color:#fff; }
+.qtv-pill--warn  { background:#f59e0b; color:#111; }
+.qtv-pill--info  { background:#3b82f6; color:#fff; }
+
+/* Row highlights */
+.qtv-row-fail { outline: 2px solid rgba(220, 38, 38, .85) !important; outline-offset: -2px; }
+.qtv-row-fail--price-maxunit { background: rgba(254, 226, 226, .65) !important; }
+.qtv-row-fail--price-minunit { background: rgba(219, 234, 254, .65) !important; }
 `;
 
-
     document.head.appendChild(style);
+
 }
+
 
 // insert above ensureRowKeyAttributes()
 function getObsVal(vm, prop) {

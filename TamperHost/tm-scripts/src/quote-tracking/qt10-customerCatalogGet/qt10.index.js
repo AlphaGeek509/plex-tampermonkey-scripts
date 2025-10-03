@@ -160,7 +160,7 @@
             const msg = codeTrimmed ? `Linked: ${codeTrimmed} (key ${catalogKey})` : `Linked: key ${catalogKey}`;
             task.success(msg);
             // Flash success for ~3s (core API is notify(text, tone, opts))
-            lt.core.hub.notify(msg, "success", { ms: 3000 });
+            lt.core.hub.notify(msg, "success");
 
 
         } catch (err) {

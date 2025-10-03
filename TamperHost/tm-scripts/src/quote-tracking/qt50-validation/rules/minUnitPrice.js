@@ -27,16 +27,28 @@ export default function minUnitPrice(ctx, settings, utils) {
 
             const num = toNum(raw);
 
+            // Decide currency: infer from raw or use settings.currencyCode (default USD)
+            const inferCurrency = (rawVal) => {
+                const s = String(typeof rawVal === 'function' ? rawVal() : rawVal || '');
+                if (/\$/.test(s)) return 'USD';
+                if (/€/.test(s)) return 'EUR';
+                if (/£/.test(s)) return 'GBP';
+                return settings?.currencyCode || 'USD';
+            };
+
+            const currency = inferCurrency(raw);
+            const moneyFmt = new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 6 });
+            const numFmt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 6 });
+
             if (Number.isFinite(num) && num < min) {
-                const fmt = (n) => (Number.isFinite(n)
-                    ? n.toLocaleString('en-US', { maximumFractionDigits: 6 })
-                    : String(n));
+                const fmtMoney = (n) => Number.isFinite(n) ? moneyFmt.format(n) : String(n);
+
                 issues.push({
                     kind: 'price.minUnitPrice',
                     level: 'error',
                     quotePartKey: qp,
-                    message: `Unit Price ${fmt(num)} < Min ${fmt(min)}`,
-                    meta: { unitRaw: raw, unitNum: num, min }
+                    message: `Unit Price ${fmtMoney(num)} < Min ${fmtMoney(min)}`,
+                    meta: { unitRaw: raw, unitNum: num, min, currency }
                 });
             }
         }

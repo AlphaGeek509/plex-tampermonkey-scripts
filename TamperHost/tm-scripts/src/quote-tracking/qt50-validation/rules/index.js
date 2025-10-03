@@ -1,7 +1,7 @@
 // src/quote-tracking/validation/rules/index.js
 import autoManageLtPartNoOnQuote from './autoManageLtPartNoOnQuote';
-//import forbidZeroPrice from './forbidZeroPrice';
+import leadtimeZeroWeeks from './leadtimeZeroWeeks';
 import minUnitPrice from './minUnitPrice';
 import maxUnitPrice from './maxUnitPrice';
 
-export default [autoManageLtPartNoOnQuote, maxUnitPrice, minUnitPrice];  //requireResolvedPart, forbidZeroPrice, 
+export default [autoManageLtPartNoOnQuote, leadtimeZeroWeeks, maxUnitPrice, minUnitPrice]; 

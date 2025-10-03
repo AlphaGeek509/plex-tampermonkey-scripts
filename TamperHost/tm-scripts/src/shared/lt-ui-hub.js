@@ -89,8 +89,8 @@
         .hub {
           box-sizing: border-box;
           width: 100%;
-          background: #ffffff;
-          border-bottom: 1px solid rgba(0,0,0,.08);
+          background: var(--lt-hub-bg, #ffffff); /* default white, tokenized */
+          border-bottom: 1px solid color-mix(in srgb, var(--lt-ink, #222) 8%, transparent);
           box-shadow: 0 2px 8px rgba(0,0,0,.06);
           padding: 8px 12px;
           display: grid;
@@ -117,25 +117,64 @@
         /* Keep brand visible in nav too (change to 'none' to hide) */
         :host([data-variant="nav"]) .brand { display: inline-flex; }
         :host([data-variant="nav"]) button.hbtn { padding: 4px 10px; }
-
         .brand {
           display: inline-flex; align-items: center; gap: 6px;
-          padding: 4px 8px; border-radius: 999px; border: 1px solid rgba(0,0,0,.12);
-          background: #f7f9fb; font-weight: 600;
-        }
-        /* Map global theme vars (from :root in theme.css) into the shadow tree */
-        :host {
-          --lt-brand: var(--brand-600, #0b5fff);
-          --lt-brand-700: var(--brand-700, #0a4fd6);
-          --lt-ink: var(--ink, #222);
-          --lt-ink-muted: var(--ink-muted, #666);
-          --lt-ok: var(--ok, #15803d);
-          --lt-warn: var(--warn, #b45309);
-          --lt-err: var(--err, #b91c1c);
+          padding: 4px 8px;
+          border-radius: 999px;
+          border: 1px solid color-mix(in srgb, var(--lt-ink, #222) 12%, transparent);
+          background: color-mix(in srgb, var(--lt-brand, #8b0b04) 6%, white);
+          font-weight: 600;
+          transition: background .18s ease, border-color .18s ease, box-shadow .18s ease;
         }
 
-        /* Brand token touches */
-        .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--lt-brand); }
+        /* Dark-on-hover (corporate-red tint) */
+        .brand:hover {
+          background: color-mix(in srgb, var(--lt-brand, #8b0b04) 12%, white);
+          border-color: color-mix(in srgb, var(--lt-brand, #8b0b04) 24%, white);
+          box-shadow: 0 2px 6px rgba(0,0,0,.08);
+        }
+
+        /* Keyboard accessibility highlight if the chip ever becomes focusable */
+        .brand:focus-visible {
+          outline: 2px solid color-mix(in srgb, var(--lt-brand, #8b0b04) 35%, white);
+          outline-offset: 2px;
+        }
+
+        /* Map global theme vars (from :root in theme.css) into the shadow tree */
+        :host {
+          --lt-brand: var(--brand-600);
+          --lt-brand-700: var(--brand-700);
+          --lt-ink: var(--ink);
+          --lt-ink-muted: var(--ink-muted);
+          --lt-ok: var(--ok);
+          --lt-warn: var(--warn);
+          --lt-err: var(--err);
+          --lt-hub-bg: var(--hub-bg, #ffffff); /* optional: override from :root if needed */
+          --lt-brand-icon: var(--brand-icon, url('https://monroeengineering.com/img/favicon.ico'));
+        }
+
+        /* Brand mark: prefer an icon image; fall back to a colored dot */
+        .dot {
+          width: 16px; height: 16px;
+          border-radius: 4px;
+          background-color: transparent;
+          background-image: var(--lt-brand-icon, url('https://monroeengineering.com/img/favicon.ico'));
+          background-repeat: no-repeat;
+          background-position: center;
+          background-size: contain;
+          transition: filter .18s ease, box-shadow .18s ease, background-color .18s ease;
+        }
+
+        /* Slight emphasis on hover: tiny tint and crisper icon */
+        .brand:hover .dot {
+          background-color: color-mix(in srgb, var(--lt-brand, #8b0b04) 10%, transparent);
+          filter: saturate(1.08) contrast(1.06);
+          box-shadow: 0 1px 2px rgba(0,0,0,.10);
+        }
+
+        /* If you want a purely circular tint behind the icon, uncomment:
+        .dot { border-radius: 999px; background-color: color-mix(in srgb, var(--lt-brand) 16%, transparent); }
+        */
 
         /* Button system: primary / ghost, with accessible focus + hover states */
         button.hbtn {
@@ -180,19 +219,34 @@
 
 
         .sep { width: 1px; height: 20px; background: rgba(0,0,0,.12); }
-        .status {
-          padding: 3px 10px; border-radius: 999px;
-          border: 1px solid rgba(0,0,0,.15); background: #f8fafc; font-size: 12px;
+                .status {
+          display: inline-flex; align-items: center; gap: 8px;
+          padding: 5px 12px;
+          border-radius: 999px;
+          font-weight: 600;
+          font-size: 12px;
+          border: 1px solid transparent;
+          box-shadow: 0 4px 12px rgba(0,0,0,.16);
+          animation: lt-pop-in .14s ease-out;
         }
-        .status.success { background:#ecfdf5; border-color:#d1fae5; }
-        .status.info    { background:#eff6ff; border-color:#dbeafe; }
-        .status.warn    { background:#fffbeb; border-color:#fef3c7; }
-        .status.danger  { background:#fef2f2; border-color:#fee2e2; }
+        .status.success { background: var(--lt-ok);   color: #fff;  border-color: color-mix(in srgb, var(--lt-ok)   70%, black); }
+        .status.info    { background: var(--lt-brand);color: #fff;  border-color: color-mix(in srgb, var(--lt-brand)70%, black); }
+        .status.warn    { background: var(--lt-warn); color: #111;  border-color: color-mix(in srgb, var(--lt-warn) 50%, black); animation: lt-pop-in .14s ease-out, lt-pulse 1.1s ease-in-out 2; }
+        .status.error   { background: var(--lt-err);  color: #fff;  border-color: color-mix(in srgb, var(--lt-err)  70%, black); animation: lt-pop-in .14s ease-out, lt-pulse 1.1s ease-in-out 2; }
+
+        .status.success::before { content: "✓"; font-weight: 900; filter: drop-shadow(0 1px 0 rgba(0,0,0,.2)); }
+        .status.info::before    { content: "ℹ"; font-weight: 900; filter: drop-shadow(0 1px 0 rgba(0,0,0,.2)); }
+        .status.warn::before    { content: "⚠"; font-weight: 900; }
+        .status.error::before   { content: "✖"; font-weight: 900; filter: drop-shadow(0 1px 0 rgba(0,0,0,.2)); }
 
         .status-wrap { display: inline-flex; align-items: center; gap: 8px; }
+
+        @keyframes lt-pop-in { from { transform: scale(.98); opacity:.0; } to { transform: scale(1); opacity:1; } }
+        @keyframes lt-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(0,0,0,.0);} 50% { box-shadow: 0 0 0 6px rgba(0,0,0,.06);} }
+
         .spinner {
           width: 16px; height: 16px; border-radius: 50%;
-          border: 2px solid rgba(0,0,0,.15); border-top-color: #0ea5e9;
+          border: 2px solid rgba(0,0,0,.15); border-top-color: var(--lt-brand);
           animation: spin 800ms linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -326,7 +380,7 @@
                     return {
                         update(text) { if (typeof text === 'string') lab.textContent = text; return this; },
                         success(text = 'Done') { lab.className = 'status success'; lab.textContent = text; spin.remove(); return this; },
-                        error(text = 'Error') { lab.className = 'status danger'; lab.textContent = text; spin.remove(); return this; },
+                        error(text = 'Error') { lab.className = 'status error'; lab.textContent = text; spin.remove(); return this; },
                         clear() { statusSlot.replaceChildren(); return this; }
                     };
                 },
@@ -412,6 +466,20 @@
         ROOT.__ensureLTHubPromise = (async () => {
             const { container } = await ROOT.waitForContainerAndAnchor(timeoutMs, selectors);
             const { host, api } = (ROOT.createHub || createHub)();
+
+            // If the page is still on the old blue tokens, set Monroe tokens on the hub host only.
+            try {
+                const rootBrand = getComputedStyle(document.documentElement)
+                    .getPropertyValue('--brand-600').trim().toLowerCase();
+                if (!rootBrand || rootBrand === '#0b5fff') {
+                    host.style.setProperty('--brand-600', '#8b0b04'); // Monroe primary
+                    host.style.setProperty('--brand-700', '#5c0a0a'); // Monroe hover/active
+                    host.style.setProperty('--ok', '#28a745');
+                    host.style.setProperty('--warn', '#ffc107');
+                    host.style.setProperty('--err', '#dc3545');
+                }
+            } catch { }
+
 
             if (desiredMount === 'nav') {
                 // Wait for navbar; never fall back to body

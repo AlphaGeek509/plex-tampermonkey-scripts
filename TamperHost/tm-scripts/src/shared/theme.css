@@ -1,15 +1,22 @@
 /* OneMonroe brand theme (baseline) */
 :root {
-    --brand: #0b5fff; /* primary */
-    --brand-600: #0b5fff;
-    --brand-700: #0a4fd6;
-    --accent: #ff6a00; /* accent */
+    /* OneMonroe corporate mapping */
+    --brand: #8b0b04; /* Monroe red */ /* theme.css/custom.css */
+    --brand-600: #8b0b04; /* primary base */
+    --brand-700: #5c0a0a; /* darker hover/active */
+    --accent: #8b0902; /* secondary red accent */
     --muted: #f4f6f8;
     --ink: #222;
     --ink-muted: #666;
-    --ok: #15803d;
-    --warn: #b45309;
-    --err: #b91c1c;
+    /* Align status tokens with corporate/Bootstrap tones */
+    --ok: #28a745;
+    --warn: #ffc107;
+    --err: #dc3545;
+}
+
+/* Typography scope for LT surfaces (keeps host untouched) */
+.lt-hub, #qtv-modal {
+    font-family: "Poppins", Arial, sans-serif; /* corporate font */
 }
 
 /* Hub pill tones */
@@ -47,20 +54,48 @@
     color: var(--ink-muted);
 }
 
-/* Buttons (optional utility) */
+/* Buttons (component) */
 .lt-btn {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: .5rem;
     padding: .5rem .8rem;
     border-radius: .6rem;
     border: 1px solid transparent;
     background: var(--brand-600);
     color: #fff;
-    cursor: pointer
+    cursor: pointer;
+    font-family: "Poppins", Arial, sans-serif; /* corporate font */
+    transition: background .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease, transform .06s ease;
+}
+    .lt-btn:hover {
+        background: var(--brand-700);
+    }
+
+    .lt-btn:active {
+        transform: translateY(.5px);
+    }
+
+    .lt-btn:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--brand-600) 40%, white);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-600) 25%, transparent);
+    }
+
+    .lt-btn[disabled] {
+        opacity: .6;
+        cursor: not-allowed;
+    }
+
+/* Variants */
+.lt-btn--primary {
+    background: var(--brand-600);
+    color: #fff;
+    border-color: color-mix(in srgb, var(--brand-600) 70%, black);
 }
 
-    .lt-btn:hover {
+    .lt-btn--primary:hover {
         background: var(--brand-700);
     }
 
@@ -71,8 +106,97 @@
 }
 
     .lt-btn--ghost:hover {
-        background: rgba(11,95,255,0.08);
+        background: color-mix(in srgb, var(--brand-600) 12%, transparent);
     }
+
+.lt-btn--success, .lt-btn--ok {
+    background: var(--ok);
+    color: #fff;
+    border-color: color-mix(in srgb, var(--ok) 70%, black);
+}
+
+.lt-btn--warn {
+    background: var(--warn);
+    color: #111;
+    border-color: color-mix(in srgb, var(--warn) 50%, black);
+}
+
+.lt-btn--error, .lt-btn--danger {
+    background: var(--err);
+    color: #fff;
+    border-color: color-mix(in srgb, var(--err) 70%, black);
+}
+
+
+/* Card (component) */
+.lt-card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 18px 40px rgba(0,0,0,.28);
+    overflow: hidden;
+}
+
+.lt-card__header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid #eaeaea;
+    background: linear-gradient(180deg, #fbfbfb 0%, #f7f7f7 100%);
+}
+
+.lt-card__title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ink, #0f172a);
+}
+
+.lt-card__spacer {
+    margin-left: auto;
+}
+
+.lt-card__body {
+    padding: 10px 14px 14px;
+}
+
+/* Table (component) */
+.lt-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+}
+
+    .lt-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #fff;
+        border-bottom: 1px solid #eaeaea;
+        padding: 8px 10px;
+        text-align: left;
+        color: var(--ink-muted, #475569);
+    }
+
+    .lt-table tbody td {
+        padding: 8px 10px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .lt-table tbody tr td:first-child:not(:empty) {
+        border-top: 1px solid #e5e7eb;
+    }
+
+    .lt-table tbody tr:nth-child(odd) {
+        background: #fcfdff;
+    }
+
+    .lt-table tbody tr:hover {
+        background: #f1f5f9;
+        cursor: pointer;
+    }
+
 
 /* Hub: brand + status */
 .lt-hub .brand {
@@ -125,15 +249,222 @@
 
 /* QT50: validation highlights */
 .qtv-row-fail {
-    outline: 2px solid rgba(185, 28, 28, 0.6); /* red-700 */
-    background: rgba(254, 226, 226, 0.35); /* red-100 */
-    transition: background 160ms ease-in, outline 160ms ease-in;
+    outline: 2px solid color-mix(in srgb, var(--err) 70%, white);
+    background: color-mix(in srgb, var(--err) 12%, white);
+    border-left: 4px solid var(--err);
+    box-shadow: inset 0 6px 18px rgba(0,0,0,.12);
+    transition: background 160ms ease-in, outline 160ms ease-in, box-shadow 160ms ease-in;
 }
-
 /* Rule-specific accent for max unit price */
 .qtv-row-fail--price-maxunit {
-    outline-color: rgba(153, 27, 27, 0.8); /* deeper red */
-    background: rgba(254, 202, 202, 0.45); /* red-200 */
+    outline-color: color-mix(in srgb, var(--err) 80%, black);
+    background: color-mix(in srgb, var(--err) 20%, white);
+}
+/* Rule-specific accent for min unit price */
+.qtv-row-fail--price-minunit {
+    outline-color: color-mix(in srgb, var(--brand-700) 70%, black);
+    background: color-mix(in srgb, var(--brand-600) 12%, white);
+}
+
+/* QT Validation Modal (Plex-like table) */
+#qtv-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.38);
+    z-index: 2147483647;
+}
+
+#qtv-modal {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%,-50%);
+    background: #fff;
+    width: min(960px, 94vw);
+    max-height: 80vh;
+    overflow: hidden;
+    border-radius: 12px;
+    box-shadow: 0 18px 40px rgba(0,0,0,.28);
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+    #qtv-modal .qtv-hd {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        border-bottom: 1px solid #eaeaea;
+        background: linear-gradient(180deg, #fbfbfb 0%, #f7f7f7 100%);
+    }
+
+        #qtv-modal .qtv-hd h3 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--ink, #0f172a);
+        }
+
+    #qtv-modal .qtv-actions {
+        margin-left: auto;
+        display: flex;
+        gap: 8px;
+    }
+
+        #qtv-modal .qtv-actions .btn {
+            border-radius: 8px;
+            line-height: 1.3;
+            padding: 6px 10px;
+        }
+
+    #qtv-modal .qtv-bd {
+        padding: 10px 14px 14px;
+        overflow: auto;
+        max-height: calc(80vh - 56px);
+    }
+
+    #qtv-modal table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 13px;
+    }
+
+    #qtv-modal thead th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #fff;
+        border-bottom: 1px solid #eaeaea;
+        padding: 8px 10px;
+        text-align: left;
+        color: var(--ink-muted, #475569);
+    }
+
+    #qtv-modal tbody td {
+        padding: 8px 10px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    #qtv-modal tbody tr td:first-child:not(:empty) {
+        border-top: 1px solid #e5e7eb;
+    }
+
+    #qtv-modal tbody tr:nth-child(odd) {
+        background: #fcfdff;
+    }
+
+    #qtv-modal tbody tr:hover {
+        background: #f1f5f9;
+        cursor: pointer;
+    }
+
+    #qtv-modal td:nth-child(1) {
+        width: 100px;
+    }
+
+    #qtv-modal td:nth-child(2) {
+        width: 220px;
+    }
+
+    #qtv-modal td:last-child {
+        word-break: break-word;
+    }
+
+/* Level pill */
+.qtv-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    border: 1px solid transparent;
+    box-shadow: 0 4px 12px rgba(0,0,0,.14);
+    font-weight: 600;
+}
+
+.qtv-pill--info {
+    background: var(--brand-600);
+    color: #fff;
+    border-color: color-mix(in srgb, var(--brand-600) 70%, black);
+}
+
+.qtv-pill--success {
+    background: var(--ok);
+    color: #fff;
+    border-color: color-mix(in srgb, var(--ok) 70%, black);
+}
+
+.qtv-pill--warn {
+    background: var(--warn);
+    color: #111;
+    border-color: color-mix(in srgb, var(--warn) 50%, black);
+}
+
+.qtv-pill--error {
+    background: var(--err);
+    color: #fff;
+    border-color: color-mix(in srgb, var(--err) 70%, black);
+}
+
+.qtv-pill--info::before {
+    content: "ℹ";
+    font-weight: 900;
+}
+
+.qtv-pill--success::before {
+    content: "✓";
+    font-weight: 900;
+}
+
+.qtv-pill--warn::before {
+    content: "⚠";
+    font-weight: 900;
+}
+
+.qtv-pill--error::before {
+    content: "✖";
+    font-weight: 900;
+}
+
+/* Brand style for our <li> wrapper so it matches Monroe red */
+/* Make the LI itself carry the Monroe red border with stronger specificity */
+.plex-actions-wrapper ul.plex-actions > li.lt-action.lt-action--brand {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--brand-600) !important; /* override Plex blue */
+    border-radius: 8px;
+    background: transparent;
+    box-shadow: 0 1px 0 rgba(0,0,0,.04);
+}
+
+    /* Hover fills lightly with brand tint */
+    .plex-actions-wrapper ul.plex-actions > li.lt-action.lt-action--brand:hover {
+        background: color-mix(in srgb, var(--brand-600) 12%, transparent);
+    }
+
+    /* Make the inner ghost anchor look seamless inside the red li */
+    /* Neutralize Plex's anchor button styling so the LI border shows red */
+    .plex-actions-wrapper ul.plex-actions > li.lt-action.lt-action--brand > a.lt-btn {
+        border: 1px solid transparent !important; /* kill blue border */
+        background: transparent !important;
+        box-shadow: none !important;
+        color: var(--brand-600) !important;
+        padding: 6px 10px;
+        line-height: 1.25;
+        border-radius: 8px; /* match li radius */
+        text-decoration: none;
+    }
+
+    /* Strong, accessible focus using brand */
+    .plex-actions-wrapper ul.plex-actions > li.lt-action.lt-action--brand:has(> a.lt-btn:focus-visible) {
+        outline: 2px solid color-mix(in srgb, var(--brand-600) 40%, black);
+        outline-offset: 2px;
+    }
+
+/* Spacing between actions (keeps native feel) */
+.plex-actions-wrapper ul.plex-actions > li.lt-action {
+    margin-left: 8px;
 }
 
 

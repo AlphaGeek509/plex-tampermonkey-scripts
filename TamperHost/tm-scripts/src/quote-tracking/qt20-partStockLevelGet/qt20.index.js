@@ -29,7 +29,8 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
         ACTIONS_UL_SEL: '.plex-dialog-has-buttons .plex-actions-wrapper ul.plex-actions',
         MODAL_TITLE: 'Quote Part Detail',
         // Primary KO anchor is the form container; fallbacks retained for older layouts
-        ANCHOR_SEL: '.plex-form-content, .plex-dialog-content, [data-bind], input[name="PartNo"], input[name="PartNoNew"], input[name="ItemNo"], input[name="Part_Number"], input[name="Item_Number"]',
+        //, .plex-dialog-content, [data-bind], input[name="PartNo"], input[name="PartNoNew"], input[name="ItemNo"], input[name="Part_Number"], input[name="Item_Number"]
+        ANCHOR_SEL: '.plex-form-content',
         DS_STOCK: 172,
         ACTION_BAR_SEL: '#QuoteWizardSharedActionBar',
         GRID_SEL: '.plex-grid',
@@ -165,12 +166,12 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
 
             // No breakdown, no stamp — just a simple toast
             task.success('Stock retrieved', 1200);
-            lt.core.hub.notify(`Stock: ${formatInt(sum)} pcs`, 'success', { ms: 2500, toast: true });
+            lt.core.hub.notify(`Stock: ${formatInt(sum)} pcs`, 'success', { toast: true });
 
             dlog('QT20 success', { qk, partNo, basePart, sum });
         } catch (err) {
             task.error('Failed');
-            lt.core.hub.notify(`Stock check failed: ${err?.message || err}`, 'error', { ms: 4000, toast: true });
+            lt.core.hub.notify(`Stock check failed: ${err?.message || err}`, 'error', { toast: true });
 
             derr('handleClick:', err);
         } finally {
@@ -234,25 +235,39 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             ul.dataset.qt20Injected = '1';
             dlog('injecting controls');
 
-            // Main action
+            // Main action (themed anchor inside LI to match Plex action bar sizing)
             const liMain = document.createElement('li');
+            liMain.className = 'lt-action lt-action--brand';
             const btn = document.createElement('a');
             btn.href = 'javascript:void(0)';
-            btn.textContent = 'LT Get Stock Levels';
-            btn.title = 'Show total stock (no stamp)';
-            btn.setAttribute('aria-label', 'Get stock levels');
-            btn.setAttribute('role', 'button');
-            Object.assign(btn.style, { cursor: 'pointer', transition: 'filter .15s, text-decoration-color .15s' });
-            btn.addEventListener('mouseenter', () => { btn.style.filter = 'brightness(1.08)'; btn.style.textDecoration = 'underline'; });
-            btn.addEventListener('mouseleave', () => { btn.style.filter = ''; btn.style.textDecoration = ''; });
-            btn.addEventListener('focus', () => { btn.style.outline = '2px solid #4a90e2'; btn.style.outlineOffset = '2px'; });
-            btn.addEventListener('blur', () => { btn.style.outline = ''; btn.style.outlineOffset = ''; });
-            btn.addEventListener('click', () => handleClick(modal));
-            btn.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(modal); }
-            });
+            btn.id = 'qt20-stock-li-btn';
+            btn.className = 'lt-btn lt-btn--ghost';
+            btn.textContent = 'Get Stock Levels';
+            btn.title = 'Fetch stock for this part (no stamp)';
+            btn.addEventListener('click', (e) => { e.preventDefault(); handleClick(modal); });
             liMain.appendChild(btn);
             ul.appendChild(liMain);
+
+
+            //// Main action
+            //const liMain = document.createElement('li');
+            //const btn = document.createElement('a');
+            //btn.href = 'javascript:void(0)';
+            //btn.textContent = 'LT Get Stock Levels';
+            //btn.title = 'Show total stock (no stamp)';
+            //btn.setAttribute('aria-label', 'Get stock levels');
+            //btn.setAttribute('role', 'button');
+            //Object.assign(btn.style, { cursor: 'pointer', transition: 'filter .15s, text-decoration-color .15s' });
+            //btn.addEventListener('mouseenter', () => { btn.style.filter = 'brightness(1.08)'; btn.style.textDecoration = 'underline'; });
+            //btn.addEventListener('mouseleave', () => { btn.style.filter = ''; btn.style.textDecoration = ''; });
+            //btn.addEventListener('focus', () => { btn.style.outline = '2px solid #4a90e2'; btn.style.outlineOffset = '2px'; });
+            //btn.addEventListener('blur', () => { btn.style.outline = ''; btn.style.outlineOffset = ''; });
+            //btn.addEventListener('click', () => handleClick(modal));
+            //btn.addEventListener('keydown', (e) => {
+            //    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(modal); }
+            //});
+            //liMain.appendChild(btn);
+            //ul.appendChild(liMain);
 
             // Let other modules refresh if they care (no-op here)
             onNodeRemoved(modal, () => {

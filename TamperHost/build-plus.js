@@ -100,6 +100,13 @@ const PKG_PATH = path.join(SRC_ROOT, 'package.json');
 // Known module → src/out mapping for emit step
 const MODULES = [
     {
+        id: 'QT05',
+        featureName: 'Customer Contact Add',
+        bannerBase: 'qt10-customerContactAdd',
+        src: path.join(SRC_ROOT, 'src', 'quote-tracking', 'qt05-customerContactAdd', 'qt05.index.js'),
+        out: path.join(ROOT, 'wwwroot', 'qt05.user.js')
+    },
+    {
         id: 'QT10',
         featureName: 'Customer Catalog Get',
         bannerBase: 'qt10-customerCatalogGet',

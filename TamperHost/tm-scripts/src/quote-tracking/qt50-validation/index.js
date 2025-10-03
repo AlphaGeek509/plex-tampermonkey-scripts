@@ -23,6 +23,7 @@ export const KEYS = {
     autoManageLtPartNoOnQuote: 'qt50.autoManageLtPartNoOnQuote',
     minUnitPrice: 'qt50.minUnitPrice',
     maxUnitPrice: 'qt50.maxUnitPrice',
+    leadtimeZeroWeeks: 'qt50.leadtimeZeroWeeks',
 };
 
 const LEGACY_KEYS = {
@@ -30,6 +31,7 @@ const LEGACY_KEYS = {
     autoManageLtPartNoOnQuote: 'qtv.autoManageLtPartNoOnQuote',
     minUnitPrice: 'qtv.minUnitPrice',
     maxUnitPrice: 'qtv.maxUnitPrice',
+    leadtimeZeroWeeks: 'qt50.leadtimeZeroWeeks',
 };
 
 const DEF = {
@@ -37,7 +39,9 @@ const DEF = {
     [KEYS.autoManageLtPartNoOnQuote]: true,
     [KEYS.minUnitPrice]: 0,
     [KEYS.maxUnitPrice]: 10,
+    [KEYS.leadtimeZeroWeeks]: true,
 };
+
 function readOrLegacy(k) {
     const v = GM_getValue(k);
     if (v !== undefined) return v;
@@ -53,15 +57,16 @@ const getVal = k => {
 };
 const setVal = (k, v) => { GM_setValue(k, v); emitChanged(); };
 
-
 export function getSettings() {
     return {
         enabled: getVal(KEYS.enabled),
         autoManageLtPartNoOnQuote: getVal(KEYS.autoManageLtPartNoOnQuote),
         minUnitPrice: getVal(KEYS.minUnitPrice),
-        maxUnitPrice: getVal(KEYS.maxUnitPrice)
+        maxUnitPrice: getVal(KEYS.maxUnitPrice),
+        leadtimeZeroWeeks: getVal(KEYS.leadtimeZeroWeeks),
     };
 }
+
 export function onSettingsChange(fn) {
     if (typeof fn !== 'function') return () => { };
     const h = () => fn(getSettings());
@@ -86,7 +91,8 @@ async function ensureHubGear() {
     const onWizard = TMUtils.matchRoute?.(ROUTES);
     const active = document.querySelector('.plex-wizard-page-list .plex-wizard-page.active, .plex-wizard-page-list .plex-wizard-page[aria-current="page"]');
     const name = (active?.textContent || '').trim().replace(/\s+/g, ' ');
-    const onTarget = onWizard && /^part\s*summary$/i.test(name);
+    const onTarget = true;
+    //const onTarget = onWizard && /^part\s*summary$/i.test(name);
 
     const hub = await (async function getHub(opts = { mount: 'nav' }) {
         for (let i = 0; i < 50; i++) {
@@ -120,16 +126,23 @@ function showPanel() {
     const overlay = document.createElement('div');
     overlay.id = 'lt-qtv-overlay';
     Object.assign(overlay.style, {
-        position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 100002
+        position: 'fixed',
+        inset: 0,
+        background: 'var(--lt-overlay, rgba(0,0,0,.36))',
+        zIndex: 100002
     });
 
     const panel = document.createElement('div');
+    panel.id = 'lt-qtv-panel';
+    panel.className = 'lt-card lt-modal';
     Object.assign(panel.style, {
-        position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
-        background: '#fff', padding: '18px', borderRadius: '12px',
-        boxShadow: '0 10px 30px rgba(0,0,0,.30)', fontFamily: 'system-ui, Segoe UI, sans-serif',
-        width: '420px', maxWidth: '92vw'
+        position: 'absolute',
+        top: '50%', left: '50%',
+        transform: 'translate(-50%,-50%)',
+        width: '520px',
+        maxWidth: 'min(92vw, 560px)'
     });
+
 
     // Close on ESC (works when focus is anywhere inside overlay)
     overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') overlay.remove(); });
@@ -154,7 +167,12 @@ function showPanel() {
     <label title="If Part Status is Quote, the Lyn-Tron Part No is controlled automatically."
            style="display:block; margin:8px 0;">
       <input type="checkbox" id="qtv-autoManageLtPartNoOnQuote">
-      Auto-manage Lyn-Tron Part No when Part status is “Quote”.
+      Auto-manage omitted Lyn-Tron Part No.
+    </label>
+
+    <label style="display:block; margin:8px 0;">
+      <input type="checkbox" id="qtv-leadtimeZeroWeeks">
+      Alert when Leadtime is 0 weeks
     </label>
 
     <div style="display:flex; gap:10px; margin:8px 0;">
@@ -170,24 +188,28 @@ function showPanel() {
 
     <div style="border-top:1px solid #eee; margin:12px 0 10px;"></div>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
-      <button id="qtv-export" class="btn btn-default">Export</button>
-      <label class="btn btn-default">Import <input id="qtv-import" type="file" accept="application/json" style="display:none;"></label>
+      <button id="qtv-export" class="lt-btn lt-btn--ghost">Export</button>
+      <button id="qtv-import-btn" class="lt-btn lt-btn--ghost" type="button">Import</button>
+        <input id="qtv-import" type="file" accept="application/json" style="display:none;">
       <span style="flex:1"></span>
-      <button id="qtv-reset" class="btn btn-default" style="border-color:#f59e0b; color:#b45309;">Reset</button>
-      <button id="qtv-close" class="btn btn-primary" style="background:#2563eb; color:#fff; border:1px solid #1d4ed8;">Save &amp; Close</button>
+      <button id="qtv-reset" class="lt-btn lt-btn--warn">Reset</button>
+      <button id="qtv-close" class="lt-btn lt-btn--primary">Save &amp; Close</button>
     </div>
   `;
 
     // Initialize control states
     panel.querySelector('#qtv-enabled').checked = getVal(KEYS.enabled);
     panel.querySelector('#qtv-autoManageLtPartNoOnQuote').checked = getVal(KEYS.autoManageLtPartNoOnQuote);
+    panel.querySelector('#qtv-leadtimeZeroWeeks').checked = getVal(KEYS.leadtimeZeroWeeks);
     setNumberOrBlank(panel.querySelector('#qtv-min'), getVal(KEYS.minUnitPrice));
     setNumberOrBlank(panel.querySelector('#qtv-max'), getVal(KEYS.maxUnitPrice));
 
     // Change handlers
     panel.querySelector('#qtv-enabled')?.addEventListener('change', e => setVal(KEYS.enabled, !!e.target.checked));
     panel.querySelector('#qtv-autoManageLtPartNoOnQuote')?.addEventListener('change', e => setVal(KEYS.autoManageLtPartNoOnQuote, !!e.target.checked));
-
+    panel.querySelector('#qtv-leadtimeZeroWeeks')?.addEventListener('change', e =>
+        setVal(KEYS.leadtimeZeroWeeks, !!e.target.checked)
+    );
     panel.querySelector('#qtv-min')?.addEventListener('change', e => {
         const v = parseNumberOrNull(e.target.value); setVal(KEYS.minUnitPrice, v); setNumberOrBlank(e.target, v);
     });
@@ -216,7 +238,7 @@ function showPanel() {
     });
 
     // Import
-    panel.querySelector('#qtv-import')?.addEventListener('change', async (ev) => {
+    panel.querySelector('#qtv-import-btn')?.addEventListener('change', async (ev) => {
         try {
             const f = ev.target.files?.[0]; if (!f) return;
             const data = JSON.parse(await f.text());
@@ -232,6 +254,7 @@ function showPanel() {
         }
     });
 
+    ensureSettingsStyles(); // NEW: fallback styles if theme.css isn’t ready
     overlay.appendChild(panel);
     (document.body || document.documentElement).appendChild(overlay);
 
@@ -243,3 +266,43 @@ function showPanel() {
 function parseNumberOrNull(s) { const v = Number(String(s).trim()); return Number.isFinite(v) ? v : null; }
 function toNullOrNumber(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
 function setNumberOrBlank(input, val) { input.value = (val == null ? '' : String(val)); }
+
+/* NEW: minimal fallback styles for the settings panel */
+function ensureSettingsStyles() {
+    if (document.getElementById('lt-qtv-panel-styles')) return;
+    const s = document.createElement('style');
+    s.id = 'lt-qtv-panel-styles';
+    s.textContent = `
+#lt-qtv-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.36); z-index: 100002; }
+#lt-qtv-panel.lt-card {
+  /* Local Monroe palette (independent of page tokens) */
+  --brand-600: #8b0b04;
+  --brand-700: #5c0a0a;
+  --ok: #28a745;
+  --warn: #ffc107;
+  --err: #dc3545;
+
+  background: #fff; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.30);
+  overflow: hidden; padding: 16px;
+}
+#lt-qtv-panel h3 { margin: 0 0 10px 0; font: 600 16px/1.2 system-ui, Segoe UI, sans-serif; }
+#lt-qtv-panel .lt-btn,
+#lt-qtv-panel label.lt-btn {
+  display:inline-flex; align-items:center; gap:6px; padding:6px 10px;
+  border:1px solid #d1d5db; border-radius:8px; background:#f9fafb; cursor:pointer;
+}
+#lt-qtv-panel .lt-btn--primary { background: var(--brand-600); border-color: color-mix(in srgb, var(--brand-600) 70%, black); color:#fff; }
+#lt-qtv-panel .lt-btn--primary:hover { background: var(--brand-700); }
+#lt-qtv-panel .lt-btn--ghost   { background: transparent; color: var(--brand-600); border-color: var(--brand-600); }
+#lt-qtv-panel .lt-btn--ghost:hover { background: color-mix(in srgb, var(--brand-600) 12%, transparent); }
+#lt-qtv-panel .lt-btn--warn    { background: var(--warn); color:#111; border-color: color-mix(in srgb, var(--warn) 50%, black); }
+#lt-qtv-panel .lt-btn--error   { background: var(--err);  color:#fff; border-color: color-mix(in srgb, var(--err) 70%, black); }
+#lt-qtv-panel .lt-btn--ok      { background: var(--ok);   color:#fff; border-color: color-mix(in srgb, var(--ok) 70%, black); }
+
+#lt-qtv-panel input[type="number"], #lt-qtv-panel input[type="text"] {
+  width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff;
+}
+  `;
+    document.head.appendChild(s);
+}
+
