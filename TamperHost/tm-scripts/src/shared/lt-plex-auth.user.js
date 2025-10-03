@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LT › Plex Auth Helper
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      4.0.2
+// @version      4.1.3
 // @description  Shared helper for storing and retrieving Plex API key
 // @match        https://*.on.plex.com/*
 // @match        https://*.plex.com/*

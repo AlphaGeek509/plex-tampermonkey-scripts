@@ -607,7 +607,7 @@ async function emitModule(m, versionStr) {
                 const sha = (process.env.GIT_SHA || '').trim();
                 const pinnedIdent = sha ? sha : `v${versionStr}`;
                 // const purgeUrl = `https://purge.jsdelivr.net/gh/${pkg}@${pinnedIdent}/TamperHost/wwwroot/${path.basename(m.out)}`;
-                console.log(`🧹 jsDelivr purge → ${purgeUrl}`);
+                // console.log(`🧹 jsDelivr purge → ${purgeUrl}`);
             }
 
         }

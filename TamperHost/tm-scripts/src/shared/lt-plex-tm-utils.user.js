@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LT › Plex TM Utils
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      4.0.2
+// @version      4.1.3
 // @description  Shared utilities
 // @match        https://*.on.plex.com/*
 // @match        https://*.plex.com/*
