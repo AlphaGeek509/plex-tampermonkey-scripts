@@ -27,14 +27,26 @@ export default function maxUnitPrice(ctx, settings, utils) {
 
             const num = toNum(raw);
 
+            // Decide currency: infer from raw or use settings.currencyCode (default USD)
+            const inferCurrency = (rawVal) => {
+                const s = String(typeof rawVal === 'function' ? rawVal() : (rawVal ?? '')).trim();
+                if (/\$/.test(s)) return 'USD';
+                if (/€/.test(s)) return 'EUR';
+                if (/£/.test(s)) return 'GBP';
+                return settings?.currencyCode || 'USD';
+            };
+
+            const currency = inferCurrency(raw);
+            const moneyFmt = new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 6 });
+
             if (Number.isFinite(num) && num > max) {
-                const fmt = (n) => (Number.isFinite(n) ? n.toLocaleString('en-US', { maximumFractionDigits: 6 }) : String(n));
+                const fmtMoney = (n) => Number.isFinite(n) ? moneyFmt.format(n) : String(n);
                 issues.push({
                     kind: 'price.maxUnitPrice',
                     level: 'error',
                     quotePartKey: qp,
-                    message: `Unit Price ${fmt(num)} > Max ${fmt(max)}`,
-                    meta: { unitRaw: raw, unitNum: num, max }
+                    message: `Unit Price ${fmtMoney(num)} > Max ${fmtMoney(max)}`,
+                    meta: { unitRaw: raw, unitNum: num, max, currency }
                 });
             }
         }

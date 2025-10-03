@@ -135,7 +135,8 @@ function getActiveWizardPageName() {
 }
 
 function isOnTargetWizardPage() {
-    return /^part\s*summary$/i.test(getActiveWizardPageName());
+    return true; // always show on all pages
+    //return /^part\s*summary$/i.test(getActiveWizardPageName());
 }
 
 async function reconcile() {
