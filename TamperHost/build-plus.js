@@ -378,7 +378,9 @@ function getBannerVars(m, versionStr, envName, opts) {
     const MATCHES = isProd
         ? [
             '// @match       https://lyntron.on.plex.com/SalesAndCRM/QuoteWizard*',
-            '// @match       https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*'
+            '// @match       https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*',
+            '// @match       https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*',
+            '// @match       https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*'
         ]
         : [
             '// @match       https://lyntron.on.plex.com/SalesAndCRM/QuoteWizard*',
