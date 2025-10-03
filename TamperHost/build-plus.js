@@ -297,8 +297,9 @@ function ensureGrants(header, grants) {
     }
     return out;
 }
-// Rewrites @require lines: appends ?v=<stamp> and enforces core → data-core order
+// Rewrites @require lines: appends ?v=<stamp> and enforces UI Hub → Core ordering
 function rewriteRequires(header, versionStr, opts) {
+
     const stamp = opts.release
         ? versionStr                       // stable in release
         : `${versionStr}-${Date.now()}`;   // unique per dev build
@@ -322,18 +323,22 @@ function rewriteRequires(header, versionStr, opts) {
     // Nothing to reorder? done.
     if (!reqIdx.length) return lines.join('\n');
 
-    // Ensure lt-ui-hub comes BEFORE lt-core
-    let iHub = -1, iCore2 = -1;
+    // Ensure lt-ui-hub BEFORE lt-core
+    let iHub = -1, iCore = -1, iDataCore = -1;
     for (const i of reqIdx) {
         if (/lt-ui-hub\.js(\?|$)/i.test(lines[i])) iHub = i;
-        if (/lt-core\.user\.js(\?|$)/i.test(lines[i])) iCore2 = i;
+        if (/lt-core\.user\.js(\?|$)/i.test(lines[i])) iCore = i;
+        if (/lt-data-core\.user\.js(\?|$)/i.test(lines[i])) iDataCore = i;
     }
-    if (iHub >= 0 && iCore2 >= 0 && iHub > iCore2) {
-        const tmp = lines[iHub];
-        lines[iHub] = lines[iCore2];
-        lines[iCore2] = tmp;
+    // Hub before Core
+    if (iHub >= 0 && iCore >= 0 && iHub > iCore) {
+        const tmp = lines[iHub]; lines[iHub] = lines[iCore]; lines[iCore] = tmp;
+        [iHub, iCore] = [iCore, iHub];
     }
-
+    // Core before Data-Core
+    if (iCore >= 0 && iDataCore >= 0 && iCore > iDataCore) {
+        const tmp = lines[iCore]; lines[iCore] = lines[iDataCore]; lines[iDataCore] = tmp;
+    }
 
     return lines.join('\n');
 }
@@ -426,40 +431,65 @@ function getBannerVars(m, versionStr, envName, opts) {
 }
 
 function injectUpdateDownload(header, m, versionStr, opts) {
-    // Pinned (by tag) base for requires and for header when not using "latest"
+    // Resolve bases
+    const pkg = 'AlphaGeek509/plex-tampermonkey-scripts';
+    const sha = (process.env.GIT_SHA || '').trim();
+    const mode = (process.env.TM_URL_MODE || 'pinned').toLowerCase(); // pinned | latest | hybrid
+    const devBase = (process.env.DEV_BASE || 'http://localhost:5000').replace(/\/+$/, '');
+
+    // Prefer commit-SHA pinning when provided (most cache-proof), else tag "v{VER}"
+    const pinnedIdent = sha ? sha : `v${versionStr}`;
+
     const basePinned = (process.env.CDN_BASE ||
-        'https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v{VER}/TamperHost/wwwroot'
-    ).replace('{VER}', versionStr);
+        `https://cdn.jsdelivr.net/gh/${pkg}@${pinnedIdent}/TamperHost/wwwroot`
+    ).replace(/\/+$/, '');
 
-    // Latest (auto-update) base for the main script header (release only)
-    const baseLatest = 'https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@latest/TamperHost/wwwroot';
-
-    // Local base for dev
-    const baseDev = 'http://localhost:5000';
+    const baseLatest = (process.env.CDN_LATEST_BASE ||
+        `https://cdn.jsdelivr.net/gh/${pkg}@latest/TamperHost/wwwroot`
+    ).replace(/\/+$/, '');
 
     const fileName = path.basename(m.out);
 
-    // Allow overriding behavior via env:
-    // TM_UPDATEURL_LATEST = "1" (default) -> use @latest on release
-    // TM_UPDATEURL_LATEST = "0"           -> keep pinned even on release
-    const preferLatest = (process.env.TM_UPDATEURL_LATEST ?? '1') !== '0';
+    // Decide URLs
+    let updateURL, downloadURL;
 
-    // Which URL to put into @updateURL/@downloadURL?
-    const urlForHeader =
-        opts.release
-            ? (preferLatest ? `${baseLatest}/${fileName}` : `${basePinned}/${fileName}`)
-            : `${baseDev}/${fileName}`;
+    if (!opts.release) {
+        // Dev builds always point to local
+        updateURL = `${devBase}/${fileName}`;
+        downloadURL = `${devBase}/${fileName}`;
+    } else {
+        switch (mode) {
+            case 'latest': {
+                updateURL = `${baseLatest}/${fileName}`;
+                downloadURL = `${baseLatest}/${fileName}`;
+                break;
+            }
+            case 'hybrid': {
+                // Hybrid still pins both to avoid split sources; keeps logic simple & reliable
+                updateURL = `${basePinned}/${fileName}`;
+                downloadURL = `${basePinned}/${fileName}`;
+                break;
+            }
+            case 'pinned':
+            default: {
+                updateURL = `${basePinned}/${fileName}`;
+                downloadURL = `${basePinned}/${fileName}`;
+                break;
+            }
+        }
+    }
 
+    // Inject or replace the lines
     const upRe = /^\s*\/\/\s*@updateURL[^\n]*$/m;
     const dlRe = /^\s*\/\/\s*@downloadURL[^\n]*$/m;
 
-    const lineUp = `// @updateURL   ${urlForHeader}`;
-    const lineDl = `// @downloadURL ${urlForHeader}`;
+    const lineUp = `// @updateURL   ${updateURL}`;
+    const lineDl = `// @downloadURL ${downloadURL}`;
 
-    // If present, replace; otherwise insert before end of header block.
     if (upRe.test(header)) header = header.replace(upRe, lineUp);
     if (dlRe.test(header)) header = header.replace(dlRe, lineDl);
 
+    // If any missing, append just before end of header
     if (!upRe.test(header) || !dlRe.test(header)) {
         const endMarker = /\/\/\s*==\/UserScript==/;
         if (endMarker.test(header)) {
@@ -468,8 +498,10 @@ function injectUpdateDownload(header, m, versionStr, opts) {
             header = `${lineUp}\n${lineDl}\n${header}`;
         }
     }
+
     return header;
 }
+
 async function emitModule(m, versionStr) {
     ensureDir(m.out);
     const entry = m.src;
@@ -569,7 +601,15 @@ async function emitModule(m, versionStr) {
             await esbuild.build(buildOpts);
             // Ensure output reflects the bumped version (also updates any VERSION constants)
             updateFileVersion(m.out, versionStr, opts.dry);
-            console.log(`📦 Emitted ${ m.id }: ${ path.relative(ROOT, m.out) } `);
+            console.log(`📦 Emitted ${m.id}: ${path.relative(ROOT, m.out)} `);
+            if (opts.release) {
+                const pkg = 'AlphaGeek509/plex-tampermonkey-scripts';
+                const sha = (process.env.GIT_SHA || '').trim();
+                const pinnedIdent = sha ? sha : `v${versionStr}`;
+                // const purgeUrl = `https://purge.jsdelivr.net/gh/${pkg}@${pinnedIdent}/TamperHost/wwwroot/${path.basename(m.out)}`;
+                console.log(`🧹 jsDelivr purge → ${purgeUrl}`);
+            }
+
         }
     } else {
         // Fallback: concatenate banner + source (no bundling)
