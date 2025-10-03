@@ -14,18 +14,18 @@
     "bump:major": "node ../build-plus.js --major"
   },
   "tmVersions": {
-    "QT05": "3.9.1",
-    "QT10": "3.9.1",
-    "QT20": "3.9.1",
-    "QT30": "3.9.1",
-    "QT35": "3.9.1",
-    "QT50": "3.9.1",
-    "LT_CORE": "3.9.1",
-    "LT_DATA_CORE": "3.9.1",
-    "LT_UI_HUB": "3.9.1",
-    "LT_PLEX_AUTH": "3.9.1",
-    "LT_PLEX_TM_UTILS": "3.9.1",
-    "ALL": "3.9.1"
+    "QT05": "3.9.23",
+    "QT10": "3.9.23",
+    "QT20": "3.9.23",
+    "QT30": "3.9.23",
+    "QT35": "3.9.23",
+    "QT50": "3.9.23",
+    "LT_CORE": "3.9.23",
+    "LT_DATA_CORE": "3.9.23",
+    "LT_UI_HUB": "3.9.23",
+    "LT_PLEX_AUTH": "3.9.23",
+    "LT_PLEX_TM_UTILS": "3.9.23",
+    "ALL": "3.9.23"
   },
   "tmFiles": {
     "QT05": [

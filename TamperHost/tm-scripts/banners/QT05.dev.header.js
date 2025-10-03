@@ -2,7 +2,7 @@
 // @name        QT05_DEV
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
 // @version     3.6.5
-// @description DEV-only build; includes user-start gate
+// @description Customer Contact Add: Adds a Hub Bar button (“New Contact”) on the Quote page that opens the Plex Contact form in a new tab, preserving test vs. prod based on the current host. It resolves CustomerNo via KO (with DOM fallbacks) and is SPA-safe via ensureHubButton and URL/mutation observers.
 // @match       https://lyntron.on.plex.com/SalesAndCRM/QuoteWizard*
 // @match       https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*

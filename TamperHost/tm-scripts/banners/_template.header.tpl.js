@@ -3,6 +3,10 @@
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
 // @version     @@VERSION@@
 // @description @@DESC@@
+// @author      Jeff Nichols (OneMonroe | Lyn-Tron)
+// @license     MIT
+// @homepageURL https://github.com/AlphaGeek509/plex-tampermonkey-scripts
+// @supportURL  https://github.com/AlphaGeek509/plex-tampermonkey-scripts/issues
 @@MATCHES@@
 __REQUIRES__
 __RESOURCES__
@@ -11,7 +15,6 @@ __RESOURCES__
 // @grant       GM_setValue
 // @grant       GM_xmlhttpRequest
 // @grant       unsafeWindow
-// @connect     *.plex.com
 // @run-at      document-start
 // @noframes
 // ==/UserScript==
