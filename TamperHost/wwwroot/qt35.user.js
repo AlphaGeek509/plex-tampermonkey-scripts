@@ -1,28 +1,33 @@
 // ==UserScript==
 // @name        QT35
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     3.9.1
-// @description Production build
+// @version     4.0.1
+// @description Adds Attachments badge/button (and Dock) and promotes draft→quote once if needed. Counts attachments via DS 11713 (group 11) and auto-refreshes on Part Summary activation and QT20 modal close.
+// @author      Jeff Nichols (OneMonroe | Lyn-Tron)
+// @license     MIT
+// @homepageURL https://github.com/AlphaGeek509/plex-tampermonkey-scripts
+// @supportURL  https://github.com/AlphaGeek509/plex-tampermonkey-scripts/issues
 // @match       https://lyntron.on.plex.com/SalesAndCRM/QuoteWizard*
 // @match       https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*
-// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.9.1/TamperHost/wwwroot/lt-plex-tm-utils.user.js?v=3.9.1
-// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.9.1/TamperHost/wwwroot/lt-plex-auth.user.js?v=3.9.1
-// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.9.1/TamperHost/wwwroot/lt-ui-hub.js?v=3.9.1
-// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.9.1/TamperHost/wwwroot/lt-data-core.user.js?v=3.9.1
-// @require      https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.9.1/TamperHost/wwwroot/lt-core.user.js?v=3.9.1
-// @resource     THEME_CSS https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v3.9.1/TamperHost/wwwroot/theme.css
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v4.0.1/TamperHost/wwwroot/lt-plex-tm-utils.user.js?v=4.0.1
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v4.0.1/TamperHost/wwwroot/lt-plex-auth.user.js?v=4.0.1
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v4.0.1/TamperHost/wwwroot/lt-ui-hub.js?v=4.0.1
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v4.0.1/TamperHost/wwwroot/lt-data-core.user.js?v=4.0.1
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v4.0.1/TamperHost/wwwroot/lt-core.user.js?v=4.0.1
+// @resource    THEME_CSS https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v4.0.1/TamperHost/wwwroot/theme.css
 // @grant       GM_registerMenuCommand
 // @grant       GM_getValue
 // @grant       GM_setValue
 // @grant       GM_xmlhttpRequest
 // @grant       unsafeWindow
 // @connect     *.plex.com
+// @connect     cdn.jsdelivr.net
 // @run-at      document-start
 // @noframes
-// @grant        GM_addStyle
-// @grant        GM_getResourceText
+// @grant       GM_addStyle
+// @grant       GM_getResourceText
 // @updateURL   https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@latest/TamperHost/wwwroot/qt35.user.js
 // @downloadURL https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@latest/TamperHost/wwwroot/qt35.user.js
 // ==/UserScript==
