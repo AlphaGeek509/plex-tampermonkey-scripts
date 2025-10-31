@@ -127,8 +127,20 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             if (!Number.isFinite(qk) || qk <= 0) throw new Error('Quote Key not found');
 
             // Prefer the modal VM anchored at .plex-form-content
-            const vmModal = getModalVM(modalEl);
-            const partNo = readPartFromAny(modalEl, vmModal ?? rootVM);
+            // Wait briefly for KO to bind this modal before grabbing its VM
+            let vmModal = getModalVM(modalEl);
+            if (!vmModal && window.TMUtils?.waitForModelAsync) {
+                try {
+                    const { viewModel } = await window.TMUtils.waitForModelAsync('.plex-dialog-has-buttons .plex-form-content', {
+                        pollMs: 120,
+                        timeoutMs: 1500,
+                        requireKo: true
+                    }) ?? {};
+                    if (viewModel) vmModal = (viewModel.data || viewModel.model || viewModel);
+                } catch { /* ignore and continue */ }
+            }
+
+            const partNo = await resolvePartNo(modalEl, vmModal ?? rootVM, { timeoutMs: 5000, pollMs: 150 });
 
             if (!partNo) throw new Error('PartNo not available');
             const basePart = toBasePart(partNo);
@@ -210,6 +222,159 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
         return '';
     }
 
+    // Robust resolver that retries briefly to survive KO/layout timing.
+    async function resolvePartNo(modalEl, vmCandidate, { timeoutMs = 5000, pollMs = 150 } = {}) {
+        const deadline = Date.now() + Math.max(500, timeoutMs | 0);
+        let last = '';
+
+        while (Date.now() < deadline) {
+            // 1) Try the fast path (existing logic)
+            const v = readPartFromAny(modalEl, vmCandidate);
+            if (v) return v;
+            last = v || last;
+
+            // 2) Nudge DOM to commit pending input → KO (blur/change)
+            try {
+                const el = modalEl?.querySelector('input[name="PartNo"],input[name="Part_Number"],input[name="ItemNo"],input[name="Item_Number"]');
+                if (el) {
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                    el.dispatchEvent(new Event('blur', { bubbles: true }));
+                }
+            } catch { /* non-fatal */ }
+
+            // 3) Yield + small delay to let KO settle
+            await new Promise(r => requestAnimationFrame(r));
+            await new Promise(r => setTimeout(r, Math.max(50, pollMs | 0)));
+        }
+
+        return last; // still '', caller will handle
+    }
+
+    // ===== Pricing columns lockout (hide, disable, and re-apply on re-render)
+    function findHeaderIndexes(modalEl, headerTexts) {
+        try {
+            const hdr = modalEl.querySelector('.plex-grid-container .plex-grid-header thead');
+            if (!hdr) return [];
+            const cells = [...hdr.querySelectorAll('th .plex-grid-header-inner-content abbr')];
+            const set = new Set();
+            for (const want of headerTexts) {
+                const idx = cells.findIndex(a => a && a.textContent && a.textContent.trim().toLowerCase() === String(want).trim().toLowerCase());
+                if (idx >= 0) set.add(idx);
+            }
+            return [...set].sort((a, b) => a - b);
+        } catch { return []; }
+    }
+
+    function hideColumnsByIndexes(modalEl, idxs) {
+        if (!idxs || !idxs.length) return;
+        try {
+            // 1) Headers
+            const hdrCells = modalEl.querySelectorAll('.plex-grid-container .plex-grid-header thead th');
+            idxs.forEach(i => { if (hdrCells[i]) hdrCells[i].style.display = 'none'; });
+
+            // 2) Body cells
+            const bodyRows = modalEl.querySelectorAll('.plex-grid-wrapper .plex-grid tbody tr');
+            for (const r of bodyRows) {
+                const tds = r.children;
+                idxs.forEach(i => { if (tds && tds[i]) tds[i].style.display = 'none'; });
+            }
+
+            // 3) Colgroups to keep widths sane
+            const colgroups = modalEl.querySelectorAll('.plex-grid-container colgroup, .plex-grid-wrapper colgroup');
+            for (const cg of colgroups) {
+                const cols = cg.querySelectorAll('col');
+                idxs.forEach(i => { if (cols[i]) cols[i].style.display = 'none'; });
+            }
+        } catch { /* no-op */ }
+    }
+
+    function disableInputsInLockedColumns(modalEl, idxs) {
+        try {
+            // Also directly target known field names we never allow
+            const hardNames = ['NewUnitPrice', 'NewPercentMarkup', 'PercentMarkup', 'MarkupPercent'];
+            const hardSel = hardNames.map(n => `input[name="${n}"],textarea[name="${n}"],select[name="${n}"]`).join(',');
+            const markReadOnly = el => {
+                try {
+                    if ('readOnly' in el) el.readOnly = true;
+                    if ('disabled' in el) el.disabled = true;
+                    el.setAttribute('aria-readonly', 'true');
+                    el.title = 'Disabled by policy';
+                    el.style.pointerEvents = 'none';
+                } catch { }
+            };
+
+            // Mark any known named controls now
+            try { modalEl.querySelectorAll(hardSel).forEach(markReadOnly); } catch { }
+
+            // Event-level hard block for any input living inside locked TDs
+            const idxSet = new Set(idxs);
+            const isInLockedCell = (node) => {
+                const td = node?.closest?.('td');
+                if (!td || typeof td.cellIndex !== 'number') return false;
+                return idxSet.has(td.cellIndex);
+            };
+
+            // Avoid duplicate listeners per modal instance
+            if (!modalEl.dataset.qt20LockoutListeners) {
+                modalEl.dataset.qt20LockoutListeners = '1';
+
+                modalEl.addEventListener('focusin', (e) => {
+                    const t = e.target;
+                    if (t && (isInLockedCell(t) || (t.matches && t.matches(hardSel)))) {
+                        try { t.blur?.(); } catch { }
+                        lt?.core?.hub?.notify?.('This field is controlled by policy and cannot be edited here.', 'warning', { toast: true });
+                    }
+                }, true);
+
+                modalEl.addEventListener('keydown', (e) => {
+                    const t = e.target;
+                    if (t && (isInLockedCell(t) || (t.matches && t.matches(hardSel)))) {
+                        e.stopImmediatePropagation(); e.preventDefault();
+                    }
+                }, true);
+
+                modalEl.addEventListener('input', (e) => {
+                    const t = e.target;
+                    if (t && (isInLockedCell(t) || (t.matches && t.matches(hardSel)))) {
+                        if ('value' in t) t.value = '';
+                        e.stopImmediatePropagation(); e.preventDefault();
+                    }
+                }, true);
+            }
+
+            // Also sweep existing inputs in those TDs and mark them read-only
+            const rows = modalEl.querySelectorAll('.plex-grid-wrapper .plex-grid tbody tr');
+            for (const r of rows) {
+                idxs.forEach(i => {
+                    const td = r.children?.[i];
+                    if (!td) return;
+                    td.querySelectorAll('input,textarea,select').forEach(markReadOnly);
+                });
+            }
+        } catch { /* no-op */ }
+    }
+
+    function lockoutPricingColumns(modalEl) {
+        // Columns to hide/lock by header text
+        const idxs = findHeaderIndexes(modalEl, ['Unit Price', '% Markup', '$ Markup']);
+        // Disable any inputs inside those columns (and known field names)
+        disableInputsInLockedColumns(modalEl, idxs);
+        // Hide the columns visually
+        hideColumnsByIndexes(modalEl, idxs);
+    }
+
+    function watchPricingLockout(modalEl) {
+        try {
+            // Apply immediately
+            lockoutPricingColumns(modalEl);
+            // Re-apply on grid re-render (Plex rebinding)
+            const root = modalEl.querySelector('.plex-grid-container') || modalEl;
+            const mo = new MutationObserver(() => lockoutPricingColumns(modalEl));
+            mo.observe(root, { childList: true, subtree: true });
+            // Stop when modal is removed
+            onNodeRemoved(modalEl, () => mo.disconnect());
+        } catch { /* ignore */ }
+    }
 
     // ===== Modal wiring (idempotent per modal)
     function onNodeRemoved(node, cb) {
@@ -248,26 +413,8 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             liMain.appendChild(btn);
             ul.appendChild(liMain);
 
-
-            //// Main action
-            //const liMain = document.createElement('li');
-            //const btn = document.createElement('a');
-            //btn.href = 'javascript:void(0)';
-            //btn.textContent = 'LT Get Stock Levels';
-            //btn.title = 'Show total stock (no stamp)';
-            //btn.setAttribute('aria-label', 'Get stock levels');
-            //btn.setAttribute('role', 'button');
-            //Object.assign(btn.style, { cursor: 'pointer', transition: 'filter .15s, text-decoration-color .15s' });
-            //btn.addEventListener('mouseenter', () => { btn.style.filter = 'brightness(1.08)'; btn.style.textDecoration = 'underline'; });
-            //btn.addEventListener('mouseleave', () => { btn.style.filter = ''; btn.style.textDecoration = ''; });
-            //btn.addEventListener('focus', () => { btn.style.outline = '2px solid #4a90e2'; btn.style.outlineOffset = '2px'; });
-            //btn.addEventListener('blur', () => { btn.style.outline = ''; btn.style.outlineOffset = ''; });
-            //btn.addEventListener('click', () => handleClick(modal));
-            //btn.addEventListener('keydown', (e) => {
-            //    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(modal); }
-            //});
-            //liMain.appendChild(btn);
-            //ul.appendChild(liMain);
+            // Enforce Unit Price and % Markup lockout in this modal instance
+            watchPricingLockout(modal);
 
             // Let other modules refresh if they care (no-op here)
             onNodeRemoved(modal, () => {
