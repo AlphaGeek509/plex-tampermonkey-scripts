@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LT › Plex TM Utils
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      4.1.3
+// @version      4.2.4
 // @description  Shared utilities
 // @match        https://*.on.plex.com/*
 // @match        https://*.plex.com/*
@@ -541,7 +541,7 @@
         });
     }
     // ✅ add this right after the waitForModelAsync function definition
-    //TMUtils.waitForModelAsync = waitForModelAsync;
+    TMUtils.waitForModelAsync = waitForModelAsync;
 
 
 
