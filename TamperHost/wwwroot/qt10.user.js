@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        QT10_DEV
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     4.1.10
+// @version     4.2.2
 // @description Watches CustomerNo, fetches Catalog Key/Code (DS 319/22696), and stores them in the DRAFT repo. Supports draft→quote promote and small DEV seams for debugging. (DEV build)
 // @author      Jeff Nichols (OneMonroe | Lyn-Tron)
 // @license     MIT
@@ -11,11 +11,11 @@
 // @match       https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*
-// @require     http://localhost:5000/lt-plex-tm-utils.user.js?v=4.1.10-1761845775520
-// @require     http://localhost:5000/lt-plex-auth.user.js?v=4.1.10-1761845775520
-// @require     http://localhost:5000/lt-ui-hub.js?v=4.1.10-1761845775520
-// @require     http://localhost:5000/lt-core.user.js?v=4.1.10-1761845775520
-// @require     http://localhost:5000/lt-data-core.user.js?v=4.1.10-1761845775520
+// @require     http://localhost:5000/lt-plex-tm-utils.user.js?v=4.2.2-1761938962404
+// @require     http://localhost:5000/lt-plex-auth.user.js?v=4.2.2-1761938962404
+// @require     http://localhost:5000/lt-ui-hub.js?v=4.2.2-1761938962404
+// @require     http://localhost:5000/lt-core.user.js?v=4.2.2-1761938962404
+// @require     http://localhost:5000/lt-data-core.user.js?v=4.2.2-1761938962404
 // @resource    THEME_CSS http://localhost:5000/theme.css
 // @grant       GM_registerMenuCommand
 // @grant       GM_getValue

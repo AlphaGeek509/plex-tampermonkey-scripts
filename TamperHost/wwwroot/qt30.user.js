@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        QT30_DEV
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     4.1.10
+// @version     4.2.2
 // @description Applies customer catalog breakpoints (DS 4809) using Catalog Key (repo/DS 3156), removes zero-qty rows, and sets RvCustomizedUnitPrice with rounding. Refreshes via KO or wizard nav. (DEV build)
 // @author      Jeff Nichols (OneMonroe | Lyn-Tron)
 // @license     MIT
@@ -11,11 +11,11 @@
 // @match       https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*
-// @require     http://localhost:5000/lt-plex-tm-utils.user.js?v=4.1.10-1761845775564
-// @require     http://localhost:5000/lt-plex-auth.user.js?v=4.1.10-1761845775564
-// @require     http://localhost:5000/lt-ui-hub.js?v=4.1.10-1761845775564
-// @require     http://localhost:5000/lt-core.user.js?v=4.1.10-1761845775564
-// @require     http://localhost:5000/lt-data-core.user.js?v=4.1.10-1761845775564
+// @require     http://localhost:5000/lt-plex-tm-utils.user.js?v=4.2.2-1761938962452
+// @require     http://localhost:5000/lt-plex-auth.user.js?v=4.2.2-1761938962452
+// @require     http://localhost:5000/lt-ui-hub.js?v=4.2.2-1761938962452
+// @require     http://localhost:5000/lt-core.user.js?v=4.2.2-1761938962452
+// @require     http://localhost:5000/lt-data-core.user.js?v=4.2.2-1761938962452
 // @resource    THEME_CSS http://localhost:5000/theme.css
 // @grant       GM_registerMenuCommand
 // @grant       GM_getValue
