@@ -3,6 +3,7 @@ open System.Collections.Concurrent
 open System.Net.WebSockets
 open System.Text
 open System.Threading
+open System.Threading.Tasks
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.Hosting
@@ -34,36 +35,43 @@ app.UseStaticFiles(
 app.UseDirectoryBrowser() |> ignore
 
 // Browser clients connect here and wait for reload signals
-app.Map("/ws", fun (ctx: HttpContext) -> task {
-    if ctx.WebSockets.IsWebSocketRequest then
-        let! ws = ctx.WebSockets.AcceptWebSocketAsync()
-        let id = Guid.NewGuid()
-        clients.TryAdd(id, ws) |> ignore
-        let buf = Array.zeroCreate<byte> 256
-        try
-            let mutable running = true
-            while running do
-                let! result = ws.ReceiveAsync(ArraySegment<byte>(buf), CancellationToken.None)
-                if result.MessageType = WebSocketMessageType.Close then
-                    do! ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None)
-                    running <- false
-        finally
-            clients.TryRemove(id) |> ignore
-    else
-        ctx.Response.StatusCode <- 400
-}) |> ignore
+let wsHandler (ctx: HttpContext) : Task =
+    task {
+        if ctx.WebSockets.IsWebSocketRequest then
+            let! ws = ctx.WebSockets.AcceptWebSocketAsync()
+            let id = Guid.NewGuid()
+            clients.TryAdd(id, ws) |> ignore
+            let buf = Array.zeroCreate<byte> 256
+            try
+                let mutable running = true
+                while running do
+                    let! result = ws.ReceiveAsync(ArraySegment<byte>(buf), CancellationToken.None)
+                    if result.MessageType = WebSocketMessageType.Close then
+                        do! ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None)
+                        running <- false
+            finally
+                clients.TryRemove(id) |> ignore
+        else
+            ctx.Response.StatusCode <- 400
+    }
+
+app.Map("/ws", RequestDelegate(wsHandler)) |> ignore
 
 // build-plus.js POSTs here after each successful rebuild in watch mode
-app.MapPost("/_dev/reload", fun (ctx: HttpContext) -> task {
-    let msg = Encoding.UTF8.GetBytes("reload")
-    let seg = ArraySegment<byte>(msg)
-    for kvp in clients do
-        if kvp.Value.State = WebSocketState.Open then
-            try
-                do! kvp.Value.SendAsync(seg, WebSocketMessageType.Text, true, CancellationToken.None)
-            with _ -> ()
-    ctx.Response.StatusCode <- 204
-}) |> ignore
+let reloadHandler (ctx: HttpContext) : Task =
+    task {
+        if ctx.Request.Method = "POST" then
+            let msg = Encoding.UTF8.GetBytes("reload")
+            let seg = ArraySegment<byte>(msg)
+            for kvp in clients do
+                if kvp.Value.State = WebSocketState.Open then
+                    try
+                        do! kvp.Value.SendAsync(seg, WebSocketMessageType.Text, true, CancellationToken.None)
+                    with _ -> ()
+        ctx.Response.StatusCode <- 204
+    }
+
+app.Map("/_dev/reload", RequestDelegate(reloadHandler)) |> ignore
 
 app.MapGet("/", Func<string>(fun () -> "TamperHost is running")) |> ignore
 app.MapGet("/healthz", Func<string>(fun () -> "ok")) |> ignore
