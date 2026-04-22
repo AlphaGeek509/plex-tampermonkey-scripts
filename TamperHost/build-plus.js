@@ -476,119 +476,72 @@ function injectUpdateDownload(header, m, versionStr, opts) {
     return header;
 }
 
+function makeBuildOpts(m, entry, banner) {
+    const buildOpts = {
+        entryPoints: [entry],
+        bundle: true,
+        outfile: m.out,
+        sourcemap: opts.release ? false : 'inline',
+        minify: !!opts.release,
+        minifyIdentifiers: false,
+        target: ['chrome110', 'edge110', 'firefox110'],
+        legalComments: 'none',
+        format: 'iife',
+        platform: 'browser',
+        splitting: false,
+        define: { __BUILD_DEV__: String(!opts.release) }
+    };
+    if (banner) buildOpts.banner = { js: banner + '\n' };
+    const gName = LIB_GLOBALS[m.id];
+    if (gName) {
+        buildOpts.footer = {
+            js: `;(function(g){try{if(typeof ${gName}!=='undefined'){g.${gName}=${gName};}}catch(e){}})(typeof unsafeWindow!=='undefined'?unsafeWindow:window);`
+        };
+    }
+    return buildOpts;
+}
+
+async function runEsbuild(m, entry, buildOpts, versionStr, label) {
+    if (opts.watch) {
+        const ctx = await esbuild.context(buildOpts);
+        await ctx.watch();
+        console.log(`👀 Watching ${m.id} (${path.relative(ROOT, entry)}) → ${path.relative(ROOT, m.out)}`);
+        return;
+    }
+    if (!opts.dry) await esbuild.build(buildOpts);
+    updateFileVersion(m.out, versionStr, opts.dry);
+    console.log(`${opts.dry ? '🧪 DRY' : '📦'} Emitted${label} ${m.id}: ${path.relative(ROOT, m.out)}`);
+}
+
 async function emitModule(m, versionStr) {
     if (!opts.dry) ensureDir(m.out);
     const entry = m.src;
 
-    // ---- Plain library build path (no Tampermonkey header) ----
     if (m.isLib) {
         if (esbuild) {
-            const buildOpts = {
-                entryPoints: [entry],
-                bundle: true,
-                outfile: m.out,
-                sourcemap: opts.release ? false : 'inline',
-                // Keep syntax & whitespace minification, but DON'T rename identifiers for libs we want to export
-                minify: !!opts.release,
-                minifyIdentifiers: false,
-                target: ['chrome110', 'edge110', 'firefox110'],
-                legalComments: 'none',
-                format: 'iife',
-                platform: 'browser',
-                splitting: false,
-                define: { __BUILD_DEV__: String(!opts.release) }
-            };
-
-            // If this lib has a known global name, append a tiny footer to publish it.
-            const gName = LIB_GLOBALS[m.id];
-            if (gName) {
-                // This assumes your lib defines a top-level variable with the same name (e.g., const TMUtils = {...}).
-                // We attach it to unsafeWindow/window without throwing if minified or absent.
-                buildOpts.footer = {
-                    js: `;(function(g){try{if(typeof ${gName}!=='undefined'){g.${gName}=${gName};}}catch(e){}})(typeof unsafeWindow!=='undefined'?unsafeWindow:window);`
-                };
-            }
-            if (opts.watch) {
-                const ctx = await esbuild.context(buildOpts);
-                await ctx.watch();
-                console.log(`👀 Watching ${m.id} (${path.relative(ROOT, entry)}) → ${path.relative(ROOT, m.out)} `);
-                return;
-            } else {
-                if (!opts.dry) await esbuild.build(buildOpts);
-                updateFileVersion(m.out, versionStr, opts.dry);
-                console.log(`${opts.dry ? '🧪 DRY' : '📦'} Emitted (lib) ${m.id}: ${path.relative(ROOT, m.out)}`);
-                return;
-            }
+            await runEsbuild(m, entry, makeBuildOpts(m, entry, null), versionStr, ' (lib)');
         } else {
-            // fallback concat (no banner)
-            if (!fs.existsSync(entry)) {
-                console.error(`❌ Source file not found for ${m.id}: ${entry} `);
-                return;
-            }
+            if (!fs.existsSync(entry)) { console.error(`❌ Source file not found for ${m.id}: ${entry}`); return; }
             const body = fs.readFileSync(entry, 'utf8');
             if (!opts.dry) fs.writeFileSync(m.out, body, 'utf8');
             updateFileVersion(m.out, versionStr, opts.dry);
-            console.log(`📄 Copied(no esbuild, lib) ${m.id}: ${path.relative(ROOT, m.out)} `);
-            return;
+            console.log(`📄 Copied(no esbuild, lib) ${m.id}: ${path.relative(ROOT, m.out)}`);
         }
-
+        return;
     }
-    let header = loadBannerForModule(m, versionStr, opts);
 
-    // --- Inject/refresh @updateURL/@downloadURL ---
+    let header = loadBannerForModule(m, versionStr, opts);
     header = injectUpdateDownload(header, m, versionStr, opts);
 
     if (esbuild) {
-        const buildOpts = {
-            entryPoints: [entry],
-            bundle: true,
-            outfile: m.out,
-            sourcemap: opts.release ? false : 'inline',
-            // Keep syntax & whitespace minification, but DON'T rename identifiers for libs we want to export
-            minify: !!opts.release,
-            minifyIdentifiers: false,
-            target: ['chrome110', 'edge110', 'firefox110'],
-            legalComments: 'none',
-            format: 'iife',
-            platform: 'browser',
-            splitting: false,
-            define: { __BUILD_DEV__: String(!opts.release) },
-            banner: { js: header + '\n' }
-        };
-
-        // If this lib has a known global name, append a tiny footer to publish it.
-        const gName = LIB_GLOBALS[m.id];
-        if (gName) {
-            // This assumes your lib defines a top-level variable with the same name (e.g., const TMUtils = {...}).
-            // We attach it to unsafeWindow/window without throwing if minified or absent.
-            buildOpts.footer = {
-                js: `;(function(g){try{if(typeof ${gName}!=='undefined'){g.${gName}=${gName};}}catch(e){}})(typeof unsafeWindow!=='undefined'?unsafeWindow:window);`
-            };
-        }
-
-        if (opts.watch) {
-            const ctx = await esbuild.context(buildOpts);
-            await ctx.watch();
-            console.log(`👀 Watching ${m.id} (${path.relative(ROOT, entry)}) → ${path.relative(ROOT, m.out)}`);
-            return;
-        } else {
-            if (!opts.dry) await esbuild.build(buildOpts);
-            updateFileVersion(m.out, versionStr, opts.dry);
-            console.log(`${opts.dry ? '🧪 DRY' : '📦'} Emitted ${m.id}: ${path.relative(ROOT, m.out)}`);
-        }
+        await runEsbuild(m, entry, makeBuildOpts(m, entry, header), versionStr, '');
+        if (opts.watch) return;
     } else {
-        // Fallback: concatenate banner + source (no bundling)
-        if (!fs.existsSync(entry)) {
-            console.error(`❌ Source file not found for ${ m.id }: ${ entry } `);
-            return;
-        }
+        if (!fs.existsSync(entry)) { console.error(`❌ Source file not found for ${m.id}: ${entry}`); return; }
         const body = fs.readFileSync(entry, 'utf8');
-        const out = header + body;
-
-        if (!opts.dry) fs.writeFileSync(m.out, out, 'utf8');
+        if (!opts.dry) fs.writeFileSync(m.out, header + body, 'utf8');
         updateFileVersion(m.out, versionStr, opts.dry);
-
-        console.log(`📄 Copied(no esbuild) ${ m.id }: ${ path.relative(ROOT, m.out) } `);
+        console.log(`📄 Copied(no esbuild) ${m.id}: ${path.relative(ROOT, m.out)}`);
     }
 }
 
