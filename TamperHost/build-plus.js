@@ -299,15 +299,12 @@ function ensureGrants(header, grants) {
 }
 // Rewrites @require lines: appends ?v=<stamp> and enforces UI Hub → Core ordering
 function rewriteRequires(header, versionStr, opts) {
-
     const stamp = opts.release
         ? versionStr                       // stable in release
         : `${versionStr}-${Date.now()}`;   // unique per dev build
 
     const lines = header.split('\n');
 
-    // Collect all @require lines and add v= stamp
-    const reqIdx = [];
     for (let i = 0; i < lines.length; i++) {
         const m = /^\s*\/\/\s*@require\s+(\S+)/.exec(lines[i]);
         if (!m) continue;
@@ -317,27 +314,6 @@ function rewriteRequires(header, versionStr, opts) {
             url += (url.includes('?') ? '&' : '?') + 'v=' + encodeURIComponent(stamp);
         }
         lines[i] = lines[i].replace(m[1], url);
-        reqIdx.push(i);
-    }
-
-    // Nothing to reorder? done.
-    if (!reqIdx.length) return lines.join('\n');
-
-    // Ensure lt-ui-hub BEFORE lt-core
-    let iHub = -1, iCore = -1, iDataCore = -1;
-    for (const i of reqIdx) {
-        if (/lt-ui-hub\.js(\?|$)/i.test(lines[i])) iHub = i;
-        if (/lt-core\.user\.js(\?|$)/i.test(lines[i])) iCore = i;
-        if (/lt-data-core\.user\.js(\?|$)/i.test(lines[i])) iDataCore = i;
-    }
-    // Hub before Core
-    if (iHub >= 0 && iCore >= 0 && iHub > iCore) {
-        const tmp = lines[iHub]; lines[iHub] = lines[iCore]; lines[iCore] = tmp;
-        [iHub, iCore] = [iCore, iHub];
-    }
-    // Core before Data-Core
-    if (iCore >= 0 && iDataCore >= 0 && iCore > iDataCore) {
-        const tmp = lines[iCore]; lines[iCore] = lines[iDataCore]; lines[iDataCore] = tmp;
     }
 
     return lines.join('\n');
