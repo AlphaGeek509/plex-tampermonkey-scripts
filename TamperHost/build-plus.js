@@ -33,6 +33,25 @@ const LIB_GLOBALS = {
 let esbuild = null;
 try { esbuild = require('esbuild'); } catch { /* optional */ }
 
+// Esbuild plugin: after each successful watch rebuild, signal the dev server
+// to broadcast a reload to all connected browser clients.
+function devReloadPlugin() {
+    const http = require('http');
+    return {
+        name: 'dev-reload',
+        setup(build) {
+            build.onEnd(result => {
+                if (result.errors.length > 0) return;
+                const req = http.request(
+                    { method: 'POST', hostname: 'localhost', port: 5000, path: '/_dev/reload' }
+                );
+                req.on('error', () => {}); // dev server may not be running
+                req.end();
+            });
+        }
+    };
+}
+
 // --------------------------- arg parsing ---------------------------
 const args = process.argv.slice(2);
 const opts = {
@@ -503,6 +522,7 @@ function makeBuildOpts(m, entry, banner) {
 
 async function runEsbuild(m, entry, buildOpts, versionStr, label) {
     if (opts.watch) {
+        buildOpts.plugins = [...(buildOpts.plugins || []), devReloadPlugin()];
         const ctx = await esbuild.context(buildOpts);
         await ctx.watch();
         console.log(`👀 Watching ${m.id} (${path.relative(ROOT, entry)}) → ${path.relative(ROOT, m.out)}`);
