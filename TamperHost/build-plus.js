@@ -456,16 +456,22 @@ function injectUpdateDownload(header, m, versionStr, opts) {
     const lineUp = `// @updateURL   ${updateURL}`;
     const lineDl = `// @downloadURL ${downloadURL}`;
 
-    if (upRe.test(header)) header = header.replace(upRe, lineUp);
-    if (dlRe.test(header)) header = header.replace(dlRe, lineDl);
+    // Capture presence BEFORE modifying header to avoid false re-test after replace
+    const hadUp = upRe.test(header);
+    const hadDl = dlRe.test(header);
 
-    // If any missing, append just before end of header
-    if (!upRe.test(header) || !dlRe.test(header)) {
+    if (hadUp) header = header.replace(upRe, lineUp);
+    if (hadDl) header = header.replace(dlRe, lineDl);
+
+    // Insert only the lines that were genuinely absent
+    if (!hadUp || !hadDl) {
+        const missing = [!hadUp ? lineUp : null, !hadDl ? lineDl : null]
+            .filter(Boolean).join('\n');
         const endMarker = /\/\/\s*==\/UserScript==/;
         if (endMarker.test(header)) {
-            header = header.replace(endMarker, `${lineUp}\n${lineDl}\n// ==/UserScript==`);
+            header = header.replace(endMarker, `${missing}\n// ==/UserScript==`);
         } else {
-            header = `${lineUp}\n${lineDl}\n${header}`;
+            header = `${missing}\n${header}`;
         }
     }
 
