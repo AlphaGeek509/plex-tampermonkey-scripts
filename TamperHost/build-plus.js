@@ -42,10 +42,16 @@ function devReloadPlugin() {
         setup(build) {
             build.onEnd(result => {
                 if (result.errors.length > 0) return;
-                const req = http.request(
-                    { method: 'POST', hostname: 'localhost', port: 5000, path: '/_dev/reload' }
-                );
+                const filename = path.basename(build.initialOptions.outfile || '');
+                const req = http.request({
+                    method: 'POST',
+                    hostname: 'localhost',
+                    port: 5000,
+                    path: '/_dev/reload',
+                    headers: { 'Content-Type': 'text/plain', 'Content-Length': Buffer.byteLength(filename) }
+                });
                 req.on('error', () => {}); // dev server may not be running
+                req.write(filename);
                 req.end();
             });
         }

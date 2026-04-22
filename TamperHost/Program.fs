@@ -2,6 +2,7 @@ open System
 open System.Collections.Concurrent
 open System.Net.WebSockets
 open System.Text
+open System.IO
 open System.Threading
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Builder
@@ -61,7 +62,12 @@ app.Map("/ws", RequestDelegate(wsHandler)) |> ignore
 let reloadHandler (ctx: HttpContext) : Task =
     task {
         if ctx.Request.Method = "POST" then
-            let msg = Encoding.UTF8.GetBytes("reload")
+            use reader = new StreamReader(ctx.Request.Body)
+            let! filename = reader.ReadToEndAsync()
+            let payload =
+                let f = filename.Trim()
+                if f <> "" then $"reload:{f}" else "reload"
+            let msg = Encoding.UTF8.GetBytes(payload)
             let seg = ArraySegment<byte>(msg)
             for kvp in clients do
                 if kvp.Value.State = WebSocketState.Open then
