@@ -29,11 +29,34 @@ const LIB_GLOBALS = {
     LT_UI_HUB: 'LTHub'
 };
 
-const readline = require('readline');
-
 // Try to load esbuild (optional)
 let esbuild = null;
 try { esbuild = require('esbuild'); } catch { /* optional */ }
+
+// Esbuild plugin: after each successful watch rebuild, signal the dev server
+// to broadcast a reload to all connected browser clients.
+function devReloadPlugin() {
+    const http = require('http');
+    return {
+        name: 'dev-reload',
+        setup(build) {
+            build.onEnd(result => {
+                if (result.errors.length > 0) return;
+                const filename = path.basename(build.initialOptions.outfile || '');
+                const req = http.request({
+                    method: 'POST',
+                    hostname: 'localhost',
+                    port: 5000,
+                    path: '/_dev/reload',
+                    headers: { 'Content-Type': 'text/plain', 'Content-Length': Buffer.byteLength(filename) }
+                });
+                req.on('error', () => {}); // dev server may not be running
+                req.write(filename);
+                req.end();
+            });
+        }
+    };
+}
 
 // --------------------------- arg parsing ---------------------------
 const args = process.argv.slice(2);
@@ -50,14 +73,14 @@ const opts = {
 function usage(exitCode = 0) {
     console.log(`
 Usage:
-  node build-plus.js --patch --ids QT10 --emit --watch
+  node build-plus.js --patch --emit                       # build all modules
+  node build-plus.js --patch --ids QT10 --emit --watch    # single module, watch
   node build-plus.js --set 3.6.0 --ids QT35 --emit --release
-  node build-plus.js --minor --emit                 # interactive picker
 
 Flags:
-    --patch | --minor | --major   Choose a bump type (lockstep via tmVersions.ALL)
+  --patch | --minor | --major   Bump type (lockstep via tmVersions.ALL)
   --set 1.2.3                   Set exact version (overrides bump type)
-  --ids <id...>                 Modules to process (QT10, QT20, QT30, QT35)
+  --ids <id...>                 Modules to process; omit to build all
   --emit                        Build/copy outputs for selected modules
   --release                     With --emit, minify and use PROD banners
   --watch                       With --emit, watch sources and rebuild
@@ -299,15 +322,12 @@ function ensureGrants(header, grants) {
 }
 // Rewrites @require lines: appends ?v=<stamp> and enforces UI Hub → Core ordering
 function rewriteRequires(header, versionStr, opts) {
-
     const stamp = opts.release
         ? versionStr                       // stable in release
         : `${versionStr}-${Date.now()}`;   // unique per dev build
 
     const lines = header.split('\n');
 
-    // Collect all @require lines and add v= stamp
-    const reqIdx = [];
     for (let i = 0; i < lines.length; i++) {
         const m = /^\s*\/\/\s*@require\s+(\S+)/.exec(lines[i]);
         if (!m) continue;
@@ -317,27 +337,6 @@ function rewriteRequires(header, versionStr, opts) {
             url += (url.includes('?') ? '&' : '?') + 'v=' + encodeURIComponent(stamp);
         }
         lines[i] = lines[i].replace(m[1], url);
-        reqIdx.push(i);
-    }
-
-    // Nothing to reorder? done.
-    if (!reqIdx.length) return lines.join('\n');
-
-    // Ensure lt-ui-hub BEFORE lt-core
-    let iHub = -1, iCore = -1, iDataCore = -1;
-    for (const i of reqIdx) {
-        if (/lt-ui-hub\.js(\?|$)/i.test(lines[i])) iHub = i;
-        if (/lt-core\.user\.js(\?|$)/i.test(lines[i])) iCore = i;
-        if (/lt-data-core\.user\.js(\?|$)/i.test(lines[i])) iDataCore = i;
-    }
-    // Hub before Core
-    if (iHub >= 0 && iCore >= 0 && iHub > iCore) {
-        const tmp = lines[iHub]; lines[iHub] = lines[iCore]; lines[iCore] = tmp;
-        [iHub, iCore] = [iCore, iHub];
-    }
-    // Core before Data-Core
-    if (iCore >= 0 && iDataCore >= 0 && iCore > iDataCore) {
-        const tmp = lines[iCore]; lines[iCore] = lines[iDataCore]; lines[iDataCore] = tmp;
     }
 
     return lines.join('\n');
@@ -434,7 +433,7 @@ function injectUpdateDownload(header, m, versionStr, opts) {
     // Resolve bases
     const pkg = 'AlphaGeek509/plex-tampermonkey-scripts';
     const sha = (process.env.GIT_SHA || '').trim();
-    const mode = (process.env.TM_URL_MODE || 'pinned').toLowerCase(); // pinned | latest | hybrid
+    const mode = (process.env.TM_URL_MODE || 'pinned').toLowerCase(); // pinned | latest
     const devBase = (process.env.DEV_BASE || 'http://localhost:5000').replace(/\/+$/, '');
 
     // Prefer commit-SHA pinning when provided (most cache-proof), else tag "v{VER}"
@@ -464,12 +463,6 @@ function injectUpdateDownload(header, m, versionStr, opts) {
                 downloadURL = `${baseLatest}/${fileName}`;
                 break;
             }
-            case 'hybrid': {
-                // Hybrid still pins both to avoid split sources; keeps logic simple & reliable
-                updateURL = `${basePinned}/${fileName}`;
-                downloadURL = `${basePinned}/${fileName}`;
-                break;
-            }
             case 'pinned':
             default: {
                 updateURL = `${basePinned}/${fileName}`;
@@ -486,231 +479,105 @@ function injectUpdateDownload(header, m, versionStr, opts) {
     const lineUp = `// @updateURL   ${updateURL}`;
     const lineDl = `// @downloadURL ${downloadURL}`;
 
-    if (upRe.test(header)) header = header.replace(upRe, lineUp);
-    if (dlRe.test(header)) header = header.replace(dlRe, lineDl);
+    // Capture presence BEFORE modifying header to avoid false re-test after replace
+    const hadUp = upRe.test(header);
+    const hadDl = dlRe.test(header);
 
-    // If any missing, append just before end of header
-    if (!upRe.test(header) || !dlRe.test(header)) {
+    if (hadUp) header = header.replace(upRe, lineUp);
+    if (hadDl) header = header.replace(dlRe, lineDl);
+
+    // Insert only the lines that were genuinely absent
+    if (!hadUp || !hadDl) {
+        const missing = [!hadUp ? lineUp : null, !hadDl ? lineDl : null]
+            .filter(Boolean).join('\n');
         const endMarker = /\/\/\s*==\/UserScript==/;
         if (endMarker.test(header)) {
-            header = header.replace(endMarker, `${lineUp}\n${lineDl}\n// ==/UserScript==`);
+            header = header.replace(endMarker, `${missing}\n// ==/UserScript==`);
         } else {
-            header = `${lineUp}\n${lineDl}\n${header}`;
+            header = `${missing}\n${header}`;
         }
     }
 
     return header;
 }
 
+function makeBuildOpts(m, entry, banner) {
+    const buildOpts = {
+        entryPoints: [entry],
+        bundle: true,
+        outfile: m.out,
+        sourcemap: opts.release ? false : 'inline',
+        minify: !!opts.release,
+        minifyIdentifiers: false,
+        target: ['chrome110', 'edge110', 'firefox110'],
+        legalComments: 'none',
+        format: 'iife',
+        platform: 'browser',
+        splitting: false,
+        define: { __BUILD_DEV__: String(!opts.release) }
+    };
+    if (banner) buildOpts.banner = { js: banner + '\n' };
+    const gName = LIB_GLOBALS[m.id];
+    if (gName) {
+        buildOpts.footer = {
+            js: `;(function(g){try{if(typeof ${gName}!=='undefined'){g.${gName}=${gName};}}catch(e){}})(typeof unsafeWindow!=='undefined'?unsafeWindow:window);`
+        };
+    }
+    return buildOpts;
+}
+
+async function runEsbuild(m, entry, buildOpts, versionStr, label) {
+    if (opts.watch) {
+        buildOpts.plugins = [...(buildOpts.plugins || []), devReloadPlugin()];
+        const ctx = await esbuild.context(buildOpts);
+        await ctx.watch();
+        console.log(`👀 Watching ${m.id} (${path.relative(ROOT, entry)}) → ${path.relative(ROOT, m.out)}`);
+        return;
+    }
+    if (!opts.dry) await esbuild.build(buildOpts);
+    updateFileVersion(m.out, versionStr, opts.dry);
+    console.log(`${opts.dry ? '🧪 DRY' : '📦'} Emitted${label} ${m.id}: ${path.relative(ROOT, m.out)}`);
+}
+
 async function emitModule(m, versionStr) {
-    ensureDir(m.out);
+    if (!opts.dry) ensureDir(m.out);
     const entry = m.src;
 
-    // ---- Plain library build path (no Tampermonkey header) ----
     if (m.isLib) {
         if (esbuild) {
-            const buildOpts = {
-                entryPoints: [entry],
-                bundle: true,
-                outfile: m.out,
-                sourcemap: opts.release ? false : 'inline',
-                // Keep syntax & whitespace minification, but DON'T rename identifiers for libs we want to export
-                minify: !!opts.release,
-                minifyIdentifiers: false,
-                target: ['chrome110', 'edge110', 'firefox110'],
-                legalComments: 'none',
-                format: 'iife',
-                platform: 'browser',
-                splitting: false,
-                define: { __BUILD_DEV__: String(!opts.release) }
-            };
-
-            // If this lib has a known global name, append a tiny footer to publish it.
-            const gName = LIB_GLOBALS[m.id];
-            if (gName) {
-                // This assumes your lib defines a top-level variable with the same name (e.g., const TMUtils = {...}).
-                // We attach it to unsafeWindow/window without throwing if minified or absent.
-                buildOpts.footer = {
-                    js: `;(function(g){try{if(typeof ${gName}!=='undefined'){g.${gName}=${gName};}}catch(e){}})(typeof unsafeWindow!=='undefined'?unsafeWindow:window);`
-                };
-            }
-            if (opts.watch) {
-                const ctx = await esbuild.context(buildOpts);
-                await ctx.watch();
-                console.log(`👀 Watching ${m.id} (${path.relative(ROOT, entry)}) → ${path.relative(ROOT, m.out)} `);
-                return;
-            } else {
-                await esbuild.build(buildOpts);
-                updateFileVersion(m.out, versionStr, opts.dry);
-                console.log(`📦 Emitted (lib) ${m.id}: ${path.relative(ROOT, m.out)} `);
-                return;
-            }
+            await runEsbuild(m, entry, makeBuildOpts(m, entry, null), versionStr, ' (lib)');
         } else {
-            // fallback concat (no banner)
-            if (!fs.existsSync(entry)) {
-                console.error(`❌ Source file not found for ${m.id}: ${entry} `);
-                return;
-            }
+            if (!fs.existsSync(entry)) { console.error(`❌ Source file not found for ${m.id}: ${entry}`); return; }
             const body = fs.readFileSync(entry, 'utf8');
             if (!opts.dry) fs.writeFileSync(m.out, body, 'utf8');
             updateFileVersion(m.out, versionStr, opts.dry);
-            console.log(`📄 Copied(no esbuild, lib) ${m.id}: ${path.relative(ROOT, m.out)} `);
-            return;
+            console.log(`📄 Copied(no esbuild, lib) ${m.id}: ${path.relative(ROOT, m.out)}`);
         }
-
+        return;
     }
-    let header = loadBannerForModule(m, versionStr, opts);
 
-    // --- Inject/refresh @updateURL/@downloadURL ---
+    let header = loadBannerForModule(m, versionStr, opts);
     header = injectUpdateDownload(header, m, versionStr, opts);
 
     if (esbuild) {
-        const buildOpts = {
-            entryPoints: [entry],
-            bundle: true,
-            outfile: m.out,
-            sourcemap: opts.release ? false : 'inline',
-            // Keep syntax & whitespace minification, but DON'T rename identifiers for libs we want to export
-            minify: !!opts.release,
-            minifyIdentifiers: false,
-            target: ['chrome110', 'edge110', 'firefox110'],
-            legalComments: 'none',
-            format: 'iife',
-            platform: 'browser',
-            splitting: false,
-            define: { __BUILD_DEV__: String(!opts.release) },
-            banner: { js: header + '\n' }
-        };
-
-        // If this lib has a known global name, append a tiny footer to publish it.
-        const gName = LIB_GLOBALS[m.id];
-        if (gName) {
-            // This assumes your lib defines a top-level variable with the same name (e.g., const TMUtils = {...}).
-            // We attach it to unsafeWindow/window without throwing if minified or absent.
-            buildOpts.footer = {
-                js: `;(function(g){try{if(typeof ${gName}!=='undefined'){g.${gName}=${gName};}}catch(e){}})(typeof unsafeWindow!=='undefined'?unsafeWindow:window);`
-            };
-        }
-
-        if (opts.watch) {
-            const ctx = await esbuild.context(buildOpts);
-            await ctx.watch();
-            console.log(`👀 Watching ${ m.id } (${ path.relative(ROOT, entry) }) → ${ path.relative(ROOT, m.out) } `);
-            return;
-        } else {
-            await esbuild.build(buildOpts);
-            // Ensure output reflects the bumped version (also updates any VERSION constants)
-            updateFileVersion(m.out, versionStr, opts.dry);
-            console.log(`📦 Emitted ${m.id}: ${path.relative(ROOT, m.out)} `);
-            if (opts.release) {
-                const pkg = 'AlphaGeek509/plex-tampermonkey-scripts';
-                const sha = (process.env.GIT_SHA || '').trim();
-                const pinnedIdent = sha ? sha : `v${versionStr}`;
-                // const purgeUrl = `https://purge.jsdelivr.net/gh/${pkg}@${pinnedIdent}/TamperHost/wwwroot/${path.basename(m.out)}`;
-                // console.log(`🧹 jsDelivr purge → ${purgeUrl}`);
-            }
-
-        }
+        await runEsbuild(m, entry, makeBuildOpts(m, entry, header), versionStr, '');
+        if (opts.watch) return;
     } else {
-        // Fallback: concatenate banner + source (no bundling)
-        if (!fs.existsSync(entry)) {
-            console.error(`❌ Source file not found for ${ m.id }: ${ entry } `);
-            return;
-        }
+        if (!fs.existsSync(entry)) { console.error(`❌ Source file not found for ${m.id}: ${entry}`); return; }
         const body = fs.readFileSync(entry, 'utf8');
-        const out = header + body;
-
-        if (!opts.dry) fs.writeFileSync(m.out, out, 'utf8');
+        if (!opts.dry) fs.writeFileSync(m.out, header + body, 'utf8');
         updateFileVersion(m.out, versionStr, opts.dry);
-
-        console.log(`📄 Copied(no esbuild) ${ m.id }: ${ path.relative(ROOT, m.out) } `);
+        console.log(`📄 Copied(no esbuild) ${m.id}: ${path.relative(ROOT, m.out)}`);
     }
 }
 
-// Interactive selection (no deps):
-// ─────────────────────────────────────────────────────────────────────────────
-// Interactive module picker (validated; supports a/all, comma lists, q/quit)
-// Also supports non-interactive BUILD_MODS env (e.g., "1,3" or "a" or "q")
-// ─────────────────────────────────────────────────────────────────────────────
-function showMenu(modules) {
-    console.log('\nSelect module(s) to process:');
-    modules.forEach((m, i) => console.log(`  ${ i + 1 }. ${ m.id } — ${ m.featureName } `));
-    console.log('  a. ALL');
-    console.log('  q. Quit');
-    console.log('\nTip: enter a single number (e.g., 1) or a comma list (e.g., 1,3).');
-}
-
-function parseSelection(input, modules) {
-    const max = modules.length;
-    if (input == null) return { quit: true, ids: [] };
-    const s = String(input).trim().toLowerCase();
-
-    if (s === '' || s === 'q' || s === 'quit' || s === 'exit') return { quit: true, ids: [] };
-    if (s === 'a' || s === 'all') return { quit: false, ids: modules.map(m => m.id) };
-
-    const parts = s.split(',').map(x => x.trim()).filter(Boolean);
-    if (!parts.length) return { quit: false, ids: null };
-
-    const idxs = [];
-    for (const p of parts) {
-        if (!/^\d+$/.test(p)) return { quit: false, ids: null };
-        const n = Number(p);
-        if (n < 1 || n > max) return { quit: false, ids: null };
-        idxs.push(n - 1);
-    }
-    const dedup = [...new Set(idxs)];
-    return { quit: false, ids: dedup.map(i => modules[i].id) };
-}
-
-function askQuestion(rl, prompt) {
-    return new Promise(resolve => rl.question(prompt, resolve));
-}
-
-async function promptSelectModules(modules) {
-    // Non-interactive override
-    if (process.env.BUILD_MODS) {
-        const { quit, ids } = parseSelection(process.env.BUILD_MODS, modules);
-        if (quit) {
-            console.log('👋 Exiting without building.');
-            return null; // caller should stop
-        }
-        if (Array.isArray(ids)) return ids;
-        console.log('⚠️  Invalid BUILD_MODS value. Falling back to interactive prompt.\n');
-    }
-
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    try {
-        for (; ;) {
-            showMenu(modules);
-            const answer = await askQuestion(rl, 'Your choice: ');
-            const { quit, ids } = parseSelection(answer, modules);
-            if (quit) {
-                console.log('👋 Exiting without building.');
-                return null; // caller should stop
-            }
-            if (Array.isArray(ids)) return ids;
-
-            console.log('\n⚠️  Invalid input. Enter like "1" or "1,3" or "a" for all, or "q" to quit.\n');
-        }
-    } finally {
-        rl.close();
-    }
-}
 
 
 // --------------------------- main (modules-only) ---------------------------
 (async () => {
     if (!opts.ids || !opts.ids.length) {
-        const chosen = await promptSelectModules(MODULES);
-        if (chosen === null) {
-            // User chose to quit (or BUILD_MODS requested quit)
-            process.exit(0);
-        }
-        if (!chosen.length) {
-            console.error('No modules selected. Exiting.');
-            process.exit(1);
-        }
-        opts.ids = chosen;
+        opts.ids = MODULES.map(m => m.id);
+        console.log(`ℹ️  No --ids specified; defaulting to all ${opts.ids.length} modules.`);
     }
 
 
