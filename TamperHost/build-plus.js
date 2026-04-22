@@ -473,7 +473,7 @@ function injectUpdateDownload(header, m, versionStr, opts) {
 }
 
 async function emitModule(m, versionStr) {
-    ensureDir(m.out);
+    if (!opts.dry) ensureDir(m.out);
     const entry = m.src;
 
     // ---- Plain library build path (no Tampermonkey header) ----
@@ -510,9 +510,9 @@ async function emitModule(m, versionStr) {
                 console.log(`👀 Watching ${m.id} (${path.relative(ROOT, entry)}) → ${path.relative(ROOT, m.out)} `);
                 return;
             } else {
-                await esbuild.build(buildOpts);
+                if (!opts.dry) await esbuild.build(buildOpts);
                 updateFileVersion(m.out, versionStr, opts.dry);
-                console.log(`📦 Emitted (lib) ${m.id}: ${path.relative(ROOT, m.out)} `);
+                console.log(`${opts.dry ? '🧪 DRY' : '📦'} Emitted (lib) ${m.id}: ${path.relative(ROOT, m.out)}`);
                 return;
             }
         } else {
@@ -565,21 +565,12 @@ async function emitModule(m, versionStr) {
         if (opts.watch) {
             const ctx = await esbuild.context(buildOpts);
             await ctx.watch();
-            console.log(`👀 Watching ${ m.id } (${ path.relative(ROOT, entry) }) → ${ path.relative(ROOT, m.out) } `);
+            console.log(`👀 Watching ${m.id} (${path.relative(ROOT, entry)}) → ${path.relative(ROOT, m.out)}`);
             return;
         } else {
-            await esbuild.build(buildOpts);
-            // Ensure output reflects the bumped version (also updates any VERSION constants)
+            if (!opts.dry) await esbuild.build(buildOpts);
             updateFileVersion(m.out, versionStr, opts.dry);
-            console.log(`📦 Emitted ${m.id}: ${path.relative(ROOT, m.out)} `);
-            if (opts.release) {
-                const pkg = 'AlphaGeek509/plex-tampermonkey-scripts';
-                const sha = (process.env.GIT_SHA || '').trim();
-                const pinnedIdent = sha ? sha : `v${versionStr}`;
-                // const purgeUrl = `https://purge.jsdelivr.net/gh/${pkg}@${pinnedIdent}/TamperHost/wwwroot/${path.basename(m.out)}`;
-                // console.log(`🧹 jsDelivr purge → ${purgeUrl}`);
-            }
-
+            console.log(`${opts.dry ? '🧪 DRY' : '📦'} Emitted ${m.id}: ${path.relative(ROOT, m.out)}`);
         }
     } else {
         // Fallback: concatenate banner + source (no bundling)
