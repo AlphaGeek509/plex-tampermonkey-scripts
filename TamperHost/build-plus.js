@@ -434,7 +434,7 @@ function injectUpdateDownload(header, m, versionStr, opts) {
     // Resolve bases
     const pkg = 'AlphaGeek509/plex-tampermonkey-scripts';
     const sha = (process.env.GIT_SHA || '').trim();
-    const mode = (process.env.TM_URL_MODE || 'pinned').toLowerCase(); // pinned | latest | hybrid
+    const mode = (process.env.TM_URL_MODE || 'pinned').toLowerCase(); // pinned | latest
     const devBase = (process.env.DEV_BASE || 'http://localhost:5000').replace(/\/+$/, '');
 
     // Prefer commit-SHA pinning when provided (most cache-proof), else tag "v{VER}"
@@ -462,12 +462,6 @@ function injectUpdateDownload(header, m, versionStr, opts) {
             case 'latest': {
                 updateURL = `${baseLatest}/${fileName}`;
                 downloadURL = `${baseLatest}/${fileName}`;
-                break;
-            }
-            case 'hybrid': {
-                // Hybrid still pins both to avoid split sources; keeps logic simple & reliable
-                updateURL = `${basePinned}/${fileName}`;
-                downloadURL = `${basePinned}/${fileName}`;
                 break;
             }
             case 'pinned':
