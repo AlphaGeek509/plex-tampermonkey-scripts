@@ -31,6 +31,7 @@
         /**
          * Run a function after ensuring we have an auth key.
          * If a refresh hook exists we’ll attempt it once.
+         * Throws if no key is available after the refresh attempt.
          */
         async withFreshAuth(fn) {
             let key = await core.auth.getKey();
@@ -45,7 +46,8 @@
                     }
                 } catch { /* non-fatal */ }
             }
-            return fn(key || undefined);
+            if (!key) throw new Error(‘No Plex API key configured. Use the TamperMonkey menu (⚙️ Set Plex API Key) to set one.’);
+            return fn(key);
         }
     };
 
