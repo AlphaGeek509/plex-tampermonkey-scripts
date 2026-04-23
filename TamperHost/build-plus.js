@@ -605,8 +605,9 @@ async function emitModule(m, versionStr) {
         }
         updatedPerIdVersion[id] = nextAll;
 
+        const prevVersion = pkg.tmVersions[id] || '0.0.0';
         if (!opts.dry) pkg.tmVersions[id] = nextAll;
-        console.log(`ℹ️  ${id}: ${(pkg.tmVersions[id] || '0.0.0')} → ${nextAll} `);
+        console.log(`ℹ️  ${id}: ${prevVersion} → ${nextAll} `);
     }
 
     // Also bump the lockstep anchor

@@ -36,6 +36,7 @@
 		<None Include=".gitignore" />
 		<None Include="README.md" Condition="Exists('README.md')" />
 		<None Include="tm-scripts\banners\_template.header.tpl.js" />
+		<None Include="tm-scripts\dev\lt-dev-reload.user.js" />
 
 		<!-- Package config and banners -->
 		<None Include="tm-scripts\package.json" />
