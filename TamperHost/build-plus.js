@@ -61,25 +61,26 @@ function devReloadPlugin() {
 // --------------------------- arg parsing ---------------------------
 const args = process.argv.slice(2);
 const opts = {
-    bump: null,      // 'patch' | 'minor' | 'major'
-    set: null,       // 'x.y.z'
-    ids: null,       // array of module ids (e.g., ['QT10'])
+    bump: false,      // true when --bump/--patch/--minor/--major passed
+    set: null,        // 'YYYY.MM.DD.N'
+    ids: null,        // array of module ids (e.g., ['QT10'])
     dry: false,
-    emit: false,     // if true, build/copy outputs for known modules
-    release: false,  // if true and esbuild present, minify + remove sourcemap
-    watch: false     // esbuild watch (dev)
+    emit: false,      // if true, build/copy outputs for known modules
+    release: false,   // if true and esbuild present, minify + remove sourcemap
+    watch: false      // esbuild watch (dev)
 };
 
 function usage(exitCode = 0) {
     console.log(`
 Usage:
-  node build-plus.js --patch --emit                       # build all modules
-  node build-plus.js --patch --ids QT10 --emit --watch    # single module, watch
-  node build-plus.js --set 3.6.0 --ids QT35 --emit --release
+  node build-plus.js --bump --emit                          # build all modules
+  node build-plus.js --bump --ids QT10 --emit --watch       # single module, watch
+  node build-plus.js --set 2026.04.23.0 --ids QT35 --emit --release
 
 Flags:
-  --patch | --minor | --major   Bump type (lockstep via tmVersions.ALL)
-  --set 1.2.3                   Set exact version (overrides bump type)
+  --bump                        Advance to today's date version (YYYY.MM.DD.N)
+  --patch | --minor | --major   Aliases for --bump (retained for compatibility)
+  --set YYYY.MM.DD.N            Set exact version (overrides --bump)
   --ids <id...>                 Modules to process; omit to build all
   --emit                        Build/copy outputs for selected modules
   --release                     With --emit, minify and use PROD banners
@@ -98,9 +99,7 @@ for (let i = 0; i < args.length; i++) {
     else if (a === '--emit') opts.emit = true;
     else if (a === '--release') opts.release = true;
     else if (a === '--watch') opts.watch = true;
-    else if (a === '--patch') opts.bump = 'patch';
-    else if (a === '--minor') opts.bump = 'minor';
-    else if (a === '--major') opts.bump = 'major';
+    else if (a === '--bump' || a === '--patch' || a === '--minor' || a === '--major') opts.bump = true;
     else if (a === '--set') { opts.set = args[++i]; }
     else if (a === '--ids') {
         opts.ids = [];
@@ -111,7 +110,7 @@ for (let i = 0; i < args.length; i++) {
 }
 
 if (!opts.bump && !opts.set) {
-    console.error('❌ You must pass a bump mode (--patch|--minor|--major) or --set X.Y.Z');
+    console.error('❌ You must pass --bump or --set YYYY.MM.DD.N');
     usage(1);
 }
 
@@ -261,14 +260,18 @@ const SHARED = {
 };
 
 // --------------------------- helpers ---------------------------
-function bumpSemver(ver, mode, setStr) {
+function nextDateVersion(currentVer, setStr) {
     if (setStr) return setStr;
-    const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(ver || '0.0.0');
-    let [maj, min, pat] = m ? [+m[1], +m[2], +m[3]] : [0, 0, 0];
-    if (mode === 'major') { maj++; min = 0; pat = 0; }
-    else if (mode === 'minor') { min++; pat = 0; }
-    else /* patch/default */ { pat++; }
-    return `${maj}.${min}.${pat}`;
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const today = `${y}.${m}.${d}`;
+    const match = /^(\d{4}\.\d{2}\.\d{2})\.(\d+)$/.exec(currentVer || '');
+    if (match && match[1] === today) {
+        return `${today}.${+match[2] + 1}`;
+    }
+    return `${today}.0`;
 }function ensureDir(p) {
     const dir = path.dirname(p);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -592,8 +595,8 @@ async function emitModule(m, versionStr) {
     const updatedPerIdVersion = {}; // { QT10: 'x.y.z', ... }
 
     // 1) Determine ONE global version (lockstep) and apply to all selected ids
-    const curAll = (pkg.tmVersions && pkg.tmVersions.ALL) || '0.0.0';
-    const nextAll = bumpSemver(curAll, opts.bump, opts.set);
+    const curAll = (pkg.tmVersions && pkg.tmVersions.ALL) || '';
+    const nextAll = nextDateVersion(curAll, opts.set);
 
     for (const id of opts.ids) {
         const files = (pkg.tmFiles[id] || []).map(p => path.resolve(path.dirname(PKG_PATH), p));

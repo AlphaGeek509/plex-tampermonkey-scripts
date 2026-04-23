@@ -5,27 +5,25 @@
   "description": "Plex TamperMonkey scripts (source only).",
   "license": "UNLICENSED",
   "scripts": {
-    "dev": "node ../build-plus.js --patch --emit",
-    "build": "node ../build-plus.js --release --patch --emit",
-    "release:qt10": "node ../build-plus.js --release --patch --emit --ids QT10",
-    "release:all": "node ../build-plus.js --release --patch --emit",
-    "bump:patch": "node ../build-plus.js --patch",
-    "bump:minor": "node ../build-plus.js --minor",
-    "bump:major": "node ../build-plus.js --major"
+    "dev": "node ../build-plus.js --bump --emit",
+    "build": "node ../build-plus.js --release --bump --emit",
+    "release:qt10": "node ../build-plus.js --release --bump --emit --ids QT10",
+    "release:all": "node ../build-plus.js --release --bump --emit",
+    "bump": "node ../build-plus.js --bump"
   },
   "tmVersions": {
-    "QT05": "4.2.8",
-    "QT10": "4.2.7",
-    "QT20": "4.2.7",
-    "QT30": "4.2.7",
-    "QT35": "4.2.7",
-    "QT50": "4.2.7",
-    "LT_CORE": "4.2.7",
-    "LT_DATA_CORE": "4.2.7",
-    "LT_UI_HUB": "4.2.7",
-    "LT_PLEX_AUTH": "4.2.7",
-    "LT_PLEX_TM_UTILS": "4.2.7",
-    "ALL": "4.2.8"
+    "QT05": "2026.04.23.0",
+    "QT10": "2026.04.23.0",
+    "QT20": "2026.04.23.0",
+    "QT30": "2026.04.23.0",
+    "QT35": "2026.04.23.0",
+    "QT50": "2026.04.23.0",
+    "LT_CORE": "2026.04.23.0",
+    "LT_DATA_CORE": "2026.04.23.0",
+    "LT_UI_HUB": "2026.04.23.0",
+    "LT_PLEX_AUTH": "2026.04.23.0",
+    "LT_PLEX_TM_UTILS": "2026.04.23.0",
+    "ALL": "2026.04.23.0"
   },
   "tmFiles": {
     "QT05": [
