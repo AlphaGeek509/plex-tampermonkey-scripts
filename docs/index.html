@@ -145,6 +145,45 @@
     }
 
     footer a { color: #1565c0; }
+
+    .ds-req {
+      padding: .65rem 1.25rem;
+      background: #e8f0fe;
+      border-bottom: 1px solid #c5d8fb;
+      font-size: .82rem;
+      color: #333;
+      line-height: 1.6;
+    }
+
+    .ds-req strong { color: #1a1a2e; }
+
+    .ds-req a { color: #1565c0; }
+
+    .ds-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .3rem .5rem;
+      margin-top: .4rem;
+    }
+
+    .ds-badge {
+      background: #fff;
+      border: 1px solid #aac4f5;
+      border-radius: 4px;
+      padding: .1rem .45rem;
+      font-size: .78rem;
+      font-weight: 700;
+      color: #1565c0;
+      white-space: nowrap;
+      font-family: monospace;
+      cursor: pointer;
+      user-select: none;
+      transition: background .12s, border-color .12s;
+    }
+
+    .ds-badge:hover { background: #d0e4ff; border-color: #7aaaf5; }
+
+    .ds-badge.copied { background: #e6f4ea; border-color: #81c784; color: #2e7d32; }
   </style>
 </head>
 <body>
@@ -166,6 +205,20 @@
     <div class="group-header">
       <span class="group-header-title">Quote Tracking</span>
       <span class="group-header-sub">QuoteWizard automation &amp; data enrichment</span>
+    </div>
+
+    <div class="ds-req">
+      <strong>Required Data Source Access</strong> — Your Plex user account must be approved for the following Data Sources.
+      Contact your Plex administrator or
+      <a href="https://lyntron.on.plex.com/Platform/CustomerWebserviceAccessByUser" target="_blank" rel="noopener">add access by user account</a>.
+      <div class="ds-list">
+          <button class="ds-badge" onclick="copyDS(this)">172 - Containers_Get2_RE</button>
+          <button class="ds-badge" onclick="copyDS(this)">319 - Customer_Detail_Get</button>
+          <button class="ds-badge" onclick="copyDS(this)">3156 - Quote_Header_Get</button>
+          <button class="ds-badge" onclick="copyDS(this)">4809 - Catalog_Prices_With_Breakpoints_Get</button>
+          <button class="ds-badge" onclick="copyDS(this)">11713 - Docs_Attached_Get_All</button>
+          <button class="ds-badge" onclick="copyDS(this)">22696 - Catalog_Get</button>
+      </div>
     </div>
 
     <div class="card">
@@ -237,6 +290,18 @@
   <a href="https://github.com/AlphaGeek509/plex-tampermonkey-scripts" target="_blank" rel="noopener">GitHub</a>
   &nbsp;·&nbsp; Internal use only — Lyn-Tron
 </footer>
+
+<script>
+  function copyDS(btn) {
+    const num = btn.textContent.split(' ')[0];
+    navigator.clipboard.writeText(num).then(() => {
+      btn.classList.add('copied');
+      const orig = btn.textContent;
+      btn.textContent = num + ' ✓ copied';
+      setTimeout(() => { btn.classList.remove('copied'); btn.textContent = orig; }, 1500);
+    });
+  }
+</script>
 
 </body>
 </html>
