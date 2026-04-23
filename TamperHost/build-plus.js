@@ -436,7 +436,7 @@ function injectUpdateDownload(header, m, versionStr, opts) {
     // Resolve bases
     const pkg = 'AlphaGeek509/plex-tampermonkey-scripts';
     const sha = (process.env.GIT_SHA || '').trim();
-    const mode = (process.env.TM_URL_MODE || 'pinned').toLowerCase(); // pinned | latest
+    const mode = (process.env.TM_URL_MODE || 'latest').toLowerCase(); // pinned | latest
     const devBase = (process.env.DEV_BASE || 'http://localhost:5000').replace(/\/+$/, '');
 
     // Prefer commit-SHA pinning when provided (most cache-proof), else tag "v{VER}"
