@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        QT05_DEV
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     2026.05.19.5
+// @version     2026.05.19.13
 // @description Adds a Hub Bar “New Contact” button on Quote that opens Plex’s Contact form in a new tab. Resolves CustomerNo via KO with DOM fallbacks and guards via SPA-safe observers. (DEV build)
 // @author      Jeff Nichols (OneMonroe | Lyn-Tron)
 // @license     MIT
@@ -11,11 +11,11 @@
 // @match       https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*
-// @require     http://localhost:5000/lt-plex-tm-utils.user.js?v=2026.05.19.5-1779223515790
-// @require     http://localhost:5000/lt-plex-auth.user.js?v=2026.05.19.5-1779223515790
-// @require     http://localhost:5000/lt-core.user.js?v=2026.05.19.5-1779223515790
-// @require     http://localhost:5000/lt-data-core.user.js?v=2026.05.19.5-1779223515790
-// @require     http://localhost:5000/lt-ui-hub.js?v=2026.05.19.5-1779223515790
+// @require     http://localhost:5000/lt-plex-tm-utils.user.js?v=2026.05.19.13-1779228585455
+// @require     http://localhost:5000/lt-plex-auth.user.js?v=2026.05.19.13-1779228585455
+// @require     http://localhost:5000/lt-core.user.js?v=2026.05.19.13-1779228585455
+// @require     http://localhost:5000/lt-data-core.user.js?v=2026.05.19.13-1779228585455
+// @require     http://localhost:5000/lt-ui-hub.js?v=2026.05.19.13-1779228585455
 // @resource    THEME_CSS http://localhost:5000/theme.css
 // @grant       GM_registerMenuCommand
 // @grant       GM_getValue

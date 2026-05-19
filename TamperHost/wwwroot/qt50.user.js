@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        QT50_DEV
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     2026.05.19.5
+// @version     2026.05.19.13
 // @description Runs rule-based checks on quote lines for lead time, unit price limits, and part number management. Adds a Hub Bar “Validate Lines” button with settings, a details modal, and CSV export. Highlights issues directly in the grid with optional auto-fixes. (DEV build)
 // @author      Jeff Nichols (OneMonroe | Lyn-Tron)
 // @license     MIT
@@ -11,11 +11,11 @@
 // @match       https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*
-// @require     http://localhost:5000/lt-plex-tm-utils.user.js?v=2026.05.19.5-1779223516170
-// @require     http://localhost:5000/lt-plex-auth.user.js?v=2026.05.19.5-1779223516170
-// @require     http://localhost:5000/lt-core.user.js?v=2026.05.19.5-1779223516170
-// @require     http://localhost:5000/lt-data-core.user.js?v=2026.05.19.5-1779223516170
-// @require     http://localhost:5000/lt-ui-hub.js?v=2026.05.19.5-1779223516170
+// @require     http://localhost:5000/lt-plex-tm-utils.user.js?v=2026.05.19.13-1779228585751
+// @require     http://localhost:5000/lt-plex-auth.user.js?v=2026.05.19.13-1779228585751
+// @require     http://localhost:5000/lt-core.user.js?v=2026.05.19.13-1779228585751
+// @require     http://localhost:5000/lt-data-core.user.js?v=2026.05.19.13-1779228585751
+// @require     http://localhost:5000/lt-ui-hub.js?v=2026.05.19.13-1779228585751
 // @resource    THEME_CSS http://localhost:5000/theme.css
 // @grant       GM_registerMenuCommand
 // @grant       GM_getValue
