@@ -8,24 +8,30 @@
     "dev": "node ../build-plus.js --bump --emit",
     "build": "node ../build-plus.js --release --bump --emit",
     "release:qt10": "node ../build-plus.js --release --bump --emit --ids QT10",
+    "release:crs10": "node ../build-plus.js --release --bump --emit --ids CRS10",
     "release:all": "node ../build-plus.js --release --bump --emit",
     "bump": "node ../build-plus.js --bump"
   },
   "tmVersions": {
-    "QT05": "2026.04.23.1",
-    "QT10": "2026.04.23.1",
-    "QT20": "2026.04.23.1",
-    "QT30": "2026.04.23.1",
-    "QT35": "2026.04.23.1",
-    "QT50": "2026.04.23.1",
-    "LT_CORE": "2026.04.23.1",
-    "LT_DATA_CORE": "2026.04.23.1",
-    "LT_UI_HUB": "2026.04.23.1",
-    "LT_PLEX_AUTH": "2026.04.23.1",
-    "LT_PLEX_TM_UTILS": "2026.04.23.1",
-    "ALL": "2026.04.23.1"
+    "CRS10": "2026.05.19.5",
+    "QT05": "2026.05.19.5",
+    "QT10": "2026.05.19.5",
+    "QT20": "2026.05.19.5",
+    "QT30": "2026.05.19.5",
+    "QT35": "2026.05.19.5",
+    "QT50": "2026.05.19.5",
+    "LT_CORE": "2026.05.19.5",
+    "LT_DATA_CORE": "2026.05.19.5",
+    "LT_UI_HUB": "2026.05.19.5",
+    "LT_PLEX_AUTH": "2026.05.19.5",
+    "LT_PLEX_TM_UTILS": "2026.05.19.5",
+    "ALL": "2026.05.19.5"
   },
   "tmFiles": {
+    "CRS10": [
+      "src/cust-rel-sch/crs10-validateCertsBeforeScheduling/CRS10-ValidateCertsBeforeScheduling.user.js",
+      "../wwwroot/CRS10-ValidateCertsBeforeScheduling.user.js"
+    ],
     "QT05": [
       "src/quote-tracking/qt05-customerContactAdd/qt05.index.js",
       "../wwwroot/qt05.user.js"

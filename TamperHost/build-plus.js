@@ -183,6 +183,21 @@ const MODULES = [
         grants: ['GM_registerMenuCommand', 'GM_getValue', 'GM_setValue', 'GM_xmlhttpRequest', 'unsafeWindow'],
         connect: ['*.plex.com', 'cdn.jsdelivr.net']
     },
+    // ---- Customer Releases & Scheduling ----
+    {
+        id: 'CRS10',
+        featureName: 'Validate Certs Before Scheduling',
+        src: path.join(SRC_ROOT, 'src', 'cust-rel-sch', 'crs10-validateCertsBeforeScheduling', 'CRS10-ValidateCertsBeforeScheduling.user.js'),
+        out: path.join(ROOT, 'wwwroot', 'CRS10-ValidateCertsBeforeScheduling.user.js'),
+        desc: 'Validate certs by OrderNo+PartNo+SerialNo (display), call DS8566 (Heat_Key/Serial_No) then DS14343 by Heat_Key. Show results, require Acknowledgement when issues exist, offer quick email for misses, and provide a small settings GUI.',
+        matches: [
+            'https://lyntron.on.plex.com/SalesAndCRM/SalesReleases*',
+            'https://lyntron.test.on.plex.com/SalesAndCRM/SalesReleases*'
+        ],
+        grants: ['GM_registerMenuCommand', 'GM_getValue', 'GM_setValue', 'GM_xmlhttpRequest', 'unsafeWindow'],
+        connect: ['*.plex.com', 'localhost'],
+        runAt: 'document-idle'
+    },
     // ---- shared CORE LIBS (no Tampermonkey banner; plain JS bundles) ----
     {
         id: 'LT_CORE',
@@ -383,6 +398,9 @@ function loadBannerForModule(m, versionStr, opts) {
     if (Array.isArray(m.connect) && m.connect.length) {
         const connectLines = m.connect.map(d => `// @connect     ${d}`).join('\n') + '\n';
         header = header.replace(/(\/\/\s*@run-at[^\n]*\n)/, `${connectLines}$1`);
+    }
+    if (m.runAt) {
+        header = header.replace(/(@run-at\s+)\S+/, `$1${m.runAt}`);
     }
     if (m.icons?.icon32) {
         header = header.replace(/(\/\/\s*@version[^\n]*\n)/, `$1// @icon        ${m.icons.icon32}\n`);

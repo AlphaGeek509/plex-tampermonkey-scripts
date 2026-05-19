@@ -40,6 +40,7 @@
 
 		<!-- Package config and banners -->
 		<None Include="tm-scripts\package.json" />
+		<None Include="tm-scripts\src\cust-rel-sch\crs10-validateCertsBeforeScheduling\CRS10-ValidateCertsBeforeScheduling.user.js" />
 		<None Include="tm-scripts\src\domains\quote\quote.entity.js" />
 		<None Include="tm-scripts\src\domains\quote\quote.repo.js" />
 		<None Include="tm-scripts\src\data\core\data-context.js" />

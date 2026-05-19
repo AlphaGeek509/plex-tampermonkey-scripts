@@ -142,6 +142,6 @@
 
 
     if (DEV) {
-        (unsafeWindow || window).QT05_debug = { makeContactUrl, resolveCustomerNo, onQuotePage };
+        (unsafeWindow || window).QT05_debug = { makeContactUrl, resolveCustomerNo };
     }
 })();

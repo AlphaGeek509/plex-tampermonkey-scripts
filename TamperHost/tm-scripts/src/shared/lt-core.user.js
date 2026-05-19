@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         lt-core
 // @namespace    lt
-// @version      2026.04.23.1
+// @version      2026.05.19.5
 // @description  Shared core: auth + http + plex DS + hub (status/toast) + theme bridge + tiny utils
 // @run-at       document-start
 // @grant        none
@@ -30,7 +30,7 @@
 
         /**
          * Run a function after ensuring we have an auth key.
-         * If a refresh hook exists we’ll attempt it once.
+         * If a refresh hook exists we'll attempt it once.
          * Throws if no key is available after the refresh attempt.
          */
         async withFreshAuth(fn) {
@@ -46,7 +46,7 @@
                     }
                 } catch { /* non-fatal */ }
             }
-            if (!key) throw new Error(‘No Plex API key configured. Use the TamperMonkey menu (⚙️ Set Plex API Key) to set one.’);
+            if (!key) throw new Error('No Plex API key configured. Use the TamperMonkey menu (⚙️ Set Plex API Key) to set one.');
             return fn(key);
         }
     };
@@ -288,7 +288,7 @@
     core.theme = core.theme || {
         apply() {
             try {
-                // Only main script’s @grant matters; @require metadata is ignored by TM
+                // Only main script's @grant matters; @require metadata is ignored by TM
                 const css = (typeof GM_getResourceText === 'function') ? GM_getResourceText('THEME_CSS') : '';
                 if (css && typeof GM_addStyle === 'function') GM_addStyle(css);
             } catch (e) {

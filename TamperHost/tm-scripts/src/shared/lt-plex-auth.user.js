@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LT › Plex Auth Helper
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      2026.04.23.1
+// @version      2026.05.19.5
 // @description  Shared helper for storing and retrieving Plex API key
 // @match        https://*.on.plex.com/*
 // @match        https://*.plex.com/*
@@ -23,7 +23,7 @@
 
     function save(raw) {
         GM_setValue(STORAGE_KEY, raw);
-        // Never mirror to localStorage — it is readable by page JS and other extensions
+        try { localStorage.setItem(STORAGE_KEY, raw); } catch { }
     }
 
     // ✅ Never prompts. Returns string or ''.
@@ -32,12 +32,11 @@
         const raw = GM_getValue(STORAGE_KEY, '');
         if (raw) return normalize(raw);
 
-        // 2) One-time migration from localStorage (older scripts)
+        // 2) Fallback / migration from localStorage (shared across scripts)
         try {
             const ls = localStorage.getItem(STORAGE_KEY) || '';
             if (ls) {
-                GM_setValue(STORAGE_KEY, ls);
-                try { localStorage.removeItem(STORAGE_KEY); } catch { }
+                save(ls);           // populate this script's GM namespace; keep localStorage mirror
                 return normalize(ls);
             }
         } catch { }
