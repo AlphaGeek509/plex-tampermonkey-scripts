@@ -97,7 +97,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             label: 'Apply Pricing',
             title: 'Apply customer catalog pricing',
             side: 'left',
-            weight: 120,
+            weight: 20,
             onClick: () => runApplyPricing(),
             // Only show when the active wizard step <li> is the configured index.
             // Completely ignores any "Part Summary" text elsewhere on the page.
@@ -125,7 +125,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             const present = (typeof hub?.has === 'function') ? !!hub.has(HUB_BTN_ID) : ids.includes(HUB_BTN_ID);
 
             if (!present && typeof hub?.registerButton === 'function') {
-                const def = { id: HUB_BTN_ID, label: 'Apply Pricing', title: 'Apply customer catalog pricing', weight: 120, onClick: () => runApplyPricing() };
+                const def = { id: HUB_BTN_ID, label: 'Apply Pricing', title: 'Apply customer catalog pricing', weight: 20, onClick: () => runApplyPricing() };
                 try { hub.registerButton('left', def); } catch { }
 
             }
@@ -184,12 +184,18 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             }
             if (catalogKey == null) { task.error('No Catalog Key'); lt.core.hub.notify('No catalog found for this quote', 'warn'); return; }
 
-            // Collect parts from KO grid now (reuse top-level KO)
+            // Collect parts from KO grid — ensure datasource is loaded first
             const grid = document.querySelector(CONFIG.GRID_SEL);
+            const gridVM = grid && KO?.dataFor?.(grid);
 
-            const raw = (grid && KO?.dataFor && Array.isArray(KO.dataFor(grid)?.datasource?.raw))
-                ? KO.dataFor(grid).datasource.raw : [];
+            if (gridVM && (!Array.isArray(gridVM.datasource?.raw) || !gridVM.datasource.raw.length)) {
+                task.update('Loading grid data…');
+                try { await gridVM.datasource.read(); } catch { }
+            }
 
+            const raw = Array.isArray(gridVM?.datasource?.raw) ? gridVM.datasource.raw : [];
+
+            log(`QT30: raw[0] keys=${raw[0] ? Object.keys(raw[0]).join(',') : 'n/a'} | PartNo type=${raw[0] ? typeof raw[0].PartNo : 'n/a'} | isObs=${raw[0] ? !!KO?.isObservable?.(raw[0].PartNo) : 'n/a'} | val=${raw[0] ? TMUtils.getObsValue?.(raw[0], 'PartNo', { first: true, trim: true }) : 'n/a'}`);
             const partNos = [...new Set(raw.map(r => TMUtils.getObsValue?.(r, "PartNo", { first: true, trim: true })).filter(Boolean))];
             if (!partNos.length) { task.error('No PartNo values'); lt.core.hub.notify('No PartNo values found', 'warn'); return; }
 
@@ -255,7 +261,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
                 if (qty > 0) {
                     const partNo = TMUtils.getObsValue(row, 'PartNo', { first: true, trim: true });
                     const bp = pickPrice(priceMap[partNo], qty);
-                    if (bp == null) continue;
+                    if (bp == null) { log(`QT30: no price for PartNo="${partNo}" qty=${qty} — keys in priceMap: [${Object.keys(priceMap).join(', ')}]`); continue; }
                     applyPriceToRow(row, round(bp));
                     log(`QT30: row[${i}] qty=${qty} price=${round(bp)}`);
                 }

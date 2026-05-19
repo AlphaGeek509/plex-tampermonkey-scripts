@@ -22,7 +22,7 @@
             id: 'qt35-attachments',
             label: 'Attachments',
             title: 'Open QT35 Attachments',
-            weight: 120,
+            weight: 40,
             onClick: () => (typeof openAttachmentsModal === 'function'
                 ? openAttachmentsModal()
                 : lt.core.hub.notify('Attachments UI not available', 'warn', { toast: true }))
@@ -162,7 +162,7 @@
                 id: HUB_BTN_ID,
                 label,
                 title: 'Refresh attachments (manual)',
-                weight: 120,
+                weight: 40,
                 onClick: () => runOneRefresh(true)
             });
         } else {
@@ -172,7 +172,7 @@
                 id: HUB_BTN_ID,
                 label: `Attachments (${count})`,
                 title: 'Refresh attachments (manual)',
-                weight: 120,
+                weight: 40,
                 onClick: () => runOneRefresh(true)
             });
         }
@@ -185,7 +185,7 @@
             label: 'Attachments (0)',
             title: 'Refresh attachments (manual)',
             side: 'left',
-            weight: 120,
+            weight: 40,
             onClick: () => runOneRefresh(true),
             showWhen: () => true,
             //showWhen: (ctx) =>
@@ -320,7 +320,7 @@
             label: 'Attachments (0)',
             title: 'Refresh attachments (manual)',
             side: 'left',
-            weight: 120,
+            weight: 40,
             onClick: () => runOneRefresh(true),
             showWhen: (ctx) => (typeof FORCE_SHOW_BTN !== 'undefined' && FORCE_SHOW_BTN) || CFG.SHOW_ON_PAGES_RE.test(ctx.pageName) || ctx.isOnPartSummary,
             mount: 'nav'

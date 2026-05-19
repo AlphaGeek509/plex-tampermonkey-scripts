@@ -18,7 +18,7 @@
         BTN_ID: 'qt05-customer-contact',
         BTN_LABEL: 'New Contact',
         BTN_TITLE: 'Open Customer Contact form',
-        BTN_WEIGHT: 70,
+        BTN_WEIGHT: 10,
     };
 
     // Route allowlist

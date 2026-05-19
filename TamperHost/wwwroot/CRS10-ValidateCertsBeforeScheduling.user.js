@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        CRS10_DEV
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     2026.05.19.13
+// @version     2026.05.19.21
 // @description Validate certs by OrderNo+PartNo+SerialNo (display), call DS8566 (Heat_Key/Serial_No) then DS14343 by Heat_Key. Show results, require Acknowledgement when issues exist, offer quick email for misses, and provide a small settings GUI. (DEV build)
 // @author      Jeff Nichols (OneMonroe | Lyn-Tron)
 // @license     MIT
@@ -9,11 +9,11 @@
 // @supportURL  https://github.com/AlphaGeek509/plex-tampermonkey-scripts/issues
 // @match       https://lyntron.on.plex.com/SalesAndCRM/SalesReleases*
 // @match       https://lyntron.test.on.plex.com/SalesAndCRM/SalesReleases*
-// @require     http://localhost:5000/lt-plex-tm-utils.user.js?v=2026.05.19.13-1779228585819
-// @require     http://localhost:5000/lt-plex-auth.user.js?v=2026.05.19.13-1779228585819
-// @require     http://localhost:5000/lt-core.user.js?v=2026.05.19.13-1779228585819
-// @require     http://localhost:5000/lt-data-core.user.js?v=2026.05.19.13-1779228585819
-// @require     http://localhost:5000/lt-ui-hub.js?v=2026.05.19.13-1779228585819
+// @require     http://localhost:5000/lt-plex-tm-utils.user.js?v=2026.05.19.21-1779233317811
+// @require     http://localhost:5000/lt-plex-auth.user.js?v=2026.05.19.21-1779233317811
+// @require     http://localhost:5000/lt-core.user.js?v=2026.05.19.21-1779233317811
+// @require     http://localhost:5000/lt-data-core.user.js?v=2026.05.19.21-1779233317811
+// @require     http://localhost:5000/lt-ui-hub.js?v=2026.05.19.21-1779233317811
 // @resource    THEME_CSS http://localhost:5000/theme.css
 // @grant       GM_registerMenuCommand
 // @grant       GM_getValue
@@ -31,7 +31,7 @@
 // ==/UserScript==
 
 (() => {
-  // src/cust-rel-sch/crs10-validateCertsBeforeScheduling/CRS10-ValidateCertsBeforeScheduling.user.js
+  // tm-scripts/src/cust-rel-sch/crs10-validateCertsBeforeScheduling/CRS10-ValidateCertsBeforeScheduling.user.js
   (async function() {
     "use strict";
     const IS_TEST_ENV = /test\.on\.plex\.com$/i.test(location.hostname);

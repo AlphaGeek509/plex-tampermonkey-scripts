@@ -267,6 +267,7 @@
             const brand = document.createElement('span');
             brand.className = 'brand';
             brand.innerHTML = '<span class="dot"></span><span class="brand-text">OneMonroe</span>';
+            brand.dataset.weight = -10;
             left.appendChild(brand);
 
             // Dedicated status slot that must always be the last child in "right"
@@ -314,11 +315,15 @@
                         if (def?.ariaLabel) el.setAttribute('aria-label', String(def.ariaLabel));
                     }
 
-                    // Keep status pill at the far right: insert new right-side items BEFORE statusSlot
+                    // Insert in weight order (ascending = left-to-right); keep status pill at far right
+                    const w = def?.weight ?? 100;
+                    el.dataset.weight = w;
                     if (target === right) {
-                        right.insertBefore(el, statusSlot);
+                        const after = [...right.children].find(c => c !== statusSlot && +(c.dataset.weight ?? 100) > w);
+                        right.insertBefore(el, after || statusSlot);
                     } else {
-                        target.appendChild(el);
+                        const after = [...target.children].find(c => +(c.dataset.weight ?? 100) > w);
+                        after ? target.insertBefore(el, after) : target.appendChild(el);
                     }
                     return api;
                 },

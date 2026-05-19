@@ -460,7 +460,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             id: HUB_BTN_ID,
             label: 'Stock',
             title: 'Fetch stock for current part',
-            weight: 110,
+            weight: 25,
             onClick: () => handleClick(getActiveModalRoot())
         });
 

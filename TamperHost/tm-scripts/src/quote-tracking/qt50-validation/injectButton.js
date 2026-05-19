@@ -233,7 +233,7 @@ export async function mountValidationButton(TMUtils) {
         id: HUB_BTN_ID,
         label: 'Validate Lines',
         title: 'Validate quote line rules',
-        weight: 130,
+        weight: 30,
         onClick: async () => {
             const settings = getSettings?.() || {};
             const task = lt.core.hub.beginTask?.('Validating…', 'info') || { done() { }, error() { } };
