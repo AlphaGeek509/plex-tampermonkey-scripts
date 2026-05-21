@@ -16,19 +16,19 @@ export default function leadtimeZeroWeeks(ctx, settings, utils) {
     };
 
     for (const [qp, group] of ctx.groupsByQuotePart.entries()) {
-        for (const r of group) {
-            const raw = utils.get(r, 'LeadTime'); // adjust field name if different
-            const num = toNum(raw);
+        const r = group[0];
+        if (!r) continue;
+        const raw = utils.get(r, 'LeadTime');
+        const num = toNum(raw);
 
-            if (Number.isFinite(num) && num === 0) {
-                issues.push({
-                    kind: 'time.leadtimeZeroWeeks',
-                    level: 'error',
-                    quotePartKey: qp,
-                    message: `Leadtime is 0 weeks (must be > 0).`,
-                    meta: { leadtimeRaw: raw, leadtimeNum: num }
-                });
-            }
+        if (Number.isFinite(num) && num === 0) {
+            issues.push({
+                kind: 'time.leadtimeZeroWeeks',
+                level: 'error',
+                quotePartKey: qp,
+                message: `Leadtime is 0 weeks (must be > 0).`,
+                meta: { leadtimeRaw: raw, leadtimeNum: num }
+            });
         }
     }
 
