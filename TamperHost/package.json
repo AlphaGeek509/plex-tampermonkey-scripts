@@ -1,12 +1,18 @@
 {
   "name": "plex-tampermonkey-monorepo",
   "private": true,
-  "workspaces": [ "tm-scripts" ],
+  "workspaces": [
+    "tm-scripts"
+  ],
   "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "dotenv": "^16.6.1",
     "esbuild": "^0.25.9"
   },
   "scripts": {
     "dev": "npm run dev -w tm-scripts",
-    "build": "npm run build -w tm-scripts"
+    "build": "npm run build -w tm-scripts",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui"
   }
 }
