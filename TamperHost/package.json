@@ -13,6 +13,8 @@
     "dev": "npm run dev -w tm-scripts",
     "build": "npm run build -w tm-scripts",
     "test": "playwright test",
-    "test:ui": "playwright test --ui"
+    "test:ui": "playwright test --ui",
+    "tm:setup-profile": "node tests/tm.setup-profile.js",
+    "tm:install": "node tests/tm.install.js"
   }
 }

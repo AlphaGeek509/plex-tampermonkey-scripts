@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        QT10_DEV
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     2026.05.19.21
+// @version     2026.05.21.3
 // @description Watches CustomerNo, fetches Catalog Key/Code (DS 319/22696), and stores them in the DRAFT repo. Supports draft→quote promote and small DEV seams for debugging. (DEV build)
 // @author      Jeff Nichols (OneMonroe | Lyn-Tron)
 // @license     MIT
@@ -11,11 +11,11 @@
 // @match       https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*
-// @require     http://localhost:5000/lt-plex-tm-utils.user.js?v=2026.05.19.21-1779233317625
-// @require     http://localhost:5000/lt-plex-auth.user.js?v=2026.05.19.21-1779233317625
-// @require     http://localhost:5000/lt-core.user.js?v=2026.05.19.21-1779233317625
-// @require     http://localhost:5000/lt-data-core.user.js?v=2026.05.19.21-1779233317625
-// @require     http://localhost:5000/lt-ui-hub.js?v=2026.05.19.21-1779233317625
+// @require     http://localhost:5000/lt-plex-tm-utils.user.js?v=2026.05.21.3-1779399959799
+// @require     http://localhost:5000/lt-plex-auth.user.js?v=2026.05.21.3-1779399959799
+// @require     http://localhost:5000/lt-core.user.js?v=2026.05.21.3-1779399959799
+// @require     http://localhost:5000/lt-data-core.user.js?v=2026.05.21.3-1779399959799
+// @require     http://localhost:5000/lt-ui-hub.js?v=2026.05.21.3-1779399959799
 // @resource    THEME_CSS http://localhost:5000/theme.css
 // @grant       GM_registerMenuCommand
 // @grant       GM_getValue
@@ -33,7 +33,7 @@
 // ==/UserScript==
 
 (() => {
-  // tm-scripts/src/quote-tracking/qt10-customerCatalogGet/qt10.index.js
+  // src/quote-tracking/qt10-customerCatalogGet/qt10.index.js
   (async function() {
     "use strict";
     const DEV = true ? true : !!(typeof globalThis !== "undefined" && globalThis.__TM_DEV__);

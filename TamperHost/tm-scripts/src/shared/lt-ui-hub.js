@@ -28,7 +28,7 @@
 
                 tryFind();
                 const obs = new MutationObserver(tryFind);
-                obs.observe(document.documentElement, { childList: true, subtree: true });
+                obs.observe(document.documentElement ?? document, { childList: true, subtree: true });
 
                 setTimeout(() => {
                     try { obs.disconnect(); } catch { }

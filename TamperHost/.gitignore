@@ -57,7 +57,8 @@ TamperHost/project-tree.txt
 local-dev/
 
 # --- Playwright
-tests/.auth/plex-session.json
+tests/.auth/
+tests/.chrome-profile/
 playwright-report/
 test-results/
 .env

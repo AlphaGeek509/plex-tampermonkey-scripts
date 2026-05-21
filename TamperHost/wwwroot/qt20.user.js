@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        QT20_DEV
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     2026.05.19.21
+// @version     2026.05.21.3
 // @description Adds “Get Stock Levels” on Quote Part Detail and Hub; queries DS 172, normalizes to pieces, and toasts totals. Optionally stamps NoteNew with “Stock: N pcs”. (DEV build)
 // @author      Jeff Nichols (OneMonroe | Lyn-Tron)
 // @license     MIT
@@ -11,11 +11,11 @@
 // @match       https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*
-// @require     http://localhost:5000/lt-plex-tm-utils.user.js?v=2026.05.19.21-1779233317661
-// @require     http://localhost:5000/lt-plex-auth.user.js?v=2026.05.19.21-1779233317661
-// @require     http://localhost:5000/lt-core.user.js?v=2026.05.19.21-1779233317661
-// @require     http://localhost:5000/lt-data-core.user.js?v=2026.05.19.21-1779233317661
-// @require     http://localhost:5000/lt-ui-hub.js?v=2026.05.19.21-1779233317661
+// @require     http://localhost:5000/lt-plex-tm-utils.user.js?v=2026.05.21.3-1779399959839
+// @require     http://localhost:5000/lt-plex-auth.user.js?v=2026.05.21.3-1779399959839
+// @require     http://localhost:5000/lt-core.user.js?v=2026.05.21.3-1779399959839
+// @require     http://localhost:5000/lt-data-core.user.js?v=2026.05.21.3-1779399959839
+// @require     http://localhost:5000/lt-ui-hub.js?v=2026.05.21.3-1779399959839
 // @resource    THEME_CSS http://localhost:5000/theme.css
 // @grant       GM_registerMenuCommand
 // @grant       GM_getValue
@@ -33,7 +33,7 @@
 // ==/UserScript==
 
 (() => {
-  // tm-scripts/src/quote-tracking/qt20-partStockLevelGet/qt20.index.js
+  // src/quote-tracking/qt20-partStockLevelGet/qt20.index.js
   var DEV = true ? true : /localhost|127\.0\.0\.1|^test\./i.test(location.hostname);
   (() => {
     "use strict";

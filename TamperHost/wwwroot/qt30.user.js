@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        QT30_DEV
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     2026.05.19.22
+// @version     2026.05.21.3
 // @description Applies customer catalog breakpoints (DS 4809) using Catalog Key (repo/DS 3156), removes zero-qty rows, and sets RvCustomizedUnitPrice with rounding. Refreshes via KO or wizard nav. (DEV build)
 // @author      Jeff Nichols (OneMonroe | Lyn-Tron)
 // @license     MIT
@@ -11,11 +11,11 @@
 // @match       https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*
-// @require     http://localhost:5000/lt-plex-tm-utils.user.js?v=2026.05.19.22-1779233320758
-// @require     http://localhost:5000/lt-plex-auth.user.js?v=2026.05.19.22-1779233320758
-// @require     http://localhost:5000/lt-core.user.js?v=2026.05.19.22-1779233320758
-// @require     http://localhost:5000/lt-data-core.user.js?v=2026.05.19.22-1779233320758
-// @require     http://localhost:5000/lt-ui-hub.js?v=2026.05.19.22-1779233320758
+// @require     http://localhost:5000/lt-plex-tm-utils.user.js?v=2026.05.21.3-1779399959876
+// @require     http://localhost:5000/lt-plex-auth.user.js?v=2026.05.21.3-1779399959876
+// @require     http://localhost:5000/lt-core.user.js?v=2026.05.21.3-1779399959876
+// @require     http://localhost:5000/lt-data-core.user.js?v=2026.05.21.3-1779399959876
+// @require     http://localhost:5000/lt-ui-hub.js?v=2026.05.21.3-1779399959876
 // @resource    THEME_CSS http://localhost:5000/theme.css
 // @grant       GM_registerMenuCommand
 // @grant       GM_getValue
@@ -33,7 +33,7 @@
 // ==/UserScript==
 
 (() => {
-  // tm-scripts/src/quote-tracking/qt30-catalogPricingApply/qt30.index.js
+  // src/quote-tracking/qt30-catalogPricingApply/qt30.index.js
   var DEV = true ? true : !!(typeof globalThis !== "undefined" && globalThis.__TM_DEV__);
   (async function() {
     const CONFIG = {

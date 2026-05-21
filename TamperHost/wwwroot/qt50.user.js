@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        QT50_DEV
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     2026.05.21.0
+// @version     2026.05.21.3
 // @description Runs rule-based checks on quote lines for lead time, unit price limits, and part number management. Adds a Hub Bar “Validate Lines” button with settings, a details modal, and CSV export. Highlights issues directly in the grid with optional auto-fixes. (DEV build)
 // @author      Jeff Nichols (OneMonroe | Lyn-Tron)
 // @license     MIT
@@ -11,11 +11,11 @@
 // @match       https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*
-// @require     http://localhost:5000/lt-plex-tm-utils.user.js?v=2026.05.21.0-1779375756894
-// @require     http://localhost:5000/lt-plex-auth.user.js?v=2026.05.21.0-1779375756894
-// @require     http://localhost:5000/lt-core.user.js?v=2026.05.21.0-1779375756894
-// @require     http://localhost:5000/lt-data-core.user.js?v=2026.05.21.0-1779375756894
-// @require     http://localhost:5000/lt-ui-hub.js?v=2026.05.21.0-1779375756894
+// @require     http://localhost:5000/lt-plex-tm-utils.user.js?v=2026.05.21.3-1779399959954
+// @require     http://localhost:5000/lt-plex-auth.user.js?v=2026.05.21.3-1779399959954
+// @require     http://localhost:5000/lt-core.user.js?v=2026.05.21.3-1779399959954
+// @require     http://localhost:5000/lt-data-core.user.js?v=2026.05.21.3-1779399959954
+// @require     http://localhost:5000/lt-ui-hub.js?v=2026.05.21.3-1779399959954
 // @resource    THEME_CSS http://localhost:5000/theme.css
 // @grant       GM_registerMenuCommand
 // @grant       GM_getValue
@@ -43,7 +43,7 @@
       __defProp(target, name, { get: all[name], enumerable: true });
   };
 
-  // tm-scripts/src/quote-tracking/qt50-validation/index.js
+  // src/quote-tracking/qt50-validation/index.js
   var index_exports = {};
   __export(index_exports, {
     KEYS: () => KEYS,
@@ -295,7 +295,7 @@
   }
   var DEV, KO, ROUTES, ON_ROUTE, KEYS, LEGACY_KEYS, DEF, getVal, setVal;
   var init_index = __esm({
-    "tm-scripts/src/quote-tracking/qt50-validation/index.js"() {
+    "src/quote-tracking/qt50-validation/index.js"() {
       DEV = true ? true : !!(typeof globalThis !== "undefined" && globalThis.__TM_DEV__);
       KO = typeof unsafeWindow !== "undefined" && unsafeWindow.ko ? unsafeWindow.ko : window.ko;
       ROUTES = [/^\/SalesAndCRM\/QuoteWizard(?:\/|$)/i];
@@ -339,7 +339,7 @@
     }
   });
 
-  // tm-scripts/src/quote-tracking/qt50-validation/rules/autoManageLtPartNoOnQuote.js
+  // src/quote-tracking/qt50-validation/rules/autoManageLtPartNoOnQuote.js
   async function autoManageLtPartNoOnQuote(ctx, settings, utils) {
     const issues = [];
     if (!settings?.autoManageLtPartNoOnQuote) return issues;
@@ -452,12 +452,12 @@
     return issues;
   }
   var init_autoManageLtPartNoOnQuote = __esm({
-    "tm-scripts/src/quote-tracking/qt50-validation/rules/autoManageLtPartNoOnQuote.js"() {
+    "src/quote-tracking/qt50-validation/rules/autoManageLtPartNoOnQuote.js"() {
       autoManageLtPartNoOnQuote.meta = { id: "autoManageLtPartNoOnQuote", label: "Auto-Manage LT Part No" };
     }
   });
 
-  // tm-scripts/src/quote-tracking/qt50-validation/rules/leadtimeZeroWeeks.js
+  // src/quote-tracking/qt50-validation/rules/leadtimeZeroWeeks.js
   function leadtimeZeroWeeks(ctx, settings, utils) {
     if (!settings?.leadtimeZeroWeeks) return [];
     const issues = [];
@@ -485,12 +485,12 @@
     return issues;
   }
   var init_leadtimeZeroWeeks = __esm({
-    "tm-scripts/src/quote-tracking/qt50-validation/rules/leadtimeZeroWeeks.js"() {
+    "src/quote-tracking/qt50-validation/rules/leadtimeZeroWeeks.js"() {
       leadtimeZeroWeeks.meta = { id: "leadtimeZeroWeeks", label: "Leadtime Zero Weeks" };
     }
   });
 
-  // tm-scripts/src/quote-tracking/qt50-validation/rules/minUnitPrice.js
+  // src/quote-tracking/qt50-validation/rules/minUnitPrice.js
   function minUnitPrice(ctx, settings, utils) {
     const min = Number(settings.minUnitPrice);
     if (!Number.isFinite(min)) return [];
@@ -531,12 +531,12 @@
     return issues;
   }
   var init_minUnitPrice = __esm({
-    "tm-scripts/src/quote-tracking/qt50-validation/rules/minUnitPrice.js"() {
+    "src/quote-tracking/qt50-validation/rules/minUnitPrice.js"() {
       minUnitPrice.meta = { id: "minUnitPrice", label: "Min Unit Price" };
     }
   });
 
-  // tm-scripts/src/quote-tracking/qt50-validation/rules/maxUnitPrice.js
+  // src/quote-tracking/qt50-validation/rules/maxUnitPrice.js
   function maxUnitPrice(ctx, settings, utils) {
     const max = Number(settings.maxUnitPrice);
     if (!Number.isFinite(max)) return [];
@@ -576,15 +576,15 @@
     return issues;
   }
   var init_maxUnitPrice = __esm({
-    "tm-scripts/src/quote-tracking/qt50-validation/rules/maxUnitPrice.js"() {
+    "src/quote-tracking/qt50-validation/rules/maxUnitPrice.js"() {
       maxUnitPrice.meta = { id: "maxUnitPrice", label: "Max Unit Price" };
     }
   });
 
-  // tm-scripts/src/quote-tracking/qt50-validation/rules/index.js
+  // src/quote-tracking/qt50-validation/rules/index.js
   var rules_default;
   var init_rules = __esm({
-    "tm-scripts/src/quote-tracking/qt50-validation/rules/index.js"() {
+    "src/quote-tracking/qt50-validation/rules/index.js"() {
       init_autoManageLtPartNoOnQuote();
       init_leadtimeZeroWeeks();
       init_minUnitPrice();
@@ -593,7 +593,7 @@
     }
   });
 
-  // tm-scripts/src/quote-tracking/qt50-validation/engine.js
+  // src/quote-tracking/qt50-validation/engine.js
   var engine_exports = {};
   __export(engine_exports, {
     runValidation: () => runValidation
@@ -671,15 +671,15 @@
     return { ok, issues };
   }
   var init_engine = __esm({
-    "tm-scripts/src/quote-tracking/qt50-validation/engine.js"() {
+    "src/quote-tracking/qt50-validation/engine.js"() {
       init_rules();
     }
   });
 
-  // tm-scripts/src/quote-tracking/qt50-validation/qtv.entry.js
+  // src/quote-tracking/qt50-validation/qtv.entry.js
   init_index();
 
-  // tm-scripts/src/quote-tracking/qt50-validation/injectButton.js
+  // src/quote-tracking/qt50-validation/injectButton.js
   init_engine();
   init_index();
   var KO2 = typeof unsafeWindow !== "undefined" && unsafeWindow.ko ? unsafeWindow.ko : window.ko;
@@ -1124,7 +1124,7 @@
     };
   }
 
-  // tm-scripts/src/quote-tracking/qt50-validation/qtv.entry.js
+  // src/quote-tracking/qt50-validation/qtv.entry.js
   var DEV3 = true ? true : !!(typeof globalThis !== "undefined" && globalThis.__TM_DEV__);
   if (true) {
     let getGridVM = function() {
