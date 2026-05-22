@@ -42,12 +42,66 @@ test.describe('QT05 on QuoteWizard', () => {
 
     await page.locator(BTN).click();
 
-    // resolveCustomerNo is async (polls KO model up to 8s) — wait for the URL to land
+    // resolveCustomerNo is async (polls KO model up to 2s) — wait for the URL to land
     await page.waitForFunction(() => window.__lt_openedUrls.length > 0, { timeout: 15000 });
 
     const urls = await page.evaluate(() => window.__lt_openedUrls);
     expect(urls[0]).toContain('/Communication/Contact/ContactFormView');
     expect(urls[0]).toContain('CustomerNo=');
+  });
+
+  test('contact form can be filled, saved, then contact is selectable as Buyer', async ({ page, context }) => {
+    test.setTimeout(120000);
+    await page.locator(BTN).waitFor({ timeout: 10000 });
+
+    const suffix = Date.now();
+    const firstName = `Test${suffix}`;
+    const lastName  = `Contact${suffix}`;
+    const fullName  = `${lastName}, ${firstName}`;
+
+    // Open contact form in new tab
+    const [contactPage] = await Promise.all([
+      context.waitForEvent('page'),
+      page.locator(BTN).click()
+    ]);
+
+    await contactPage.waitForLoadState('networkidle');
+
+    await contactPage.getByRole('textbox', { name: 'First Name †' }).fill(firstName);
+    await contactPage.getByRole('textbox', { name: 'First Name †' }).press('Tab');
+    await contactPage.getByRole('textbox', { name: 'Last Name †' }).fill(lastName);
+    await contactPage.getByRole('textbox', { name: 'Last Name †' }).press('Tab');
+    await contactPage.getByRole('textbox', { name: 'Title' }).fill('Mr');
+    await contactPage.getByRole('textbox', { name: 'Email', exact: true }).fill('jnichols@askmonroe.com');
+    await contactPage.getByRole('button', { name: 'Ok' }).click();
+
+    // Wait for save to complete — Plex either closes the tab or navigates away
+    await Promise.race([
+      contactPage.waitForEvent('close', { timeout: 15000 }),
+      contactPage.waitForLoadState('networkidle', { timeout: 15000 })
+    ]).catch(() => {});
+
+    // Ensure the popup is closed before interacting with the main page.
+    // Chrome blocks clicks on an opener while its popup window is still open.
+    if (!contactPage.isClosed()) await contactPage.close();
+
+    // Return to quote page and open the Buyer picker
+    //await page.bringToFront();
+    //await expect(page.locator(HUB)).toBeAttached({ timeout: 5000 });
+
+    // Click the picker icon next to the Buyer field — wait for it to be enabled first
+    await page.locator('.plex-picker-control:has(#BuyerPicker) > a.plex-picker-icon:not(.disabled)')
+      .waitFor({ timeout: 10000 });
+    await page.locator('.plex-picker-control:has(#BuyerPicker) > a.plex-picker-icon').click();
+
+    // Select the newly created contact from the picker grid
+    await page.getByRole('cell', { name: fullName }).click();
+    await page.getByRole('button', { name: 'Ok' }).click();
+
+    // Buyer field should now show the contact name (Plex renders selection as a token chip, not input value)
+    await expect(
+      page.locator('.plex-picker-control:has(#BuyerPicker) .plex-picker-item')
+    ).toHaveText(fullName);
   });
 });
 
