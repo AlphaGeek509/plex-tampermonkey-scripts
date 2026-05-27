@@ -10,7 +10,6 @@ test.describe('QT20 on Part Summary', () => {
     test.setTimeout(90000);
     await injectQT10AndQT20(page);
     await setupWizardPage(page, { steps: 1 });
-    await openAddPartModal(page);
   });
 
   test('hub bar mounts in navbar', async ({ page }) => {
@@ -18,23 +17,22 @@ test.describe('QT20 on Part Summary', () => {
   });
 
   test('"Get Stock Levels" button appears in modal action bar', async ({ page }) => {
+    await openAddPartModal(page);
     await expect(page.locator('#qt20-stock-li-btn')).toBeVisible({ timeout: 10000 });
   });
 
   test('Unit Price and % Markup inputs are locked in pricing grid', async ({ page }) => {
+    await openAddPartModal(page);
     await expect(page.locator('input[name="NewUnitPrice"]').first()).toBeDisabled({ timeout: 10000 });
   });
+});
 
-  test('clicking Get Stock Levels writes stock stamp to Note field (exact part number)', async ({ page }) => {
-    test.setTimeout(60000);
-    const partField = page.getByRole('textbox', { name: 'Lyn-Tron Part No.' });
-    await partField.fill(TEST_PART);
-    await partField.press('Tab');
-    await waitForPartValidated(page, TEST_PART);
-    await page.locator('#qt20-stock-li-btn').waitFor({ state: 'visible', timeout: 10000 });
-    await page.locator('#qt20-stock-li-btn').click();
-    await expect(hubStatus(page)).toHaveText(/Stock:.*pcs/, { timeout: 20000 });
-    await expect(page.getByRole('textbox', { name: 'Note', exact: true })).toHaveValue(/Stock:/, { timeout: 20000 });
+test.describe('QT20 — Quote Part Detail modal', () => {
+  test.beforeEach(async ({ page }) => {
+    test.setTimeout(90000);
+    await injectQT10AndQT20(page);
+    await setupWizardPage(page, { steps: 1 });
+    await openAddPartModal(page);
   });
 
   test('form fields accept Customer Part No, Note, and Lead Time', async ({ page }) => {
@@ -46,7 +44,7 @@ test.describe('QT20 on Part Summary', () => {
     const partField = page.getByRole('textbox', { name: 'Lyn-Tron Part No.' });
     await partField.fill(TEST_PART);
     await partField.press('Tab');
-    await waitForPartValidated(page, TEST_PART);
+    await waitForPartValidated(page);
 
     await page.getByRole('textbox', { name: 'Customer Part No *' }).fill(customerPartNo);
     await page.getByLabel('Note', { exact: true }).fill(loremIpsum);
@@ -57,6 +55,12 @@ test.describe('QT20 on Part Summary', () => {
     await expect(page.getByLabel('Lead Time')).toHaveValue(leadTime);
   });
 
+  test('submitting without Customer Part No shows validation errors', async ({ page }) => {
+    await page.getByRole('button', { name: 'Ok' }).click();
+    await expect(page.locator('div.plex-banner.plex-banner-warning')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('label.plex-error', { hasText: 'Specify Customer Part No.' })).toBeVisible({ timeout: 5000 });
+  });
+
   test('saving part detail adds row to Part Summary grid', async ({ page }) => {
     test.setTimeout(60000);
     const customerPartNo = `Blah_${Math.floor(Math.random() * 90000) + 10000}`;
@@ -65,7 +69,7 @@ test.describe('QT20 on Part Summary', () => {
     const partField = page.getByRole('textbox', { name: 'Lyn-Tron Part No.' });
     await partField.fill(TEST_PART);
     await partField.press('Tab');
-    await waitForPartValidated(page, TEST_PART);
+    await waitForPartValidated(page);
 
     await page.getByRole('textbox', { name: 'Customer Part No *' }).fill(customerPartNo);
     await page.getByLabel('Lead Time').fill(leadTime);
@@ -76,6 +80,18 @@ test.describe('QT20 on Part Summary', () => {
     // Modal closes and grid refreshes — unique Customer Part No confirms the row was saved
     await expect(page.getByRole('cell', { name: customerPartNo, exact: true })).toBeVisible({ timeout: 15000 });
     await expect(page.getByRole('cell', { name: TEST_PART, exact: true })).toBeVisible({ timeout: 5000 });
+  });
+
+  test('clicking Get Stock Levels writes stock stamp to Note field (exact part number)', async ({ page }) => {
+    test.setTimeout(60000);
+    const partField = page.getByRole('textbox', { name: 'Lyn-Tron Part No.' });
+    await partField.fill(TEST_PART);
+    await partField.press('Tab');
+    await waitForPartValidated(page);
+    await page.locator('#qt20-stock-li-btn').waitFor({ state: 'visible', timeout: 10000 });
+    await page.locator('#qt20-stock-li-btn').click();
+    await expect(hubStatus(page)).toHaveText(/Stock:.*pcs/, { timeout: 20000 });
+    await expect(page.getByRole('textbox', { name: 'Note', exact: true })).toHaveValue(/Stock:/, { timeout: 20000 });
   });
 
   test('clicking Get Stock Levels writes stock stamp to Note field (partial part number via picker)', async ({ page }) => {

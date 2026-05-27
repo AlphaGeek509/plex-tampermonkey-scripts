@@ -59,14 +59,13 @@ async function openAddPartModal(page) {
 }
 
 /**
- * Waits for Plex to confirm a part number entry.
- * Plex picker AJAX validation clears input.value after processing — the confirmed
- * part appears as a visible display chip next to the empty input, not in .value.
- * Use this instead of toHaveValue() on the Lyn-Tron Part No. field.
+ * Waits for Plex AJAX validation to settle after a direct part number entry.
+ * For direct fill(), Plex validates via AJAX but does NOT render a display chip —
+ * networkidle is the only reliable signal that validation is complete.
+ * (Display chips only appear after picker-grid selection, not direct typing.)
  */
-async function waitForPartValidated(page, partNo) {
+async function waitForPartValidated(page) {
   await page.waitForLoadState('networkidle');
-  await page.getByText(partNo, { exact: true }).first().waitFor({ state: 'visible', timeout: 20000 });
 }
 
 /**
