@@ -219,6 +219,18 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             const raw = (el?.value ?? '').trim();
             if (raw) return raw;
         } catch { }
+        // 4) Plex picker: boundDisplayValue lives on $root.elements, not $data — check any part-keyed element
+        try {
+            const ctx = KO?.contextFor?.(modalEl);
+            const root = ctx?.$root;
+            if (root?.elements) {
+                for (const key of Object.keys(root.elements)) {
+                    if (!/part/i.test(key)) continue;
+                    const v = KO?.unwrap?.(root.elements[key]?.boundDisplayValue);
+                    if (v && typeof v === 'string' && v.trim()) return v.trim();
+                }
+            }
+        } catch { }
         return '';
     }
 

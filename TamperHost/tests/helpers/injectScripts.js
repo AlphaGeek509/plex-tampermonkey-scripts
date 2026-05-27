@@ -39,6 +39,16 @@ async function injectQT10(page) {
   await page.addInitScript({ content: read('qt10.user.js') });
 }
 
+async function injectQT20(page) {
+  await injectSharedLibs(page);
+  await page.addInitScript({ content: read('qt20.user.js') });
+}
+
+async function injectQT30(page) {
+  await injectSharedLibs(page);
+  await page.addInitScript({ content: read('qt30.user.js') });
+}
+
 async function injectQT50(page) {
   await injectSharedLibs(page);
   await page.addInitScript({ content: read('qt50.user.js') });
@@ -50,4 +60,23 @@ async function injectQT05AndQT50(page) {
   await page.addInitScript({ content: read('qt50.user.js') });
 }
 
-module.exports = { injectQT05, injectQT10, injectQT50, injectQT05AndQT50 };
+async function injectQT10AndQT20(page) {
+  await injectSharedLibs(page);
+  await page.addInitScript({ content: read('qt10.user.js') });
+  await page.addInitScript({ content: read('qt20.user.js') });
+}
+
+async function injectQT10AndQT30(page) {
+  await injectSharedLibs(page);
+  await page.addInitScript({ content: read('qt10.user.js') });
+  await page.addInitScript({ content: read('qt30.user.js') });
+}
+
+async function injectQT10AndQT20AndQT30(page) {
+  await injectSharedLibs(page);
+  await page.addInitScript({ content: read('qt10.user.js') });
+  await page.addInitScript({ content: read('qt20.user.js') });
+  await page.addInitScript({ content: read('qt30.user.js') });
+}
+
+module.exports = { injectQT05, injectQT10, injectQT20, injectQT30, injectQT50, injectQT05AndQT50, injectQT10AndQT20, injectQT10AndQT30, injectQT10AndQT20AndQT30 };
