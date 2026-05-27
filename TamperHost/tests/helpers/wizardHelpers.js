@@ -59,6 +59,17 @@ async function openAddPartModal(page) {
 }
 
 /**
+ * Waits for Plex to confirm a part number entry.
+ * Plex picker AJAX validation clears input.value after processing — the confirmed
+ * part appears as a visible display chip next to the empty input, not in .value.
+ * Use this instead of toHaveValue() on the Lyn-Tron Part No. field.
+ */
+async function waitForPartValidated(page, partNo) {
+  await page.waitForLoadState('networkidle');
+  await page.getByText(partNo, { exact: true }).first().waitFor({ state: 'visible', timeout: 20000 });
+}
+
+/**
  * Enters a part number into the Lyn-Tron Part No. field and tabs away.
  * If Plex shows a picker grid (partial match), clicks the cell matching fullPartNo.
  * @param {import('@playwright/test').Page} page
@@ -79,4 +90,4 @@ async function enterPartNo(page, partNo, fullPartNo) {
 }
 
 // Re-export selectors so specs can use them without re-declaring.
-module.exports = { setupWizardPage, advanceWizard, openAddPartModal, enterPartNo, WIZARD_URL, NEXT_BTN, HUB, hubStatus };
+module.exports = { setupWizardPage, advanceWizard, openAddPartModal, enterPartNo, waitForPartValidated, WIZARD_URL, NEXT_BTN, HUB, hubStatus };
