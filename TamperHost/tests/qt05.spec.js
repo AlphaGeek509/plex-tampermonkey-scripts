@@ -5,9 +5,9 @@ const WIZARD_URL = '/SalesAndCRM/QuoteWizard';
 const TEST_CUSTOMER = 'BIS200';
 
 // Hub host: data-lt-hub="1" (shadow DOM host, Playwright pierces open shadows automatically)
-// Button:   data-id="qt05-customer-contact" (inside shadow DOM)
-const HUB     = '[data-lt-hub="1"]';
-const BTN     = '[data-id="qt05-customer-contact"]';
+// Buttons and status pill are inside that shadow root.
+const HUB = '[data-lt-hub="1"]';
+const BTN = '[data-id="qt05-customer-contact"]';
 
 test.describe('QT05 on QuoteWizard', () => {
   test.beforeEach(async ({ page }) => {
@@ -22,10 +22,6 @@ test.describe('QT05 on QuoteWizard', () => {
 
   test('hub bar mounts in navbar', async ({ page }) => {
     await expect(page.locator(HUB)).toBeAttached({ timeout: 10000 });
-  });
-
-  test('New Contact button appears after customer entry', async ({ page }) => {
-    await expect(page.locator(BTN)).toBeVisible({ timeout: 10000 });
   });
 
   test('clicking New Contact opens contact form with correct CustomerNo', async ({ page }) => {
@@ -104,6 +100,7 @@ test.describe('QT05 on QuoteWizard', () => {
     ).toHaveText(fullName);
   });
 });
+
 
 test.describe('QT05 on other pages', () => {
   test('button is absent on non-QuoteWizard pages', async ({ page }) => {

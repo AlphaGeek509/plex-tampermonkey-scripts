@@ -18,7 +18,7 @@ function credentialSeed() {
 
 // Injects shared libs in @require order, then the feature script.
 // Must be called before page.goto() so addInitScript fires at document-start.
-async function injectQT05(page) {
+async function injectSharedLibs(page) {
   await page.addInitScript({ content: gmPolyfill });
   const seed = credentialSeed();
   if (seed) await page.addInitScript({ content: seed });
@@ -27,7 +27,27 @@ async function injectQT05(page) {
   await page.addInitScript({ content: read('lt-core.user.js') });
   await page.addInitScript({ content: read('lt-data-core.user.js') });
   await page.addInitScript({ content: read('lt-ui-hub.js') });
+}
+
+async function injectQT05(page) {
+  await injectSharedLibs(page);
   await page.addInitScript({ content: read('qt05.user.js') });
 }
 
-module.exports = { injectQT05 };
+async function injectQT10(page) {
+  await injectSharedLibs(page);
+  await page.addInitScript({ content: read('qt10.user.js') });
+}
+
+async function injectQT50(page) {
+  await injectSharedLibs(page);
+  await page.addInitScript({ content: read('qt50.user.js') });
+}
+
+async function injectQT05AndQT50(page) {
+  await injectSharedLibs(page);
+  await page.addInitScript({ content: read('qt05.user.js') });
+  await page.addInitScript({ content: read('qt50.user.js') });
+}
+
+module.exports = { injectQT05, injectQT10, injectQT50, injectQT05AndQT50 };
