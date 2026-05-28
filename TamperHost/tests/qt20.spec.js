@@ -82,6 +82,32 @@ test.describe('QT20 — Quote Part Detail modal', () => {
     await expect(page.getByRole('cell', { name: TEST_PART, exact: true })).toBeVisible({ timeout: 5000 });
   });
 
+  test('quantity break inputs accept values in pricing grid', async ({ page }) => {
+    test.setTimeout(60000);
+    const quantities = [100, 250, 500, 1000, 2500];
+
+    const partField = page.getByRole('textbox', { name: 'Lyn-Tron Part No.' });
+    await partField.fill(TEST_PART);
+    await partField.press('Tab');
+    await waitForPartValidated(page);
+
+    await page.locator('input[name="NewQuantity"]').first().scrollIntoViewIfNeeded();
+
+    for (let i = 0; i < quantities.length; i++) {
+      if (quantities[i] == null) continue;
+      await page.locator('input[name="NewQuantity"]').nth(i).fill(String(quantities[i]));
+    }
+    // Tab away from the last row to trigger KO numericValue blur formatting on all rows
+    await page.locator('input[name="NewQuantity"]').nth(quantities.length - 1).press('Tab');
+
+    for (let i = 0; i < quantities.length; i++) {
+      if (quantities[i] == null) continue;
+      // Plex numericValue binding formats with thousands separators on blur (e.g. 1000 → "1,000")
+      const formatted = quantities[i].toLocaleString('en-US');
+      await expect(page.locator('input[name="NewQuantity"]').nth(i)).toHaveValue(formatted);
+    }
+  });
+
   test('clicking Get Stock Levels writes stock stamp to Note field (exact part number)', async ({ page }) => {
     test.setTimeout(60000);
     const partField = page.getByRole('textbox', { name: 'Lyn-Tron Part No.' });
