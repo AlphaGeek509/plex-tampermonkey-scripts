@@ -78,7 +78,8 @@ test.describe('QT20 — Quote Part Detail modal', () => {
     await page.waitForLoadState('networkidle');
 
     // Modal closes and grid refreshes — unique Customer Part No confirms the row was saved
-    await expect(page.getByRole('cell', { name: customerPartNo, exact: true })).toBeVisible({ timeout: 15000 });
+    // .first() because Plex renders the value in two cells (col 1 and col 3) on the same row
+    await expect(page.getByRole('cell', { name: customerPartNo, exact: true }).first()).toBeVisible({ timeout: 15000 });
     await expect(page.getByRole('cell', { name: TEST_PART, exact: true })).toBeVisible({ timeout: 5000 });
   });
 
