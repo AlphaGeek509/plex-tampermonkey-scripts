@@ -33,6 +33,11 @@ async function advanceWizard(page, steps = 0) {
  * @param {{ customer?: string, steps?: number, catalogTimeout?: number }} opts
  */
 async function setupWizardPage(page, { customer = 'BIS200', steps = 0, catalogTimeout = 20000 } = {}) {
+  page.on('console', msg => {
+    if (msg.type() === 'error' || /QT\d+:/i.test(msg.text())) {
+      console.log(`[browser ${msg.type()}] ${msg.text()}`);
+    }
+  });
   await page.goto(WIZARD_URL);
   await page.waitForLoadState('networkidle');
 

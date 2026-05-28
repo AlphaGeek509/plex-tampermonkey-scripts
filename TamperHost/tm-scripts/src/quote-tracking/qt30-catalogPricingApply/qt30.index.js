@@ -108,7 +108,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             //        if (document.querySelector('#QuotePartSummaryForm,[id^="QuotePartSummaryForm_"]')) {
             //            return true;
             //        }
-            //        // Secondary: active wizard step’s visible label is exactly "Part Summary"
+            //        // Secondary: active wizard step's visible label is exactly "Part Summary"
             //        const active = document.querySelector('.plex-wizard-page-list .plex-wizard-page.active');
             //        return !!(active && active.textContent && active.textContent.trim().toLowerCase() === 'part summary');
             //    } catch {
@@ -146,20 +146,50 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
     async function runApplyPricing() {
         const task = lt.core.hub.beginTask('Applying catalog pricing…', 'info');
         try {
+            // Resolve KO at call time — the module-level KO constant is captured at
+            // document-start before Plex loads window.ko (and unsafeWindow is unavailable
+            // in the Playwright test context), so we must re-read it here.
+            const koRT = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : null) || window.ko;
+
+            // Snapshot the grid immediately — before any async ops that may cause Plex to
+            // re-render the Part Summary grid and replace datasource.raw with a new array.
+            const allGridEls = Array.from(document.querySelectorAll(CONFIG.GRID_SEL));
+            let grid = null, gridVM = null, raw = [];
+            for (let gi = 0; gi < allGridEls.length; gi++) {
+                const gEl = allGridEls[gi];
+                const gVM = koRT?.dataFor?.(gEl);
+                if (gVM && Array.isArray(gVM?.datasource?.raw) && gVM.datasource.raw.length > 0) {
+                    grid = gEl; gridVM = gVM; break;
+                }
+            }
+            if (!gridVM && allGridEls.length > 0) {
+                // Try each grid with datasource.read() as fallback
+                for (let gi = 0; gi < allGridEls.length; gi++) {
+                    const gEl = allGridEls[gi];
+                    const gVM = koRT?.dataFor?.(gEl);
+                    if (!gVM) continue;
+                    task.update('Loading grid data…');
+                    try { await gVM.datasource.read(); } catch { }
+                    if (Array.isArray(gVM.datasource?.raw) && gVM.datasource.raw.length > 0) {
+                        grid = gEl; gridVM = gVM; break;
+                    }
+                }
+            }
+            raw = Array.isArray(gridVM?.datasource?.raw) ? gridVM.datasource.raw : [];
+
             // auth
             try { if (!(await lt.core.auth.getKey())) { lt.core.hub.notify('Sign-in required', 'warn'); task.error('No session'); return; } } catch { }
 
             const { quoteKey: qk } = getCtx() || {};
             if (!qk) { task.error('Quote_Key missing'); return; }
 
-            // Ensure we’re operating on the correct quote scope
+            // Ensure we're operating on the correct quote scope
             await ensureRepoForQuote(qk);
 
             // 1) Ask lt-core to promote draft → quote (centralized path, one-shot first)
             try {
-                // Prefer the single public entrypoint in lt-core
                 await lt.core.qt.promoteDraftToQuote?.({ qk, strategy: 'once' });
-            } catch { /* non-fatal; we’ll verify by reading header next */ }
+            } catch { /* non-fatal; we'll verify by reading header next */ }
 
             // 2) Re-read live quote header after promotion
             let header = await quoteRepo.getHeader?.() || {};
@@ -169,11 +199,11 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             // 3) If KO was still binding (very fast click), try a short retry window via lt-core
             if (catalogKey == null) {
                 try {
-                    await lt.core.qt.promoteDraftToQuote?.({ qk, strategy: 'retry' }); // short, internal retry
+                    await lt.core.qt.promoteDraftToQuote?.({ qk, strategy: 'retry' });
                     header = await quoteRepo.getHeader?.() || {};
                     catalogKey =
                         TMUtils.getObsValue?.(header, ['Catalog_Key', 'CatalogKey'], { first: true }) ?? null;
-                } catch { /* still non-fatal; we’ll fall back to DS */ }
+                } catch { /* still non-fatal; we'll fall back to DS */ }
             }
 
             if (catalogKey == null) {
@@ -184,19 +214,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
             }
             if (catalogKey == null) { task.error('No Catalog Key'); lt.core.hub.notify('No catalog found for this quote', 'warn'); return; }
 
-            // Collect parts from KO grid — ensure datasource is loaded first
-            const grid = document.querySelector(CONFIG.GRID_SEL);
-            const gridVM = grid && KO?.dataFor?.(grid);
-
-            if (gridVM && (!Array.isArray(gridVM.datasource?.raw) || !gridVM.datasource.raw.length)) {
-                task.update('Loading grid data…');
-                try { await gridVM.datasource.read(); } catch { }
-            }
-
-            const raw = Array.isArray(gridVM?.datasource?.raw) ? gridVM.datasource.raw : [];
-
-            log(`QT30: raw[0] keys=${raw[0] ? Object.keys(raw[0]).join(',') : 'n/a'} | PartNo type=${raw[0] ? typeof raw[0].PartNo : 'n/a'} | isObs=${raw[0] ? !!KO?.isObservable?.(raw[0].PartNo) : 'n/a'} | val=${raw[0] ? TMUtils.getObsValue?.(raw[0], 'PartNo', { first: true, trim: true }) : 'n/a'}`);
-            const partNos = [...new Set(raw.map(r => TMUtils.getObsValue?.(r, "PartNo", { first: true, trim: true })).filter(Boolean))];
+            const partNos = [...new Set(raw.map(r => TMUtils.getObsValue?.(r, "PartNo", { first: true, trim: true, allowPlex: false })).filter(Boolean))];
             if (!partNos.length) { task.error('No PartNo values'); lt.core.hub.notify('No PartNo values found', 'warn'); return; }
 
             task.update(`Loading ${partNos.length} part(s)…`);
@@ -259,7 +277,7 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
 
                 // Apply price to non-zero rows
                 if (qty > 0) {
-                    const partNo = TMUtils.getObsValue(row, 'PartNo', { first: true, trim: true });
+                    const partNo = TMUtils.getObsValue(row, 'PartNo', { first: true, trim: true, allowPlex: false });
                     const bp = pickPrice(priceMap[partNo], qty);
                     if (bp == null) { log(`QT30: no price for PartNo="${partNo}" qty=${qty} — keys in priceMap: [${Object.keys(priceMap).join(', ')}]`); continue; }
                     applyPriceToRow(row, round(bp));
@@ -315,10 +333,11 @@ const DEV = (typeof __BUILD_DEV__ !== 'undefined')
      * Returns a string describing which path succeeded, or null.
      */
     async function refreshQuoteGrid() {
+        const koRT = (typeof unsafeWindow !== 'undefined' ? unsafeWindow.ko : null) || window.ko;
         // Prefer a KO-level refresh if available
         try {
             const gridEl = document.querySelector(CONFIG.GRID_SEL);
-            const gridVM = gridEl && KO?.dataFor?.(gridEl);
+            const gridVM = gridEl && koRT?.dataFor?.(gridEl);
 
             if (typeof gridVM?.datasource?.read === 'function') {
                 await gridVM.datasource.read();   // async re-query/rebind
