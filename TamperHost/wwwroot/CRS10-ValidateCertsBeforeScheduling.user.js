@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        CRS10
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     2026.06.01.0
+// @version     2026.06.01.1
 // @description Validate certs by OrderNo+PartNo+SerialNo (display), call DS8566 (Heat_Key/Serial_No) then DS14343 by Heat_Key. Show results, require Acknowledgement when issues exist, offer quick email for misses, and provide a small settings GUI.
 // @author      Jeff Nichols (OneMonroe | Lyn-Tron)
 // @license     MIT
@@ -9,12 +9,12 @@
 // @supportURL  https://github.com/AlphaGeek509/plex-tampermonkey-scripts/issues
 // @match       https://lyntron.on.plex.com/SalesAndCRM/SalesReleases*
 // @match       https://lyntron.test.on.plex.com/SalesAndCRM/SalesReleases*
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.0/TamperHost/wwwroot/lt-plex-tm-utils.user.js?v=2026.06.01.0
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.0/TamperHost/wwwroot/lt-plex-auth.user.js?v=2026.06.01.0
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.0/TamperHost/wwwroot/lt-core.user.js?v=2026.06.01.0
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.0/TamperHost/wwwroot/lt-data-core.user.js?v=2026.06.01.0
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.0/TamperHost/wwwroot/lt-ui-hub.js?v=2026.06.01.0
-// @resource    THEME_CSS https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.0/TamperHost/wwwroot/theme.css
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.1/TamperHost/wwwroot/lt-plex-tm-utils.user.js?v=2026.06.01.1
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.1/TamperHost/wwwroot/lt-plex-auth.user.js?v=2026.06.01.1
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.1/TamperHost/wwwroot/lt-core.user.js?v=2026.06.01.1
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.1/TamperHost/wwwroot/lt-data-core.user.js?v=2026.06.01.1
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.1/TamperHost/wwwroot/lt-ui-hub.js?v=2026.06.01.1
+// @resource    THEME_CSS https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.1/TamperHost/wwwroot/theme.css
 // @grant       GM_registerMenuCommand
 // @grant       GM_getValue
 // @grant       GM_setValue
@@ -26,8 +26,8 @@
 // @noframes
 // @grant       GM_addStyle
 // @grant       GM_getResourceText
-// @updateURL   https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@latest/TamperHost/wwwroot/CRS10-ValidateCertsBeforeScheduling.user.js
-// @downloadURL https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@latest/TamperHost/wwwroot/CRS10-ValidateCertsBeforeScheduling.user.js
+// @updateURL   https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@master/TamperHost/wwwroot/CRS10-ValidateCertsBeforeScheduling.user.js
+// @downloadURL https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@master/TamperHost/wwwroot/CRS10-ValidateCertsBeforeScheduling.user.js
 // ==/UserScript==
 
 (()=>{(async function(){"use strict";let f=/test\.on\.plex\.com$/i.test(location.hostname);TMUtils.setDebug?.(f);let x=TMUtils.getLogger?.("CRS10"),C=(...e)=>{f&&x?.log?.(...e)},Y=(...e)=>{f&&x?.warn?.(...e)},S=(...e)=>{f&&x?.error?.(...e)},L=[/^\/SalesAndCRM\/SalesReleases(?:\/|$)/i];if(!TMUtils.matchRoute?.(L)){C("Skipping route:",location.pathname);return}let N=Object.getOwnPropertyDescriptor(CSSStyleSheet.prototype,"cssRules");N?.get&&Object.defineProperty(CSSStyleSheet.prototype,"cssRules",{get(){try{return N.get.call(this)}catch{return[]}}});let U=Object.getOwnPropertyDescriptor(CSSStyleSheet.prototype,"rules");U?.get&&Object.defineProperty(CSSStyleSheet.prototype,"rules",{get(){try{return U.get.call(this)}catch{return[]}}});let $="crs10.showMissingOnly",K="crs10.missingToAddress",j="crs10.limitMCM199Only",M=GM_getValue($,!1),w=GM_getValue(K,""),k=GM_getValue(j,!1);function V(){let e=document.createElement("button");e.textContent="\u2699\uFE0F",Object.assign(e.style,{position:"fixed",bottom:"20px",right:"20px",zIndex:100001,padding:"6px",borderRadius:"50%",fontSize:"18px",cursor:"pointer"}),e.title="CR&S10 Settings",e.addEventListener("click",G),document.body.appendChild(e)}function G(){let e=document.createElement("div");Object.assign(e.style,{position:"fixed",inset:"0",background:"rgba(0,0,0,0.35)",zIndex:100002});let o=document.createElement("div");Object.assign(o.style,{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",background:"#fff",padding:"20px",borderRadius:"10px",boxShadow:"0 6px 20px rgba(0,0,0,0.25)",fontFamily:"system-ui, sans-serif",width:"360px",maxWidth:"90vw"}),o.innerHTML=`

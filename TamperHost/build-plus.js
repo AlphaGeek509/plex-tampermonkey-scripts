@@ -465,7 +465,7 @@ function injectUpdateDownload(header, m, versionStr, opts) {
     ).replace(/\/+$/, '');
 
     const baseLatest = (process.env.CDN_LATEST_BASE ||
-        `https://cdn.jsdelivr.net/gh/${pkg}@latest/TamperHost/wwwroot`
+        `https://cdn.jsdelivr.net/gh/${pkg}@master/TamperHost/wwwroot`
     ).replace(/\/+$/, '');
 
     const fileName = path.basename(m.out);
