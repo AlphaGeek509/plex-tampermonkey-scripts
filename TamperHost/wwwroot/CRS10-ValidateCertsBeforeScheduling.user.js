@@ -1,96 +1,36 @@
-﻿// ==UserScript==
-// @name         CR&S10 ➜ Validate Certs Before Scheduling
-// @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      3.5.173
-// @author       Jeff Nichols
-// @description  Validate certs by OrderNo+PartNo+SerialNo (display), call DS8566 (Heat_Key/Serial_No) then DS14343 by Heat_Key. Show results, require Acknowledgement when issues exist, offer quick email for misses, and provide a small settings GUI.
-// @match        https://*.plex.com/*
-// @match        https://*.on.plex.com/*
-// @require      http://localhost:5000/lt-plex-tm-utils.user.js
-// @require      http://localhost:5000/lt-plex-auth.user.js
-// @grant        GM_registerMenuCommand
-// @grant        GM_getValue
-// @grant        GM_setValue
-// @grant        GM_xmlhttpRequest
-// @grant        unsafeWindow
-// @connect      *.plex.com
-// @connect      localhost
-// @run-at       document-idle
-// Don’t run in iframes
+// ==UserScript==
+// @name        CRS10
+// @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
+// @version     2026.06.01.0
+// @description Validate certs by OrderNo+PartNo+SerialNo (display), call DS8566 (Heat_Key/Serial_No) then DS14343 by Heat_Key. Show results, require Acknowledgement when issues exist, offer quick email for misses, and provide a small settings GUI.
+// @author      Jeff Nichols (OneMonroe | Lyn-Tron)
+// @license     MIT
+// @homepageURL https://github.com/AlphaGeek509/plex-tampermonkey-scripts
+// @supportURL  https://github.com/AlphaGeek509/plex-tampermonkey-scripts/issues
+// @match       https://lyntron.on.plex.com/SalesAndCRM/SalesReleases*
+// @match       https://lyntron.test.on.plex.com/SalesAndCRM/SalesReleases*
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.0/TamperHost/wwwroot/lt-plex-tm-utils.user.js?v=2026.06.01.0
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.0/TamperHost/wwwroot/lt-plex-auth.user.js?v=2026.06.01.0
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.0/TamperHost/wwwroot/lt-core.user.js?v=2026.06.01.0
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.0/TamperHost/wwwroot/lt-data-core.user.js?v=2026.06.01.0
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.0/TamperHost/wwwroot/lt-ui-hub.js?v=2026.06.01.0
+// @resource    THEME_CSS https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.0/TamperHost/wwwroot/theme.css
+// @grant       GM_registerMenuCommand
+// @grant       GM_getValue
+// @grant       GM_setValue
+// @grant       GM_xmlhttpRequest
+// @grant       unsafeWindow
+// @connect     *.plex.com
+// @connect     localhost
+// @run-at      document-idle
 // @noframes
+// @grant       GM_addStyle
+// @grant       GM_getResourceText
+// @updateURL   https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@latest/TamperHost/wwwroot/CRS10-ValidateCertsBeforeScheduling.user.js
+// @downloadURL https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@latest/TamperHost/wwwroot/CRS10-ValidateCertsBeforeScheduling.user.js
 // ==/UserScript==
 
-(async function () {
-    'use strict';
-
-    // ---------- Standard bootstrap ----------
-    const IS_TEST_ENV = /test\.on\.plex\.com$/i.test(location.hostname);
-    TMUtils.setDebug?.(IS_TEST_ENV);
-
-    const L = TMUtils.getLogger?.('CRS10'); // rename per file: QT20, QT30, QT35
-    const dlog = (...a) => { if (IS_TEST_ENV) L?.log?.(...a); };
-    const dwarn = (...a) => { if (IS_TEST_ENV) L?.warn?.(...a); };
-    const derror = (...a) => { if (IS_TEST_ENV) L?.error?.(...a); };
-
-    // Route allowlist (CASE-INSENSITIVE)
-    const ROUTES = [/^\/SalesAndCRM\/SalesReleases(?:\/|$)/i];
-    if (!TMUtils.matchRoute?.(ROUTES)) {
-        dlog('Skipping route:', location.pathname);
-        return;
-    }
-
-    // ---------- Guard cross-origin CSS access (SecurityError) ----------
-    const _cssRulesDesc = Object.getOwnPropertyDescriptor(CSSStyleSheet.prototype, 'cssRules');
-    if (_cssRulesDesc?.get) {
-        Object.defineProperty(CSSStyleSheet.prototype, 'cssRules', {
-            get() { try { return _cssRulesDesc.get.call(this); } catch { return []; } }
-        });
-    }
-    const _rulesDesc = Object.getOwnPropertyDescriptor(CSSStyleSheet.prototype, 'rules');
-    if (_rulesDesc?.get) {
-        Object.defineProperty(CSSStyleSheet.prototype, 'rules', {
-            get() { try { return _rulesDesc.get.call(this); } catch { return []; } }
-        });
-    }
-
-    // ---------- Settings keys / load ----------
-    const SHOW_MISSING_KEY = 'crs10.showMissingOnly';
-    const MISSING_TO_KEY = 'crs10.missingToAddress';
-    const LIMIT_CUSTOMER_KEY = 'crs10.limitMCM199Only';
-
-    let showMissingOnly = GM_getValue(SHOW_MISSING_KEY, false);
-    let missingToAddress = GM_getValue(MISSING_TO_KEY, '');
-    let limitMCM199Only = GM_getValue(LIMIT_CUSTOMER_KEY, false);
-
-
-    // ---------- Settings button / panel ----------
-    function injectSettingsButton() {
-        const btn = document.createElement('button');
-        btn.textContent = '⚙️';
-        Object.assign(btn.style, {
-            position: 'fixed', bottom: '20px', right: '20px',
-            zIndex: 100001, padding: '6px', borderRadius: '50%',
-            fontSize: '18px', cursor: 'pointer'
-        });
-        btn.title = 'CR&S10 Settings';
-        btn.addEventListener('click', showSettingsPanel);
-        document.body.appendChild(btn);
-    }
-
-    function showSettingsPanel() {
-        const overlay = document.createElement('div');
-        Object.assign(overlay.style, {
-            position: 'fixed', inset: '0', background: 'rgba(0,0,0,0.35)', zIndex: 100002
-        });
-        const panel = document.createElement('div');
-        Object.assign(panel.style, {
-            position: 'absolute', top: '50%', left: '50%',
-            transform: 'translate(-50%,-50%)',
-            background: '#fff', padding: '20px', borderRadius: '10px',
-            boxShadow: '0 6px 20px rgba(0,0,0,0.25)', fontFamily: 'system-ui, sans-serif',
-            width: '360px', maxWidth: '90vw'
-        });
-        panel.innerHTML = `
+(()=>{(async function(){"use strict";let f=/test\.on\.plex\.com$/i.test(location.hostname);TMUtils.setDebug?.(f);let x=TMUtils.getLogger?.("CRS10"),C=(...e)=>{f&&x?.log?.(...e)},Y=(...e)=>{f&&x?.warn?.(...e)},S=(...e)=>{f&&x?.error?.(...e)},L=[/^\/SalesAndCRM\/SalesReleases(?:\/|$)/i];if(!TMUtils.matchRoute?.(L)){C("Skipping route:",location.pathname);return}let N=Object.getOwnPropertyDescriptor(CSSStyleSheet.prototype,"cssRules");N?.get&&Object.defineProperty(CSSStyleSheet.prototype,"cssRules",{get(){try{return N.get.call(this)}catch{return[]}}});let U=Object.getOwnPropertyDescriptor(CSSStyleSheet.prototype,"rules");U?.get&&Object.defineProperty(CSSStyleSheet.prototype,"rules",{get(){try{return U.get.call(this)}catch{return[]}}});let $="crs10.showMissingOnly",K="crs10.missingToAddress",j="crs10.limitMCM199Only",M=GM_getValue($,!1),w=GM_getValue(K,""),k=GM_getValue(j,!1);function V(){let e=document.createElement("button");e.textContent="\u2699\uFE0F",Object.assign(e.style,{position:"fixed",bottom:"20px",right:"20px",zIndex:100001,padding:"6px",borderRadius:"50%",fontSize:"18px",cursor:"pointer"}),e.title="CR&S10 Settings",e.addEventListener("click",G),document.body.appendChild(e)}function G(){let e=document.createElement("div");Object.assign(e.style,{position:"fixed",inset:"0",background:"rgba(0,0,0,0.35)",zIndex:100002});let o=document.createElement("div");Object.assign(o.style,{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",background:"#fff",padding:"20px",borderRadius:"10px",boxShadow:"0 6px 20px rgba(0,0,0,0.25)",fontFamily:"system-ui, sans-serif",width:"360px",maxWidth:"90vw"}),o.innerHTML=`
       <h3 style="margin:0 0 12px 0;">CR&S10 Settings</h3>
       <label style="display:block; margin:10px 0;">
         <input type="checkbox" id="cb-missing-only"> Show missing certs only
@@ -107,330 +47,12 @@
       <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:14px;">
         <button id="btn-close">Close</button>
       </div>
-    `;
-        overlay.appendChild(panel);
-        document.body.appendChild(overlay);
+    `,e.appendChild(o),document.body.appendChild(e);let s=o.querySelector("#cb-missing-only");s.checked=M,s.addEventListener("change",()=>{M=s.checked,GM_setValue($,M)});let r=o.querySelector("#cb-limit-mcm");r.checked=k,r.addEventListener("change",()=>{k=r.checked,GM_setValue(j,k)});let i=o.querySelector("#input-missing-to");i.value=w,i.addEventListener("change",()=>{w=i.value.trim(),GM_setValue(K,w)}),o.querySelector("#btn-close").addEventListener("click",()=>e.remove())}if(V(),typeof TMUtils>"u"){S("TMUtils helper not found; check @require URLs.");return}let O=unsafeWindow.ko;if(!O){S("Knockout not found.");return}let b=e=>typeof O.unwrap=="function"?O.unwrap(e):typeof e=="function"?e():e;function F({orderNo:e,partNo:o,serialNo:s}){let r=encodeURIComponent(w||""),i="",d=encodeURIComponent(`Missing Attachment: Order ${e}`),c=`OrderNo: ${e}
+PartNo: ${o}
+SerialNo: ${s}
 
-        const cbMissing = panel.querySelector('#cb-missing-only');
-        cbMissing.checked = showMissingOnly;
-        cbMissing.addEventListener('change', () => {
-            showMissingOnly = cbMissing.checked;
-            GM_setValue(SHOW_MISSING_KEY, showMissingOnly);
-        });
-
-        const cbLimit = panel.querySelector('#cb-limit-mcm');
-        cbLimit.checked = limitMCM199Only;
-        cbLimit.addEventListener('change', () => {
-            limitMCM199Only = cbLimit.checked;
-            GM_setValue(LIMIT_CUSTOMER_KEY, limitMCM199Only);
-        });
-
-        const emailInput = panel.querySelector('#input-missing-to');
-        emailInput.value = missingToAddress;
-        emailInput.addEventListener('change', () => {
-            missingToAddress = emailInput.value.trim();
-            GM_setValue(MISSING_TO_KEY, missingToAddress);
-        });
-
-        panel.querySelector('#btn-close').addEventListener('click', () => overlay.remove());
-    }
-
-    injectSettingsButton();
-
-    // ---------- Ensure TMUtils + KO ----------
-    if (typeof TMUtils === 'undefined') {
-        derror('TMUtils helper not found; check @require URLs.');
-        return;
-    }
-    const ko = unsafeWindow.ko;
-    if (!ko) {
-        derror('Knockout not found.');
-        return;
-    }
-
-
-    // ---------- Helpers ----------
-    const unwrap = (v) => (typeof ko.unwrap === 'function' ? ko.unwrap(v) : (typeof v === 'function' ? v() : v));
-
-    function launchMailtoRow({ orderNo, partNo, serialNo }) {
-        const to = encodeURIComponent(missingToAddress || '');
-        const cc = '';
-        const subject = encodeURIComponent(`Missing Attachment: Order ${orderNo}`);
-        let body = `OrderNo: ${orderNo}\nPartNo: ${partNo}\nSerialNo: ${serialNo}\n\nMissing attachment detected. Please investigate.\n`;
-        const uri = `mailto:${to}?cc=${encodeURIComponent(cc)}&subject=${subject}&body=${encodeURIComponent(body)}`;
-        window.open(uri, '_blank');
-    }
-
-    function showDecisionTable(statusArray, onAck) {
-        const overlay = document.createElement('div');
-        Object.assign(overlay.style, {
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100000
-        });
-
-        const box = document.createElement('div');
-        Object.assign(box.style, {
-            position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
-            background: '#fff', padding: '20px', borderRadius: '10px',
-            maxWidth: '90%', maxHeight: '80%', overflowY: 'auto',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.35)', fontFamily: 'system-ui, sans-serif'
-        });
-
-        const total = statusArray.length;
-        const issues = statusArray.filter(x => x.error || x.count === 0).length;
-
-        const title = document.createElement('div');
-        title.innerHTML = `<h3 style="margin:0 0 10px 0;">Attachment Check</h3>
+Missing attachment detected. Please investigate.
+`,l=`mailto:${r}?cc=${encodeURIComponent(i)}&subject=${d}&body=${encodeURIComponent(c)}`;window.open(l,"_blank")}function D(e,o){let s=document.createElement("div");Object.assign(s.style,{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1e5});let r=document.createElement("div");Object.assign(r.style,{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",background:"#fff",padding:"20px",borderRadius:"10px",maxWidth:"90%",maxHeight:"80%",overflowY:"auto",boxShadow:"0 8px 24px rgba(0,0,0,0.35)",fontFamily:"system-ui, sans-serif"});let i=e.length,d=e.filter(n=>n.error||n.count===0).length,c=document.createElement("div");c.innerHTML=`<h3 style="margin:0 0 10px 0;">Attachment Check</h3>
       <div style="opacity:.8; font-size:12px; margin-bottom:10px;">
-        Checked <b>${total}</b> entries • Issues: <b>${issues}</b>
-      </div>`;
-        box.appendChild(title);
-
-        const table = document.createElement('table');
-        table.style.width = '100%';
-        table.style.borderCollapse = 'collapse';
-
-        const thead = document.createElement('thead');
-        const headRow = document.createElement('tr');
-        ['OrderNo', 'PartNo', 'SerialNo', 'Has Attachments', 'Email'].forEach(text => {
-            const th = document.createElement('th');
-            th.textContent = text;
-            Object.assign(th.style, { border: '1px solid #ccc', padding: '8px', background: '#f6f6f6', textAlign: 'left' });
-            headRow.appendChild(th);
-        });
-        thead.appendChild(headRow);
-        table.appendChild(thead);
-
-        const tbody = document.createElement('tbody');
-        let prevOrder = null, prevPart = null;
-        statusArray.forEach(item => {
-            const tr = document.createElement('tr');
-
-            const showOrder = item.orderNo !== prevOrder ? item.orderNo : '';
-            const showPart = item.partNo !== prevPart ? item.partNo : '';
-            prevOrder = item.orderNo;
-            prevPart = item.partNo;
-
-            const hasAttach = item.error ? '⚠️' : (item.count > 0 ? '✅' : '❌');
-
-            [showOrder, showPart, item.serialNo, hasAttach].forEach((val, idx) => {
-                const td = document.createElement('td');
-                td.textContent = val;
-                Object.assign(td.style, { border: '1px solid #ddd', padding: '6px', textAlign: idx < 3 ? 'left' : 'center' });
-                tr.appendChild(td);
-            });
-
-            const tdEmail = document.createElement('td');
-            Object.assign(tdEmail.style, { border: '1px solid #ddd', padding: '6px', textAlign: 'center' });
-            if (item.error || item.count === 0) {
-                const mail = document.createElement('span');
-                mail.textContent = '✉️';
-                mail.title = 'Email this missing cert';
-                mail.style.cursor = 'pointer';
-                mail.addEventListener('click', e => { e.stopPropagation(); launchMailtoRow(item); });
-                tdEmail.appendChild(mail);
-            }
-            tr.appendChild(tdEmail);
-
-            tbody.appendChild(tr);
-        });
-
-        table.appendChild(tbody);
-        box.appendChild(table);
-
-        const footer = document.createElement('div');
-        footer.style.textAlign = 'center';
-        footer.style.marginTop = '14px';
-        const btnAck = document.createElement('button');
-        btnAck.textContent = 'Acknowledged';
-        btnAck.addEventListener('click', () => { overlay.remove(); onAck(); });
-        footer.appendChild(btnAck);
-        box.appendChild(footer);
-
-        overlay.appendChild(box);
-        document.body.appendChild(overlay);
-    }
-
-    // ---------- Core: hook Schedule button (once) and validate ----------
-    async function waitForRootVM() {
-        if (typeof TMUtils.waitForModelAsync === 'function') {
-            const { viewModel } = await TMUtils.waitForModelAsync('.plex-grid', {
-                pollMs: 250,
-                timeoutMs: 30000,
-                logger: IS_TEST_ENV ? L : null
-            });
-            return viewModel || null;
-        }
-
-        // Fallback (if utils not loaded): poll DOM + KO safely
-        return new Promise(resolve => {
-            const getKo = () =>
-                (typeof window !== 'undefined' && window.ko) ||
-                (typeof unsafeWindow !== 'undefined' && unsafeWindow.ko) || null;
-
-            const tick = () => {
-                const el = document.querySelector('.plex-grid');
-                const koObj = getKo();
-                let vm = null;
-                if (el && koObj && typeof koObj.contextFor === 'function') {
-                    const ctx = koObj.contextFor(el);
-                    vm = ctx?.$root?.data || ctx?.$root || null;
-                }
-                if (vm) return resolve(vm);
-                setTimeout(tick, 250);
-            };
-            tick();
-        });
-    }
-
-    function showMsg(msg, opts) {
-        if (TMUtils?.showMessage) TMUtils.showMessage(msg, opts);
-        else dlog(msg);
-    }
-
-    const vm = await waitForRootVM();
-    if (!vm) {
-        derror?.('Could not resolve root VM under .plex-grid');
-        return;
-    }
-
-    // ---------- Core: robust "Schedule" interception (delegated) ----------
-
-    // Match both <a> and <button> (text-based)
-    function isScheduleControl(el) {
-        const btn = el?.closest?.('a,button,input[type="button"],input[type="submit"]');
-        if (!btn) return null;
-        const label = (btn.innerText || btn.textContent || btn.value || '').trim();
-        // allow "Schedule" and "Schedule..." (case-insensitive)
-        if (/^schedule(?:\s*\.\.\.)?$/i.test(label)) return btn;
-        return null;
-    }
-
-    async function onScheduleClick(e) {
-        // ---------- API key ----------
-        // Warm the key; if we don’t have one, prompt the user to set it
-        const apiKey = await TMUtils.getApiKey({ wait: true, timeoutMs: 8000 });
-        if (!apiKey) {
-            TMUtils.toast('🔐 No Plex API key found. Use “⚙️ Set Plex API Key” in the Tampermonkey menu.', 'error', 4000);
-            return;
-        }
-
-        const btn = isScheduleControl(e.target);
-        if (!btn) return;          // not our control
-        if (!e.isTrusted) return;  // ignore programmatic clicks (lets our later btn.click() pass through)
-
-        // intercept native click
-        e.stopImmediatePropagation();
-        e.stopPropagation();
-        e.preventDefault();
-
-        dlog('Intercepted Schedule click:', btn);
-        showMsg('⏳ Validating certificates…', { type: 'info', autoClear: false });
-
-        try {
-            // We already resolved the root VM above:
-            //   const vm = await waitForRootVM();
-            if (!vm) {
-                derror('Could not resolve root VM under .plex-grid');
-                showMsg('❌ Could not resolve grid VM.', { type: 'error', autoClear: 3500 });
-                return;
-            }
-
-            // Gather results
-            const results = unwrap(vm.results) || [];
-
-            // Filter “flagged for schedule”
-            let flagged = results
-                .filter(r => unwrap(r.IsScheduleShipment))
-                .map(r => ({
-                    orderNo: unwrap(r.OrderNo),
-                    partNo: unwrap(r.PartNo),
-                    partKey: unwrap(r.PartKey),
-                    customerCode: unwrap(r.CustomerCode),
-                }));
-
-            if (limitMCM199Only) flagged = flagged.filter(r => r.customerCode === 'MCM199');
-
-            if (flagged.length === 0) {
-                showMsg('⚠️ No shipments flagged', { type: 'warning', autoClear: 2500 });
-                return btn.click(); // pass-through to native Schedule
-            }
-
-            if (IS_TEST_ENV) {
-                const peek = (await TMUtils.getApiKey()).toString();
-                L?.info?.('CRS10 auth present:', !!peek, 'prefix:', peek.slice(0, 10));
-            }
-
-            // DS8566: Heat_Key + Serial_No per flagged part
-            const res8566 = await Promise.all(
-                flagged.map(item =>
-                    TMUtils.ds(8566, { Part_Key: item.partKey })
-                        .catch(err => ({ rows: [], error: String(err) }))
-                )
-            );
-
-            // Flatten unique combos
-            const combos = [];
-            const seen = new Set();
-            res8566.forEach((data, idx) => {
-                const { orderNo, partNo } = flagged[idx];
-                (data.rows || []).forEach(r => {
-                    const hk = r.Heat_Key, sn = r.Serial_No;
-                    const key = `${orderNo}|${partNo}|${hk}|${sn}`;
-                    if (!seen.has(key)) {
-                        seen.add(key);
-                        combos.push({ orderNo, partNo, heatKey: hk, serialNo: sn });
-                    }
-                });
-            });
-
-            // DS14343: attachments by Heat_Key
-            const statusArray = await Promise.all(
-                combos.map(async ({ orderNo, partNo, heatKey, serialNo }) => {
-                    try {
-                        const { rows } = await TMUtils.ds(14343, {
-                            Record_Key_Value: String(heatKey),
-                            Attachment_Group_Key: 45
-                        });
-                        return { orderNo, partNo, serialNo, count: (rows ?? []).length };
-                    } catch (err) {
-                        return { orderNo, partNo, serialNo, error: String(err) };
-                    }
-                })
-            );
-
-            dlog('Final status:', statusArray);
-            showMsg(`🔍 Checked ${statusArray.length} entries`, { type: 'info', autoClear: 2000 });
-
-            // Decide what to display
-            const issuesOnly = showMissingOnly
-                ? statusArray.filter(x => x.error || x.count === 0)
-                : statusArray;
-
-            const hasIssues = statusArray.some(x => x.error || x.count === 0);
-            if (!hasIssues) {
-                showMsg('✅ All attachments present. Proceeding…', { type: 'success', autoClear: 1800 });
-                return btn.click(); // continue to native Schedule
-            }
-
-            // Require acknowledgement if any issues
-            showDecisionTable(issuesOnly, () => {
-                showMsg('✅ Acknowledged', { type: 'success', autoClear: 1800 });
-                btn.click(); // programmatic click → not re-intercepted (we ignore !e.isTrusted)
-            });
-
-        } catch (err) {
-            derror('Schedule validation failed:', err);
-            showMsg(`❌ ${err?.message || err}`, { type: 'error', autoClear: 4000 });
-            // Fail-open so ops aren’t blocked
-            btn.click();
-        }
-    }
-
-    // Attach once, capture phase so we run before KO’s handlers
-    document.addEventListener('click', onScheduleClick, true);
-    dlog('Schedule interceptor attached (delegated)');
-
-
-    // ---------- Menu command ----------
-    GM_registerMenuCommand('🔧 Re-hook CR&S10 Schedule', () => location.reload());
-})();
+        Checked <b>${i}</b> entries \u2022 Issues: <b>${d}</b>
+      </div>`,r.appendChild(c);let l=document.createElement("table");l.style.width="100%",l.style.borderCollapse="collapse";let g=document.createElement("thead"),E=document.createElement("tr");["OrderNo","PartNo","SerialNo","Has Attachments","Email"].forEach(n=>{let a=document.createElement("th");a.textContent=n,Object.assign(a.style,{border:"1px solid #ccc",padding:"8px",background:"#f6f6f6",textAlign:"left"}),E.appendChild(a)}),g.appendChild(E),l.appendChild(g);let _=document.createElement("tbody"),t=null,u=null;e.forEach(n=>{let a=document.createElement("tr"),v=n.orderNo!==t?n.orderNo:"",T=n.partNo!==u?n.partNo:"";t=n.orderNo,u=n.partNo;let W=n.error?"\u26A0\uFE0F":n.count>0?"\u2705":"\u274C";[v,T,n.serialNo,W].forEach((y,I)=>{let A=document.createElement("td");A.textContent=y,Object.assign(A.style,{border:"1px solid #ddd",padding:"6px",textAlign:I<3?"left":"center"}),a.appendChild(A)});let P=document.createElement("td");if(Object.assign(P.style,{border:"1px solid #ddd",padding:"6px",textAlign:"center"}),n.error||n.count===0){let y=document.createElement("span");y.textContent="\u2709\uFE0F",y.title="Email this missing cert",y.style.cursor="pointer",y.addEventListener("click",I=>{I.stopPropagation(),F(n)}),P.appendChild(y)}a.appendChild(P),_.appendChild(a)}),l.appendChild(_),r.appendChild(l);let p=document.createElement("div");p.style.textAlign="center",p.style.marginTop="14px";let m=document.createElement("button");m.textContent="Acknowledged",m.addEventListener("click",()=>{s.remove(),o()}),p.appendChild(m),r.appendChild(p),s.appendChild(r),document.body.appendChild(s)}async function q(){if(typeof TMUtils.waitForModelAsync=="function"){let{viewModel:e}=await TMUtils.waitForModelAsync(".plex-grid",{pollMs:250,timeoutMs:3e4,logger:f?x:null});return e||null}return new Promise(e=>{let o=()=>typeof window<"u"&&window.ko||typeof unsafeWindow<"u"&&unsafeWindow.ko||null,s=()=>{let r=document.querySelector(".plex-grid"),i=o(),d=null;if(r&&i&&typeof i.contextFor=="function"){let c=i.contextFor(r);d=c?.$root?.data||c?.$root||null}if(d)return e(d);setTimeout(s,250)};s()})}function h(e,o){TMUtils?.showMessage?TMUtils.showMessage(e,o):C(e)}let R=await q();if(!R){S?.("Could not resolve root VM under .plex-grid");return}function z(e){let o=e?.closest?.('a,button,input[type="button"],input[type="submit"]');if(!o)return null;let s=(o.innerText||o.textContent||o.value||"").trim();return/^schedule(?:\s*\.\.\.)?$/i.test(s)?o:null}async function H(e){if(!await TMUtils.getApiKey({wait:!0,timeoutMs:8e3})){TMUtils.toast("\u{1F510} No Plex API key found. Use \u201C\u2699\uFE0F Set Plex API Key\u201D in the Tampermonkey menu.","error",4e3);return}let s=z(e.target);if(s&&e.isTrusted){e.stopImmediatePropagation(),e.stopPropagation(),e.preventDefault(),C("Intercepted Schedule click:",s),h("\u23F3 Validating certificates\u2026",{type:"info",autoClear:!1});try{if(!R){S("Could not resolve root VM under .plex-grid"),h("\u274C Could not resolve grid VM.",{type:"error",autoClear:3500});return}let i=(b(R.results)||[]).filter(t=>b(t.IsScheduleShipment)).map(t=>({orderNo:b(t.OrderNo),partNo:b(t.PartNo),partKey:b(t.PartKey),customerCode:b(t.CustomerCode)}));if(k&&(i=i.filter(t=>t.customerCode==="MCM199")),i.length===0)return h("\u26A0\uFE0F No shipments flagged",{type:"warning",autoClear:2500}),s.click();if(f){let t=(await TMUtils.getApiKey()).toString();x?.info?.("CRS10 auth present:",!!t,"prefix:",t.slice(0,10))}let d=await Promise.all(i.map(t=>TMUtils.ds(8566,{Part_Key:t.partKey}).catch(u=>({rows:[],error:String(u)})))),c=[],l=new Set;d.forEach((t,u)=>{let{orderNo:p,partNo:m}=i[u];(t.rows||[]).forEach(n=>{let a=n.Heat_Key,v=n.Serial_No,T=`${p}|${m}|${a}|${v}`;l.has(T)||(l.add(T),c.push({orderNo:p,partNo:m,heatKey:a,serialNo:v}))})});let g=await Promise.all(c.map(async({orderNo:t,partNo:u,heatKey:p,serialNo:m})=>{try{let{rows:n}=await TMUtils.ds(14343,{Record_Key_Value:String(p),Attachment_Group_Key:45});return{orderNo:t,partNo:u,serialNo:m,count:(n??[]).length}}catch(n){return{orderNo:t,partNo:u,serialNo:m,error:String(n)}}}));C("Final status:",g),h(`\u{1F50D} Checked ${g.length} entries`,{type:"info",autoClear:2e3});let E=M?g.filter(t=>t.error||t.count===0):g;if(!g.some(t=>t.error||t.count===0))return h("\u2705 All attachments present. Proceeding\u2026",{type:"success",autoClear:1800}),s.click();D(E,()=>{h("\u2705 Acknowledged",{type:"success",autoClear:1800}),s.click()})}catch(r){S("Schedule validation failed:",r),h(`\u274C ${r?.message||r}`,{type:"error",autoClear:4e3}),s.click()}}}document.addEventListener("click",H,!0),C("Schedule interceptor attached (delegated)"),GM_registerMenuCommand("\u{1F527} Re-hook CR&S10 Schedule",()=>location.reload())})();})();

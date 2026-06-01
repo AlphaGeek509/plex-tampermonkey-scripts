@@ -18,7 +18,7 @@
         BTN_ID: 'qt05-customer-contact',
         BTN_LABEL: 'New Contact',
         BTN_TITLE: 'Open Customer Contact form',
-        BTN_WEIGHT: 70,
+        BTN_WEIGHT: 10,
     };
 
     // Route allowlist
@@ -60,20 +60,32 @@
 
 
     async function resolveCustomerNo() {
+        // 1) KO-bound VM from the anchor field
         try {
-            // Prefer KO-bound VM from the anchor field (same pattern used in QT10)
-            const res = await TMUtils.waitForModelAsync(CFG.ANCHOR, { pollMs: 200, timeoutMs: 8000, requireKo: true });
+            const res = await TMUtils.waitForModelAsync(CFG.ANCHOR, { pollMs: 200, timeoutMs: 2000, requireKo: true });
             const vm = res?.viewModel || null;
             const cn = TMUtils.getObsValue(vm, 'CustomerNo', { first: true, trim: true });
             if (cn) return cn;
+        } catch {}
 
-            // Fallback: read from the input (if any)
+        // 2) Raw input value (present when picker hasn't tokenized yet)
+        try {
             const inp = document.querySelector(`${CFG.ANCHOR} input, ${CFG.ANCHOR} [contenteditable]`);
             const txt = (inp?.value ?? inp?.textContent ?? '').trim();
             if (txt) return txt;
+        } catch {}
 
-            return null;
-        } catch { return null; }
+        // 3) CustomerNo from Plex-rendered page links (e.g. Customer Addresses sidebar link).
+        //    Plex populates these links after customer selection even when the KO picker
+        //    observable hasn't been updated (e.g. fill+Tab input vs. dropdown selection).
+        try {
+            const m = [...document.querySelectorAll('a[href*="CustomerNo="]')]
+                .map(a => a.href.match(/[?&]CustomerNo=([^&\s]+)/)?.[1])
+                .find(Boolean);
+            if (m) return decodeURIComponent(m);
+        } catch {}
+
+        return null;
     }
 
     function makeContactUrl(customerNo) {
@@ -142,6 +154,6 @@
 
 
     if (DEV) {
-        (unsafeWindow || window).QT05_debug = { makeContactUrl, resolveCustomerNo, onQuotePage };
+        (unsafeWindow || window).QT05_debug = { makeContactUrl, resolveCustomerNo };
     }
 })();

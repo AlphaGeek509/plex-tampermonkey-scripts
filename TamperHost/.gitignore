@@ -55,3 +55,10 @@ TamperHost/project-tree.txt
 *.zip
 *.map
 local-dev/
+
+# --- Playwright
+tests/.auth/
+tests/.chrome-profile/
+playwright-report/
+test-results/
+.env

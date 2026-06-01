@@ -134,9 +134,58 @@
             );
             const catalogCode = (Array.isArray(rows2) ? rows2.map(r => r?.Catalog_Code).find(Boolean) : null) || '';
 
-            // 3) Reflect in KO
+            // 3) Reflect in KO — scalar values on main VM
             TMUtils.setObsValue(vm, 'CatalogKey', catalogKey);
             TMUtils.setObsValue(vm, 'CatalogCode', catalogCode);
+
+            // 3b) Drive QuoteCatalogDropDown via its selectedOptions binding.
+            // The dropdown has its own KO context: data.data = options array,
+            // data.selected = selectedOptions observable (must receive the actual object).
+            try {
+                const ko = (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window).ko;
+                const dropEl = document.getElementById('QuoteCatalogDropDown');
+                if (ko && dropEl) {
+                    const ddData = ko.dataFor(dropEl);
+                    const opts = ko.unwrap(ddData?.data);
+                    if (Array.isArray(opts)) {
+                        const target = opts.find(o => Number(o.CatalogKey) === Number(catalogKey));
+                        if (target) {
+                            const applySelection = () => {
+                                const valueKey = ko.bindingHandlers?.options?.optionValueDomDataKey;
+                                let matched = false;
+                                for (const opt of dropEl.options) {
+                                    const stored = valueKey ? ko.utils.domData.get(opt, valueKey) : null;
+                                    const isMatch = stored
+                                        ? Number(stored.CatalogKey) === Number(catalogKey)
+                                        : opt.text.includes(String(catalogKey));
+                                    opt.selected = isMatch;
+                                    if (isMatch) matched = true;
+                                }
+                                if (matched) dropEl.dispatchEvent(new Event('change', { bubbles: true }));
+                            };
+
+                            // Apply immediately
+                            applySelection();
+
+                            // Plex's customer load fires after blur and resets the dropdown.
+                            // Watch config.selected; when it goes empty, re-apply once and stop watching.
+                            const writableSel = ddData?.config?.selected;
+                            if (typeof writableSel?.subscribe === 'function') {
+                                let reapplied = false;
+                                const sub = writableSel.subscribe(newVal => {
+                                    if (!reapplied && Array.isArray(newVal) && newVal.length === 0) {
+                                        reapplied = true;
+                                        sub.dispose();
+                                        setTimeout(applySelection, 50);
+                                    }
+                                });
+                                // Safety: dispose after 5s regardless
+                                setTimeout(() => sub.dispose(), 5000);
+                            }
+                        }
+                    }
+                }
+            } catch (e) { console.error('[QT10] dropdown binding error:', e); }
 
             // 4) Stash into DRAFT scope (per-tab)
             // after you've computed catalogKey, catalogCode, etc.
