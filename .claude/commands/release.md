@@ -56,10 +56,9 @@ Pause and confirm each push succeeded before continuing.
 Purge the `@latest` cache for all userscript files so users get the new version immediately:
 
 ```powershell
-$pkg = Get-Content "TamperHost/tm-scripts/package.json" | ConvertFrom-Json
-$files = $pkg.tmFiles.PSObject.Properties.Value | ForEach-Object { Split-Path $_[1] -Leaf } | Sort-Object -Unique
+$files = node -e "const p=require('./TamperHost/tm-scripts/package.json'); console.log(Object.values(p.tmFiles).map(f=>require('path').basename(f[1])).join('\n'))"
 $base = "https://purge.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@latest/TamperHost/wwwroot"
-foreach ($f in $files) {
+foreach ($f in ($files -split "`n" | Where-Object { $_ })) {
     $res = Invoke-WebRequest "$base/$f"
     Write-Host "$f — $($res.StatusCode)"
 }
