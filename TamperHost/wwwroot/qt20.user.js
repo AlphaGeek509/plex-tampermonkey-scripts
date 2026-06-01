@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        QT20
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     2026.05.27.0
+// @version     2026.06.01.0
 // @description Adds “Get Stock Levels” on Quote Part Detail and Hub; queries DS 172, normalizes to pieces, and toasts totals. Optionally stamps NoteNew with “Stock: N pcs”.
 // @author      Jeff Nichols (OneMonroe | Lyn-Tron)
 // @license     MIT
@@ -11,12 +11,12 @@
 // @match       https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.05.27.0/TamperHost/wwwroot/lt-plex-tm-utils.user.js?v=2026.05.27.0
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.05.27.0/TamperHost/wwwroot/lt-plex-auth.user.js?v=2026.05.27.0
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.05.27.0/TamperHost/wwwroot/lt-core.user.js?v=2026.05.27.0
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.05.27.0/TamperHost/wwwroot/lt-data-core.user.js?v=2026.05.27.0
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.05.27.0/TamperHost/wwwroot/lt-ui-hub.js?v=2026.05.27.0
-// @resource    THEME_CSS https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.05.27.0/TamperHost/wwwroot/theme.css
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.0/TamperHost/wwwroot/lt-plex-tm-utils.user.js?v=2026.06.01.0
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.0/TamperHost/wwwroot/lt-plex-auth.user.js?v=2026.06.01.0
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.0/TamperHost/wwwroot/lt-core.user.js?v=2026.06.01.0
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.0/TamperHost/wwwroot/lt-data-core.user.js?v=2026.06.01.0
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.0/TamperHost/wwwroot/lt-ui-hub.js?v=2026.06.01.0
+// @resource    THEME_CSS https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.0/TamperHost/wwwroot/theme.css
 // @grant       GM_registerMenuCommand
 // @grant       GM_getValue
 // @grant       GM_setValue
