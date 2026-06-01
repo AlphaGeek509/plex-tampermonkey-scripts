@@ -54,10 +54,34 @@ node build-plus.js --set 1.2.3
 
 All modules share one version (`tmVersions.ALL` in `tm-scripts/package.json`). CDN distribution uses GitHub tags (`v{semver}`).
 
+Versions follow CalVer: `YYYY.MM.DD.N`. The first release on a given day is `.0`; a second release the same day auto-increments to `.1`, and so on.
+
 ### Git flow
 `feature/*` → `develop` → `release/*` → `master`
 
 Release commit message pattern: `chore(release): build userscripts for X.Y.Z`
+
+### Deploy to master
+
+**1. Commit and push to develop**
+```bash
+git add TamperHost/build-plus.js TamperHost/tm-scripts/package.json \
+        TamperHost/tm-scripts/src/shared/ TamperHost/wwwroot/
+git commit -m "chore(release): build userscripts for YYYY.MM.DD.N"
+git push
+```
+
+**2. Merge to master and tag**
+```bash
+git checkout master
+git merge --no-ff develop -m "Merge develop into master for YYYY.MM.DD.N"
+git tag vYYYY.MM.DD.N
+git push origin master
+git push origin vYYYY.MM.DD.N
+git checkout develop
+```
+
+jsDelivr serves `@latest` automatically once the tag is on GitHub. TamperMonkey checks for updates every 6 hours and applies them silently.
 
 ---
 
