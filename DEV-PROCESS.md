@@ -81,6 +81,12 @@ git push origin vYYYY.MM.DD.N
 git checkout develop
 ```
 
+**3. Merge master back to develop**
+```bash
+git merge --no-ff master -m "Merge master back to develop after vYYYY.MM.DD.N"
+git push
+```
+
 jsDelivr serves `@latest` automatically once the tag is on GitHub. TamperMonkey checks for updates every 6 hours and applies them silently.
 
 ---
