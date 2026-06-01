@@ -32,7 +32,7 @@ chore(release): build userscripts for YYYY.MM.DD.N
 
 Push to `origin/develop`. Pause and show the user the result before continuing.
 
-## Step 5 — Merge to master and tag
+## Step 5 — Merge to master, tag, and create GitHub Release
 
 Ask the user to confirm before touching master. Then:
 ```
@@ -44,20 +44,43 @@ git push origin vYYYY.MM.DD.N
 git checkout develop
 ```
 
+After the tag push, create a GitHub Release so jsDelivr resolves `@master` correctly:
+```
+gh release create vYYYY.MM.DD.N --title "vYYYY.MM.DD.N" --notes "Release vYYYY.MM.DD.N"
+```
+
 Pause and confirm each push succeeded before continuing.
 
-## Step 6 — Merge master back to develop
+## Step 6 — Purge jsDelivr CDN cache
+
+Purge the `@master` cache for all userscript files so users get the new version immediately:
+
+```powershell
+$files = node -e "const p=require('./TamperHost/tm-scripts/package.json'); console.log(Object.values(p.tmFiles).map(f=>require('path').basename(f[1])).join('\n'))"
+$base = "https://purge.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@master/TamperHost/wwwroot"
+foreach ($f in ($files -split "`n" | Where-Object { $_ })) {
+    $res = Invoke-WebRequest "$base/$f"
+    Write-Host "$f — $($res.StatusCode)"
+}
+```
+
+Confirm all files returned `200` before continuing.
+
+## Step 7 — Merge master back to develop
 
 ```
 git merge --no-ff master -m "Merge master back to develop after vYYYY.MM.DD.N"
 git push
 ```
 
-## Step 7 — Report completion
+## Step 8 — Report completion
 
 Summarize what was done:
 - Version released
 - Tag pushed
 - Both branches up to date
 
-Remind the user that jsDelivr serves `@latest` automatically and TamperMonkey checks for updates every 6 hours.
+Remind the user that:
+- jsDelivr resolves `@master` from GitHub Releases (not raw git tags) — the `gh release create` step above is what makes `@updateURL`/`@downloadURL` point to the new version
+- TamperMonkey checks for updates every 24 hours by default; users can trigger a manual check from the TM dashboard
+- jsDelivr may take a few minutes to propagate the new release; if users see the old version, they can purge: `https://purge.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@master/TamperHost/wwwroot/`
