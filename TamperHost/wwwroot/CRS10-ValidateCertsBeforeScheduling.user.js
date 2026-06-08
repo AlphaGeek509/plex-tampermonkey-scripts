@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        CRS10
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     2026.06.01.1
+// @version     2026.06.08.3
 // @description Validate certs by OrderNo+PartNo+SerialNo (display), call DS8566 (Heat_Key/Serial_No) then DS14343 by Heat_Key. Show results, require Acknowledgement when issues exist, offer quick email for misses, and provide a small settings GUI.
 // @author      Jeff Nichols (OneMonroe | Lyn-Tron)
 // @license     MIT
@@ -9,12 +9,12 @@
 // @supportURL  https://github.com/AlphaGeek509/plex-tampermonkey-scripts/issues
 // @match       https://lyntron.on.plex.com/SalesAndCRM/SalesReleases*
 // @match       https://lyntron.test.on.plex.com/SalesAndCRM/SalesReleases*
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.1/TamperHost/wwwroot/lt-plex-tm-utils.user.js?v=2026.06.01.1
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.1/TamperHost/wwwroot/lt-plex-auth.user.js?v=2026.06.01.1
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.1/TamperHost/wwwroot/lt-core.user.js?v=2026.06.01.1
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.1/TamperHost/wwwroot/lt-data-core.user.js?v=2026.06.01.1
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.1/TamperHost/wwwroot/lt-ui-hub.js?v=2026.06.01.1
-// @resource    THEME_CSS https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.01.1/TamperHost/wwwroot/theme.css
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.08.3/TamperHost/wwwroot/lt-plex-tm-utils.user.js?v=2026.06.08.3
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.08.3/TamperHost/wwwroot/lt-plex-auth.user.js?v=2026.06.08.3
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.08.3/TamperHost/wwwroot/lt-core.user.js?v=2026.06.08.3
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.08.3/TamperHost/wwwroot/lt-data-core.user.js?v=2026.06.08.3
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.08.3/TamperHost/wwwroot/lt-ui-hub.js?v=2026.06.08.3
+// @resource    THEME_CSS https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.08.3/TamperHost/wwwroot/theme.css
 // @grant       GM_registerMenuCommand
 // @grant       GM_getValue
 // @grant       GM_setValue
