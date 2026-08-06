@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        QT35
 // @namespace   https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version     2026.06.08.3
+// @version     2026.08.06.1
 // @description Adds Attachments badge/button (and Dock) and promotes draft→quote once if needed. Counts attachments via DS 11713 (group 11) and auto-refreshes on Part Summary activation and QT20 modal close.
 // @author      Jeff Nichols (OneMonroe | Lyn-Tron)
 // @license     MIT
@@ -11,12 +11,12 @@
 // @match       https://lyntron.on.plex.com/SalesAndCrm/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCRM/QuoteWizard*
 // @match       https://lyntron.test.on.plex.com/SalesAndCrm/QuoteWizard*
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.08.3/TamperHost/wwwroot/lt-plex-tm-utils.user.js?v=2026.06.08.3
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.08.3/TamperHost/wwwroot/lt-plex-auth.user.js?v=2026.06.08.3
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.08.3/TamperHost/wwwroot/lt-core.user.js?v=2026.06.08.3
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.08.3/TamperHost/wwwroot/lt-data-core.user.js?v=2026.06.08.3
-// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.08.3/TamperHost/wwwroot/lt-ui-hub.js?v=2026.06.08.3
-// @resource    THEME_CSS https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.06.08.3/TamperHost/wwwroot/theme.css
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.08.06.1/TamperHost/wwwroot/lt-plex-tm-utils.user.js?v=2026.08.06.1
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.08.06.1/TamperHost/wwwroot/lt-plex-auth.user.js?v=2026.08.06.1
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.08.06.1/TamperHost/wwwroot/lt-core.user.js?v=2026.08.06.1
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.08.06.1/TamperHost/wwwroot/lt-data-core.user.js?v=2026.08.06.1
+// @require     https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.08.06.1/TamperHost/wwwroot/lt-ui-hub.js?v=2026.08.06.1
+// @resource    THEME_CSS https://cdn.jsdelivr.net/gh/AlphaGeek509/plex-tampermonkey-scripts@v2026.08.06.1/TamperHost/wwwroot/theme.css
 // @grant       GM_registerMenuCommand
 // @grant       GM_getValue
 // @grant       GM_setValue

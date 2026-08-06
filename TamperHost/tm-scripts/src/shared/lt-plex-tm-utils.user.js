@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LT › Plex TM Utils
 // @namespace    https://github.com/AlphaGeek509/plex-tampermonkey-scripts
-// @version      2026.06.08.3
+// @version      2026.08.06.1
 // @description  Shared utilities
 // @match        https://*.on.plex.com/*
 // @match        https://*.plex.com/*
@@ -30,12 +30,14 @@
     function _normalizeAuth(raw) {
         if (!raw) return '';
         if (/^(Basic|Bearer)\s/i.test(raw)) return raw.trim();
-        // Accept "user:pass" and encode as Basic
-        try { return `Basic ${btoa(raw.trim())}`; } catch { return ''; }
+        // Accept "user:pass" and encode as Basic. Unicode-safe, matching lt-plex-auth and Plex's
+        // documented utf8GetBytes -> base64Encode sequence.
+        try { return `Basic ${btoa(unescape(encodeURIComponent(raw.trim())))}`; } catch { return ''; }
     }
 
-    // Resolve API key across routes: prefer PlexAuth/PlexAPI, fallback to GM/localStorage.
-    // Mirrors the resolved key to localStorage + GM so future loads on this subdomain don’t need to wait.
+    // Resolve API key via PlexAuth/PlexAPI, which owns storage (extension-isolated GM store, shared
+    // across scripts by peer handshake). No localStorage mirror and no direct GM access here — a
+    // second writer would resurrect the page-readable copy this design removes.
     async function getApiKey({
         wait = false,       // set true on routes that load PlexAuth late
         timeoutMs = 0,
@@ -66,41 +68,19 @@
             }
         }
 
-        // 1) Preferred: helper object if available
+        // Single source of truth: the auth helper. It handles GM storage, cross-script sharing,
+        // legacy-mirror migration, and expiry.
         if (getter) {
             try {
                 const val = getter.call(root);
                 const key = (val && typeof val.then === 'function') ? await val : val;
                 const out = _normalizeAuth(key);
                 if (out) {
-                    // Mirror so subsequent loads on this subdomain don’t depend on the helper being present
-                    try { localStorage.setItem('PlexApiKey', out); } catch { }
-                    try { if (typeof GM_setValue === 'function') GM_setValue('PlexApiKey', out); } catch { }
                     if (useCache) TMUtils.__apiKeyCache = { value: out, ts: Date.now() };
                     return out;
                 }
-            } catch { /* fall through */ }
+            } catch { /* no key available */ }
         }
-
-        // 2) Fallback: GM store (authoritative if set via menu)
-        try {
-            const rawGM = typeof GM_getValue === 'function' ? GM_getValue('PlexApiKey', '') : '';
-            if (rawGM) {
-                const out = _normalizeAuth(rawGM);
-                if (useCache) TMUtils.__apiKeyCache = { value: out, ts: Date.now() };
-                return out;
-            }
-        } catch { }
-
-        // 3) Fallback: localStorage on this subdomain
-        try {
-            const rawLS = localStorage.getItem('PlexApiKey') || '';
-            if (rawLS) {
-                const out = _normalizeAuth(rawLS);
-                if (useCache) TMUtils.__apiKeyCache = { value: out, ts: Date.now() };
-                return out;
-            }
-        } catch { }
 
         return '';
     }
