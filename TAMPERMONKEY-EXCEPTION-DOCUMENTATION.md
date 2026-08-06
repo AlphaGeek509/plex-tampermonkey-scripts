@@ -2,7 +2,7 @@
 
 **Prepared:** 2026-08-04
 **System:** Plex ERP (QuoteWizard / Sales & CRM / Scheduling)
-**Repository:** https://github.com/AlphaGeek509/plex-tampermonkey-scripts (private/internal use)
+**Repository:** https://github.com/AlphaGeek509/plex-tampermonkey-scripts — **public repository**, internal-use scripts. The source contains no credentials, API keys, or company data; it is automation over Plex's own UI and documented Data Source API. A GitHub Pages install page is published from this repository at https://alphageek509.github.io/plex-tampermonkey-scripts/, which links to the released script builds.
 
 This document answers the specific questions required to evaluate the Tampermonkey browser-extension exception request for the Lyn-Tron Plex quoting and scheduling workflow.
 
